@@ -698,6 +698,7 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
         static std::map<uint32, std::array<float, 4>> silvermoonLastGood; // last safe spot inside: x, y, z, map
         static std::map<uint32, time_t> silvermoonDeadSince;
         static std::set<uint32> silvermoonAbandoned; // party ids that gave up
+        static std::map<uint32, std::deque<time_t>> silvermoonPartyDeaths; // party id -> recent deaths
         static std::map<uint32, std::array<float, 4>> silvermoonLastCalm; // last out-of-combat spot inside
         static std::map<uint32, std::deque<std::array<float, 4>>> silvermoonCalmTrail; // recent out-of-combat spots, newest last
         static std::map<uint32, std::array<float, 4>> silvermoonEngageSpot; // where it stood, calm, right before its latest fight
@@ -863,6 +864,23 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                         {
                             silvermoonDeadSince[guid] = time(0);
                             sLog.outBasic("Silvermoon: bot %s died in dungeon map %u", p->GetName(), dungeonMap);
+                            // a party that keeps dying (members revived one by one while the others
+                            // fight on, so it never counts as a wipe) calls the run off after 15
+                            // deaths in 15 minutes: Arcele died every 20-30 seconds on the Deadmines ship
+                            if (uint32 partyId = GetEventValue(guid, "silvermoon_dungeon_party"))
+                            {
+                                std::deque<time_t>& deaths = silvermoonPartyDeaths[partyId];
+                                time_t nowDeath = time(0);
+                                deaths.push_back(nowDeath);
+                                while (!deaths.empty() && nowDeath - deaths.front() > 15 * MINUTE)
+                                    deaths.pop_front();
+                                if (deaths.size() >= 15 && !silvermoonAbandoned.count(partyId))
+                                {
+                                    sLog.outBasic("Silvermoon: dungeon party of %s gives up on map %u after %u deaths in 15 minutes", p->GetName(), dungeonMap, uint32(deaths.size()));
+                                    silvermoonAbandoned.insert(partyId);
+                                    silvermoonPartyDeaths.erase(partyId);
+                                }
+                            }
                             return;
                         }
                         bool partyAlive = false, partyFighting = false;
@@ -883,9 +901,9 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                         {
                             uint32 wipes = GetEventValue(guid, "silvermoon_dungeon_wipes") + 1;
                             SetEventValue(guid, "silvermoon_dungeon_wipes", wipes, 150 * MINUTE);
-                            if (wipes > 8)
+                            if (wipes > 3) // was 8: a party that wipes 3 times is not going to make it
                             {
-                                sLog.outBasic("Silvermoon: bot %s gives up on dungeon map %u after %u wipes", p->GetName(), dungeonMap, wipes - 1);
+                                sLog.outBasic("Silvermoon: bot %s gives up on dungeon map %u after %u wipes", p->GetName(), dungeonMap, wipes);
                                 if (uint32 partyId = GetEventValue(guid, "silvermoon_dungeon_party"))
                                     silvermoonAbandoned.insert(partyId); // the whole party calls it, not one member at a time
                                 SetEventValue(guid, "silvermoon_dungeon", 0, 0);
