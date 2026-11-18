@@ -33,6 +33,10 @@ float SilvermoonBrainMultiplier::GetValue(Action* action)
 
 void SilvermoonBrainStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& triggers)
 {
+    // no destination: fetch everything worth doing in one go (above every stock request)
+    triggers.push_back(new TriggerNode(
+        "val::not::travel target active",
+        NextAction::array(0, new NextAction("request goal destinations", 6.97f), NULL)));
 }
 
 void SilvermoonBrainStrategy::InitNonCombatMultipliers(std::list<Multiplier*>& multipliers)

@@ -1,6 +1,7 @@
 #pragma once
 #include "playerbot/strategy/NamedObjectContext.h"
 #include "SilvermoonBrainStrategy.h"
+#include "RequestGoalAction.h"
 
 namespace ai
 {
@@ -20,6 +21,7 @@ namespace ai
     public:
         SilvermoonActionContext()
         {
+            creators["request goal destinations"] = [](PlayerbotAI* ai) { return new RequestGoalAction(ai); };
         }
     };
 }

@@ -1,0 +1,103 @@
+#include "playerbot/playerbot.h"
+#include "RequestGoalAction.h"
+#include "playerbot/TravelMgr.h"
+#include "playerbot/strategy/actions/ChooseTravelTargetAction.h"
+
+using namespace ai;
+
+std::vector<SilvermoonGoalFetch> ai::SilvermoonBuildGoalFetches(PlayerbotAI* ai, Player* bot)
+{
+    AiObjectContext* context = ai->GetAiObjectContext();
+    std::vector<SilvermoonGoalFetch> fetches;
+    uint32 level = bot->GetLevel();
+
+    // quest givers nearby (same range as the stock quest request)
+    fetches.push_back({ (uint32)TravelDestinationPurpose::QuestGiver, {}, 400.0f + level * 10.0f });
+
+    // turn-ins and objectives for every quest in the log (the stock quest request's loop, for
+    // this bot only)
+    for (auto& [questId, questStatus] : bot->getQuestStatusMap())
+    {
+        if (questStatus.m_rewarded)
+            continue;
+        Quest const* questTemplate = sObjectMgr.GetQuestTemplate(questId);
+        if (!questTemplate)
+            continue;
+        uint32 flag = 0;
+        if (bot->CanRewardQuest(questTemplate, false))
+            flag = (uint32)TravelDestinationPurpose::QuestTaker;
+        else
+        {
+            for (uint32 objective = 0; objective < 4; objective++)
+            {
+                std::vector<std::string> qualifier = { std::to_string(questId), std::to_string(objective) };
+                if (context->GetValue<bool>("need quest objective", Qualified::MultiQualify(qualifier, ","))->Get())
+                    flag |= (uint32)(1 << (objective + 1));
+            }
+        }
+        if (flag)
+            fetches.push_back({ flag, { (int32)questId }, 1000.0f + (level * level) * 75.0f });
+    }
+
+    // grind spots, always
+    fetches.push_back({ (uint32)TravelDestinationPurpose::Grind, {}, 2000.0f });
+
+    // chores when due
+    if (context->GetValue<bool>("should sell")->Get())
+        fetches.push_back({ (uint32)TravelDestinationPurpose::Vendor, {}, 10000.0f });
+    if (context->GetValue<bool>("should repair")->Get())
+        fetches.push_back({ (uint32)TravelDestinationPurpose::Repair, {}, 10000.0f });
+    if (context->GetValue<bool>("should travel named", "trainer class")->Get())
+    {
+        std::vector<int32> trainers = context->GetValue<std::vector<int32>>("available trainers", std::to_string((uint32)TRAINER_TYPE_CLASS))->Get();
+        if (!trainers.empty())
+            fetches.push_back({ (uint32)TravelDestinationPurpose::Trainer, trainers, 10000.0f });
+    }
+
+    // a little exploring, short range only (worth little until Phase 2 adds quest hubs)
+    fetches.push_back({ (uint32)TravelDestinationPurpose::Explore, {}, 500.0f });
+
+    return fetches;
+}
+
+FutureDestinations ai::SilvermoonLaunchGoalFetch(Player* bot, std::vector<SilvermoonGoalFetch> fetches)
+{
+    WorldPosition center(bot);
+    return std::async(std::launch::async, [partitions = travelPartitions, travelInfo = PlayerTravelInfo(bot), center, fetches]()
+        {
+            PartitionedTravelList list;
+            for (auto const& fetch : fetches)
+            {
+                PartitionedTravelList subList = sTravelMgr.GetPartitions(center, partitions, travelInfo, fetch.purpose, fetch.entries, true, fetch.range);
+                for (auto& [partition, points] : subList)
+                    list[partition].insert(list[partition].end(), points.begin(), points.end());
+            }
+            return list;
+        });
+}
+
+bool RequestGoalAction::Execute(Event& event)
+{
+    *AI_VALUE(FutureDestinations*, "future travel destinations") = SilvermoonLaunchGoalFetch(bot, SilvermoonBuildGoalFetches(ai, bot));
+
+    AI_VALUE(TravelTarget*, "travel target")->SetStatus(TravelStatus::TRAVEL_STATUS_PREPARE);
+    SET_AI_VALUE2(std::string, "manual string", "future travel purpose", "goal");
+    SET_AI_VALUE2(std::string, "manual string", "future travel condition", event.getSource());
+    SET_AI_VALUE2(int, "manual int", "future travel relevance", relevance * 100);
+    return true;
+}
+
+bool RequestGoalAction::isUseful()
+{
+    if (bot->InBattleGround() || !ai->AllowActivity(TRAVEL_ACTIVITY))
+        return false;
+    if (!AI_VALUE(bool, "can move around"))
+        return false;
+    TravelTarget* target = AI_VALUE(TravelTarget*, "travel target");
+    if (target->IsActive() || target->GetStatus() == TravelStatus::TRAVEL_STATUS_PREPARE)
+        return false;
+    // after a fetch that found nothing, wait a little before trying again
+    if (time(nullptr) < AI_VALUE2(int, "manual int", "silvermoon goal retry at"))
+        return false;
+    return true;
+}
