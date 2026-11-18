@@ -87,6 +87,7 @@ using namespace MaNGOS;
 #include "playerbot/silvermoon/DecisionLog.h"
 #include "playerbot/silvermoon/QuestIndex.h"
 #include "playerbot/silvermoon/Crowd.h"
+#include "playerbot/LootObjectStack.h"
 #include "playerbot/strategy/silvermoon/ChooseGoalAction.h"
 #include "playerbot/strategy/values/LastMovementValue.h"
 
@@ -2294,15 +2295,13 @@ void RandomPlayerbotMgr::SilvermoonProcessBot(Player* player, PlayerbotAI* ai, u
             bool waitingForTransport = lastMove.lastTransportEntry != 0 ||
                 (!lastMove.lastPath.empty() && lastMove.lastPath.getPath().size() > 1 &&
                  std::next(lastMove.lastPath.getPath().begin())->type == PathNodeType::NODE_TRANSPORT);
-            bool talking = false;
-            GuidPosition rpgTarget = context->GetValue<GuidPosition>("rpg target")->Get();
-            if (rpgTarget && rpgTarget.fDist(player) < INTERACTION_DISTANCE * 2)
-                talking = true;
-            bool waiting = !player->IsAlive() || player->IsInCombat() || player->IsTaxiFlying() || player->GetTransport() ||
-                waitingForTransport || player->IsSitState() || player->IsNonMeleeSpellCasted(false) || talking ||
-                !context->GetValue<LootObjectStack*>("available loot")->Get()->CanLoot(INTERACTION_DISTANCE * 2) == false;
-            bool travelling = target && target->GetDestination() && target->GetStatus() == TravelStatus::TRAVEL_STATUS_TRAVEL;
             WorldPosition here(player);
+            GuidPosition rpgTarget = context->GetValue<GuidPosition>("rpg target")->Get();
+            bool talking = rpgTarget && rpgTarget.getMapId() == here.getMapId() && rpgTarget.fDist(here) < INTERACTION_DISTANCE * 2;
+            bool looting = context->GetValue<LootObjectStack*>("available loot")->Get()->CanLoot(INTERACTION_DISTANCE * 2);
+            bool waiting = !player->IsAlive() || player->IsInCombat() || player->IsTaxiFlying() || player->GetTransport() ||
+                waitingForTransport || player->IsSitState() || player->IsNonMeleeSpellCasted(false) || talking || looting;
+            bool travelling = target && target->GetDestination() && target->GetStatus() == TravelStatus::TRAVEL_STATUS_TRAVEL;
             uint8 stage = 0;
             TravelDestination* dest = travelling ? target->GetDestination() : nullptr;
             {
