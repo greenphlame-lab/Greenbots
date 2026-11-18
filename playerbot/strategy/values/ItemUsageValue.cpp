@@ -1,6 +1,7 @@
 
 #include "playerbot/playerbot.h"
 #include "ItemUsageValue.h"
+#include "AuctionHouse/AuctionHouseMgr.h"
 #include "CraftValues.h"
 #include "MountValues.h"
 #include "BudgetValues.h"
@@ -10,6 +11,26 @@
 #include "playerbot/ServerFacade.h"
 
 using namespace ai;
+
+// Silvermoon patch: items any vendor sells (Mild Spices, Coarse Thread, ...). Bots no
+// longer flood the auction house with them.
+bool SilvermoonSoldByVendor(uint32 itemId)
+{
+    static std::set<uint32> vendorItems;
+    static bool loaded = false;
+    if (!loaded)
+    {
+        loaded = true;
+        auto result = WorldDatabase.Query("SELECT DISTINCT `item` FROM `npc_vendor` WHERE `maxcount` = 0 UNION SELECT DISTINCT `item` FROM `npc_vendor_template` WHERE `maxcount` = 0");
+        if (result)
+        {
+            do
+                vendorItems.insert(result->Fetch()[0].GetUInt32());
+            while (result->NextRow());
+        }
+    }
+    return vendorItems.count(itemId) > 0;
+}
 
 std::unordered_map<uint32, std::unordered_set<uint32>> ItemUsageValue::m_reagentItemIdsForCraftingSkills;
 std::unordered_set<uint32> ItemUsageValue::m_allReagentItemIdsForCraftingSkills;
@@ -505,6 +526,9 @@ if ((proto->Class == ITEM_CLASS_PROJECTILE ||
         if(proto->SellPrice == 0)
             SET_AI_VALUE2(int, "manual int", "expected ah sell price for " + std::to_string(itemId), ahPrice);
 
+        if (SilvermoonSoldByVendor(itemId))
+            return sellUsage; // Silvermoon patch: anyone can buy this from a vendor, so it does not belong on the AH
+
         if (ahPrice < depositCost)
             return sellUsage; //The AH desposit is higher than the money gained.
 
@@ -551,6 +575,11 @@ ItemUsage ItemUsageValue::QueryItemUsageForEquip(ItemQualifier& itemQualifier, P
         return ItemUsage::ITEM_USAGE_NONE;
 
     if (itemProto->InventoryType == INVTYPE_NON_EQUIP)
+        return ItemUsage::ITEM_USAGE_NONE;
+
+    // Silvermoon patch: warriors and rogues never use a held-in-off-hand item (orbs, tomes,
+    // lanterns): their off hand is for a weapon, or a shield for warriors.
+    if (itemProto->InventoryType == INVTYPE_HOLDABLE && (bot->getClass() == CLASS_WARRIOR || bot->getClass() == CLASS_ROGUE))
         return ItemUsage::ITEM_USAGE_NONE;
 
     uint16 dest;
@@ -1580,6 +1609,25 @@ bool ItemUsageValue::AreCurrentAHListingsTooCheap(ItemPrototype const* proto)
 
 bool ItemUsageValue::IsMoreProfitableToSellToAHThanToVendor(ItemPrototype const* proto, Player* bot)
 {
+    if (SilvermoonSoldByVendor(proto->ItemId))
+        return false; // Silvermoon patch: vendor goods are never auctioned
+
+    // Silvermoon patch: only list what actually sells. Half of all listings expired unsold and
+    // lost their deposit. Grey items and white items other than trade goods (cloth, ore, herbs,
+    // leather, meat, ...) and recipes go straight to the vendor, and nothing is listed while its
+    // faction's auction house already holds 3 or more unsold listings of the same item.
+    if (proto->Quality == ITEM_QUALITY_POOR)
+        return false;
+    if (proto->Quality == ITEM_QUALITY_NORMAL && proto->Class != ITEM_CLASS_TRADE_GOODS && proto->Class != ITEM_CLASS_RECIPE)
+        return false;
+    if (AuctionHouseObject* house = sAuctionMgr.GetAuctionsMap(bot->GetTeam() == ALLIANCE ? AUCTION_HOUSE_ALLIANCE : AUCTION_HOUSE_HORDE))
+    {
+        uint32 sameItem = 0;
+        for (auto const& entry : house->GetAuctions())
+            if (entry.second && entry.second->itemTemplate == proto->ItemId && ++sameItem >= 3)
+                return false;
+    }
+
     if (proto->Bonding == ItemBondingType::BIND_WHEN_PICKED_UP)
     {
         return false;

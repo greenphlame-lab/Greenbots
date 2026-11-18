@@ -66,7 +66,7 @@ namespace ai
     {
     public:
         ShouldSellValue(PlayerbotAI* ai, std::string name = "should sell", int checkInterval = 2) : BoolCalculatedValue(ai, name , checkInterval) {}
-        virtual bool Calculate() override { return AI_VALUE(uint8, "bag space") > 80; };
+        virtual bool Calculate() override { return AI_VALUE(uint8, "bag space") > 65; }; // Silvermoon patch: sell before the bags are nearly full (was 80)
     };
 
     class CanSellValue : public BoolCalculatedValue

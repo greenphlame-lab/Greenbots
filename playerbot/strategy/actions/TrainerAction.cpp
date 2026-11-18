@@ -58,8 +58,35 @@ void TrainerAction::Learn(uint32 cost, ObjectGuid trainerGuid, uint32 spellId, T
 #endif
 
     sPlayerbotAIConfig.logEvent(ai, "TrainerAction", proto->SpellName[0], std::to_string(proto->Id));
+    sLog.outBasic("Silvermoon: bot %s (level %u) learned %s for %u copper", bot->GetName(), bot->GetLevel(), proto->SpellName[0], cost); // for the training audit
 
     msg << " - learned";
+}
+
+// Silvermoon patch: spells that deal damage are learned first, then heals, then everything else
+// (buffs, utility), so a bot short on money spends it on what speeds up levelling.
+static uint32 SilvermoonSpellPriority(TrainerSpell const* tSpell)
+{
+    SpellEntry const* teach = sServerFacade.LookupSpellInfo(tSpell->spell);
+    if (!teach)
+        return 2;
+    SpellEntry const* spell = teach;
+    for (int j = 0; j < 3; ++j)
+        if (teach->Effect[j] == SPELL_EFFECT_LEARN_SPELL && teach->EffectTriggerSpell[j])
+            if (SpellEntry const* learned = sServerFacade.LookupSpellInfo(teach->EffectTriggerSpell[j]))
+                spell = learned;
+    uint32 best = 2;
+    for (int j = 0; j < 3; ++j)
+    {
+        uint32 e = spell->Effect[j];
+        if (e == SPELL_EFFECT_SCHOOL_DAMAGE || e == 17 /*weapon damage, no school*/ || e == 31 /*weapon % damage*/ ||
+            e == 58 /*weapon damage*/ || e == 121 /*normalized weapon damage*/ ||
+            (e == SPELL_EFFECT_APPLY_AURA && spell->EffectApplyAuraName[j] == SPELL_AURA_PERIODIC_DAMAGE))
+            return 0;
+        if (e == SPELL_EFFECT_HEAL || (e == SPELL_EFFECT_APPLY_AURA && spell->EffectApplyAuraName[j] == SPELL_AURA_PERIODIC_HEAL))
+            best = 1;
+    }
+    return best;
 }
 
 bool TrainerAction::Iterate(Player* requester, Creature* creature, TrainerSpellAction action, SpellIds& spells)
@@ -78,9 +105,17 @@ bool TrainerAction::Iterate(Player* requester, Creature* creature, TrainerSpellA
     if (tSpells)
         trainer_spells.insert(tSpells->spellList.begin(), tSpells->spellList.end());
 
-    for (TrainerSpellMap::const_iterator itr =  trainer_spells.begin(); itr !=  trainer_spells.end(); ++itr)
+    std::vector<TrainerSpell const*> ordered;
+    for (TrainerSpellMap::const_iterator itr = trainer_spells.begin(); itr != trainer_spells.end(); ++itr)
+        ordered.push_back(&itr->second);
+    std::stable_sort(ordered.begin(), ordered.end(), [](TrainerSpell const* a, TrainerSpell const* b)
     {
-        TrainerSpell const* tSpell = &itr->second;
+        uint32 pa = SilvermoonSpellPriority(a), pb = SilvermoonSpellPriority(b);
+        return pa != pb ? pa < pb : a->spellCost < b->spellCost;
+    });
+
+    for (TrainerSpell const* tSpell : ordered)
+    {
 
         if (!tSpell)
             continue;
@@ -174,7 +209,7 @@ bool TrainerAction::Iterate(Player* requester, Creature* creature, TrainerSpellA
         out << chat->formatSpell(pSpellInfo) << chat->formatMoney(cost);
 
         if (action)
-            (this->*action)(cost, creature->GetObjectGuid(), itr->first, tSpell, out);
+            (this->*action)(cost, creature->GetObjectGuid(), tSpell->spell, tSpell, out);
 
         if (!hasHeader)
         {

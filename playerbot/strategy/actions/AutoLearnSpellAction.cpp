@@ -7,10 +7,14 @@
 
 using namespace ai;
 
+// Silvermoon patch: "silent" runs (the server-start spell backfill) skip the level-up broadcast.
+static thread_local bool s_silvermoonSilent = false;
+
 bool AutoLearnSpellAction::Execute(Event& event)
 {
     Player* requester = event.getOwner() ? event.getOwner() : GetMaster();
     std::string param = event.getParam();
+    s_silvermoonSilent = (param == "silent");
 
     std::ostringstream out;
 
@@ -34,7 +38,8 @@ bool AutoLearnSpellAction::Execute(Event& event)
 
 void AutoLearnSpellAction::LearnSpells(std::ostringstream* out)
 {
-    BroadcastHelper::BroadcastLevelup(ai, bot);
+    if (!s_silvermoonSilent)
+        BroadcastHelper::BroadcastLevelup(ai, bot);
 
     if (sPlayerbotAIConfig.autoLearnQuestSpells)
         LearnQuestSpells(out);

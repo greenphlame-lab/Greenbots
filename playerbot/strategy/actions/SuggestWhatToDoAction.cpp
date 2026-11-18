@@ -148,6 +148,23 @@ void SuggestWhatToDoAction::grindMaterials()
 
     auto vec = ItemUsageValue::GetAllReagentItemIdsForCraftingSkillsVector();
 
+    // Silvermoon patch: only advertise crafting materials the bot actually carries
+    // (it used to pick any reagent in the game, so level 20s offered Dark Iron Bars).
+    std::set<uint32> reagents(vec.begin(), vec.end());
+    std::vector<uint32> owned;
+    auto consider = [&](Item* item)
+    {
+        if (item && reagents.count(item->GetEntry()) && item->GetCount() >= 5)
+            owned.push_back(item->GetEntry());
+    };
+    for (uint8 slot = INVENTORY_SLOT_ITEM_START; slot < INVENTORY_SLOT_ITEM_END; ++slot)
+        consider(bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot));
+    for (uint8 bagSlot = INVENTORY_SLOT_BAG_START; bagSlot < INVENTORY_SLOT_BAG_END; ++bagSlot)
+        if (Bag* bag = (Bag*)bot->GetItemByPos(INVENTORY_SLOT_BAG_0, bagSlot))
+            for (uint32 j = 0; j < bag->GetBagSize(); ++j)
+                consider(bag->GetItemByPos(j));
+    vec = owned;
+
     if (vec.size() > 0)
     {
         uint32 randomItemId = vec[urand() % vec.size()];

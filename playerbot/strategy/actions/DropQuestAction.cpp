@@ -54,6 +54,57 @@ bool CleanQuestLogAction::Execute(Event& event)
     if (ai->HasActivePlayerMaster())
         return false;
 
+    // Silvermoon patch: unfinished gray quests are dropped right away instead of
+    // only when the log is nearly full (completed ones are kept for the turn-in).
+    for (uint8 slot = 0; slot < MAX_QUEST_LOG_SIZE; ++slot)
+    {
+        uint32 questId = bot->GetQuestSlotQuestId(slot);
+        if (!questId)
+            continue;
+        Quest const* quest = sObjectMgr.GetQuestTemplate(questId);
+        if (!quest || quest->GetRequiredClasses() || bot->GetQuestStatus(questId) == QUEST_STATUS_COMPLETE)
+            continue;
+        int32 lowLevelDiff = sWorld.getConfig(CONFIG_INT32_QUEST_LOW_LEVEL_HIDE_DIFF);
+        if (lowLevelDiff < 0 || bot->GetLevel() <= bot->GetQuestLevelForPlayer(quest) + uint32(lowLevelDiff))
+            continue;
+        bot->GetPlayerbotAI()->DropQuest(questId);
+        ai->TellPlayer(requester, BOT_TEXT("quest_remove") + " " + chat->formatQuest(quest), PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
+    }
+
+    // Silvermoon patch: throw away quest items that no quest in the log needs any
+    // more (dropped, gray or already turned in). Items that start a quest are kept.
+    {
+        std::set<uint32> needed;
+        for (uint8 slot = 0; slot < MAX_QUEST_LOG_SIZE; ++slot)
+        {
+            Quest const* quest = sObjectMgr.GetQuestTemplate(bot->GetQuestSlotQuestId(slot));
+            if (!quest)
+                continue;
+            for (int i = 0; i < QUEST_ITEM_OBJECTIVES_COUNT; ++i)
+                if (quest->ReqItemId[i])
+                    needed.insert(quest->ReqItemId[i]);
+            if (quest->GetSrcItemId())
+                needed.insert(quest->GetSrcItemId());
+        }
+        std::vector<Item*> junk;
+        auto check = [&](Item* item)
+        {
+            if (!item)
+                return;
+            ItemPrototype const* proto = item->GetProto();
+            if (proto && proto->Class == ITEM_CLASS_QUEST && !proto->StartQuest && !needed.count(proto->ItemId))
+                junk.push_back(item);
+        };
+        for (uint8 slot = INVENTORY_SLOT_ITEM_START; slot < INVENTORY_SLOT_ITEM_END; ++slot)
+            check(bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot));
+        for (uint8 bagSlot = INVENTORY_SLOT_BAG_START; bagSlot < INVENTORY_SLOT_BAG_END; ++bagSlot)
+            if (Bag* bag = (Bag*)bot->GetItemByPos(INVENTORY_SLOT_BAG_0, bagSlot))
+                for (uint32 j = 0; j < bag->GetBagSize(); ++j)
+                    check(bag->GetItemByPos(j));
+        for (Item* item : junk)
+            bot->DestroyItem(item->GetBagSlot(), item->GetSlot(), true);
+    }
+
     uint8 totalQuests = 0;
 
     DropQuestType(requester, totalQuests); //Count the total quests

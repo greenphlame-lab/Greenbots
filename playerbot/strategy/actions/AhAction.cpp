@@ -1,10 +1,12 @@
 
 #include "playerbot/playerbot.h"
+#include "playerbot/RandomPlayerbotMgr.h"
 #include "AhAction.h"
 #include "playerbot/strategy/values/ItemCountValue.h"
 #include "playerbot/RandomItemMgr.h"
 #include "playerbot/strategy/values/BudgetValues.h"
 #include "playerbot/strategy/values/ItemUsageValue.h"
+bool SilvermoonSoldByVendor(uint32 itemId); // ItemUsageValue.cpp
 
 using namespace ai;
 
@@ -128,6 +130,16 @@ bool AhAction::ExecuteCommand(Player* requester, std::string text, Unit* auction
 
 bool AhAction::PostItem(Player* requester, Item* item, uint32 price, Unit* auctioneer, uint32 time)
 {
+    // Silvermoon patch: never list below what a vendor pays. The starting bid (95% of
+    // the buyout) stays at least ~9% above the vendor price, so the auction is always
+    // worth more than vendoring.
+    if (item && item->GetProto() && item->GetProto()->SellPrice)
+    {
+        uint64 floor = uint64(item->GetProto()->SellPrice) * item->GetCount() * 115 / 100 + 1;
+        if (price < floor)
+            price = uint32(std::min<uint64>(floor, MAX_MONEY_AMOUNT));
+    }
+
     ObjectGuid itemGuid = item->GetObjectGuid();
     ItemPrototype const* proto = item->GetProto();
 
@@ -249,10 +261,25 @@ bool AhBidAction::ExecuteCommand(Player* requester, std::string text, Unit* auct
             {
             case ItemUsage::ITEM_USAGE_EQUIP:
             case ItemUsage::ITEM_USAGE_BAD_EQUIP:
+                // Silvermoon patch: only gear the bot can wear right now
+                if (bot->CanUseItem(proto) != EQUIP_ERR_OK)
+                    continue;
+                if (proto->Class == ITEM_CLASS_CONTAINER)
+                {
+                    // bags: never pay more than a vendor would charge for the same bag, and
+                    // otherwise rank them high, bigger bags first
+                    if (SilvermoonSoldByVendor(proto->ItemId) && totalCost > proto->BuyPrice * std::max(1u, auction->itemCount))
+                        continue;
+                    power = 400 * proto->ContainerSlots;
+                    break;
+                }
                 power = sRandomItemMgr.GetLiveStatWeight(bot, auction->itemTemplate);
                 break;
             case ItemUsage::ITEM_USAGE_AH:
             {
+                // Silvermoon patch: no buying to resell. It tied up the little money bots
+                // have, and at power 1000 it outranked gear upgrades.
+                continue;
                 auto pmo = sPerformanceMonitor.start(PERF_MON_VALUE, "IsWorthBuyingFromAhToResellAtAH", ai);
                 bool isWorthBuyingFromAhToResellAtAH = ItemUsageValue::IsWorthBuyingFromAhToResellAtAH(proto, totalCost, auction->itemCount);
                 pmo.reset();
@@ -263,10 +290,9 @@ bool AhBidAction::ExecuteCommand(Player* requester, std::string text, Unit* auct
                 break;
             }
             case ItemUsage::ITEM_USAGE_VENDOR:
-                //basically if AH price is lower than vendor sell price then it's worth it
-                if (totalCost / auction->itemCount >= (int32)proto->SellPrice)
-                    continue;
-                power = 1000;
+                // Silvermoon patch: no buying auctions just to sell them to a vendor (bots
+                // bought armor they could not wear, e.g. mail pants on a cloth class)
+                continue;
                 break;
             case ItemUsage::ITEM_USAGE_FORCE_NEED:
             case ItemUsage::ITEM_USAGE_FORCE_GREED:
@@ -283,6 +309,20 @@ bool AhBidAction::ExecuteCommand(Player* requester, std::string text, Unit* auct
         std::sort(auctionPowers.begin(), auctionPowers.end(), [](std::pair<AuctionEntry*, uint32> i, std::pair<AuctionEntry*, uint32> j) {return i > j; });
 
         bool bidItems = false;
+        // Silvermoon patch: one gear upgrade per slot per auction house visit (two for
+        // rings, trinkets and one-hand weapons). Bots bought three pairs of pants at once.
+        std::map<uint32, uint32> boughtPerSlot;
+        // Bids placed on earlier visits still count: a bot bidding on three pairs of boots
+        // over three visits used to win all three when the auctions ended.
+        for (auto const& entry : map)
+        {
+            AuctionEntry* pending = entry.second;
+            if (!pending || pending->bidder != bot->GetGUIDLow())
+                continue;
+            if (ItemPrototype const* pendingProto = sObjectMgr.GetItemPrototype(pending->itemTemplate))
+                if (pendingProto->Class == ITEM_CLASS_ARMOR || pendingProto->Class == ITEM_CLASS_WEAPON)
+                    boughtPerSlot[pendingProto->InventoryType == INVTYPE_ROBE ? INVTYPE_CHEST : pendingProto->InventoryType]++;
+        }
 
         for (auto auctionPower : auctionPowers)
         {
@@ -343,7 +383,23 @@ bool AhBidAction::ExecuteCommand(Player* requester, std::string text, Unit* auct
 
             std::string reason = ItemUsageValue::ReasonForNeed(usage, auction, auction->itemCount, bot);            
 
+            uint32 slotKey = 0, slotLimit = 1;
+            if (usage == ItemUsage::ITEM_USAGE_EQUIP || usage == ItemUsage::ITEM_USAGE_BAD_EQUIP)
+            {
+                if (ItemPrototype const* bidProto = sObjectMgr.GetItemPrototype(auction->itemTemplate))
+                {
+                    slotKey = bidProto->InventoryType == INVTYPE_ROBE ? INVTYPE_CHEST : bidProto->InventoryType;
+                    if (slotKey == INVTYPE_FINGER || slotKey == INVTYPE_TRINKET || slotKey == INVTYPE_WEAPON)
+                        slotLimit = 2;
+                    if (boughtPerSlot[slotKey] >= slotLimit)
+                        continue;
+                }
+            }
+
             bidItems = BidItem(requester, auction, price, auctioneer, price == currentBuyoutPrice, reason);
+
+            if (bidItems && slotKey)
+                boughtPerSlot[slotKey]++;
 
             if (bidItems)
                 totalcount++;
