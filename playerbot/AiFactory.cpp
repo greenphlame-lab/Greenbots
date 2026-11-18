@@ -981,6 +981,12 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
                 nonCombatEngine->addStrategy("travel");
                 nonCombatEngine->addStrategy("tfish");
                 nonCombatEngine->addStrategy("rpg");                
+
+                // Silvermoon brain (Phase 1): the goal scorer picks where to go. Not for bots led by
+                // a real player or on a dungeon run (a run that starts later removes it).
+                if (sPlayerbotAIConfig.silvermoonBrain && !facade->HasRealPlayerMaster() &&
+                    !sRandomPlayerbotMgr.SilvermoonDungeonOf(player->GetGUIDLow()))
+                    nonCombatEngine->addStrategy("silvermoon brain");
             }
 
             if (sPlayerbotAIConfig.randomBotJoinBG)

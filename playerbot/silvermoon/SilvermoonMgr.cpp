@@ -979,7 +979,7 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                 {
                     // no emotes, jumping or combat chatter during a run: downtime is for eating and
                     // drinking only (normal behaviour comes back when the run ends)
-                    pai->ChangeStrategy("-travel,-rpg,-tfish,-gather,-explore,-grind,-emote,-rpg jump,+dungeon", BotState::BOT_STATE_NON_COMBAT);
+                    pai->ChangeStrategy("-travel,-rpg,-tfish,-gather,-explore,-grind,-emote,-rpg jump,-silvermoon brain,+dungeon", BotState::BOT_STATE_NON_COMBAT);
                     pai->ChangeStrategy("+cc,-aoe,-emote,-custom::say", BotState::BOT_STATE_COMBAT);
                     // Roles, the way ".bot co" sets them by hand. Tank: tank spec, and "tank assist"
                     // (it goes for whatever is hitting a party member - the healer first - to take

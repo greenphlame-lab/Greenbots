@@ -333,6 +333,7 @@ public:
     uint32 botSummonCost;
 
     BotSelfBotLevel selfBotLevel;
+    uint32 silvermoonBrain; // Silvermoon: 1 = random bots pick destinations with the goal scorer (brain Phase 1)
     uint32 iterationsPerTick;
 
     std::string autoPickReward;
