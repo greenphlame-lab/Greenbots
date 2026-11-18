@@ -36,6 +36,11 @@ set(LIBRARY_SRCS
     ${CMAKE_CURRENT_SOURCE_DIR}/botpch.cpp
 )
 
+#Silvermoon files
+file(GLOB Playerbot_Silvermoon ${CMAKE_CURRENT_SOURCE_DIR}/playerbot/silvermoon/*.cpp ${CMAKE_CURRENT_SOURCE_DIR}/playerbot/silvermoon/*.h)
+    source_group("Player Bot\\Silvermoon" FILES ${Playerbot_Silvermoon})
+    LIST(APPEND LIBRARY_SRCS ${Playerbot_Silvermoon})
+
 #Strategy files
 file(GLOB Playerbot_Strategy ${CMAKE_CURRENT_SOURCE_DIR}/playerbot/strategy/*.cpp ${CMAKE_CURRENT_SOURCE_DIR}/playerbot/strategy/*.h)
     source_group("Player Bot\\Strategies" FILES ${Playerbot_Strategy})
