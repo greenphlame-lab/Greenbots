@@ -110,6 +110,12 @@ namespace
     }
 }
 
+void ai::SilvermoonSkipDestination(uint32 guid, TravelDestination* destination, time_t seconds)
+{
+    std::lock_guard<std::mutex> guard(goalLock);
+    skipUntil[guid][destination] = time(nullptr) + seconds;
+}
+
 static SilvermoonScoredGoal ScoreWith(Player* bot, BotSnapshot const& snapshot, TravelDestination* destination, WorldPosition* position, float distance)
 {
     SilvermoonScoredGoal goal;
