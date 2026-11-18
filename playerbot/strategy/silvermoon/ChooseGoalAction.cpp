@@ -7,6 +7,7 @@
 #include "playerbot/silvermoon/DecisionLog.h"
 #include "playerbot/silvermoon/QuestIndex.h"
 #include "playerbot/silvermoon/Crowd.h"
+#include "Mails/Mail.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include <deque>
 #include <mutex>
@@ -66,6 +67,7 @@ namespace
         s.urgentRepair = context->GetValue<bool>("should repair")->Get();
         s.bagFill = context->GetValue<uint8>("bag space")->Get();
         s.urgentVendor = s.bagFill > 90;
+        s.playerMail = SilvermoonHasPlayerMail(bot);
         return s;
     }
 
@@ -108,6 +110,20 @@ namespace
                 ++left;
         return std::max<uint32>(1, left);
     }
+}
+
+bool ai::SilvermoonHasPlayerMail(Player* bot)
+{
+    time_t now = time(nullptr);
+    for (PlayerMails::iterator itr = bot->GetMailBegin(); itr != bot->GetMailEnd(); ++itr)
+    {
+        Mail const* mail = *itr;
+        if (mail->state == MAIL_STATE_DELETED || now < mail->deliver_time || (!mail->has_items && !mail->money))
+            continue;
+        if (mail->messageType == MAIL_NORMAL && mail->sender && !sRandomPlayerbotMgr.IsRandomBot(uint32(mail->sender)))
+            return true;
+    }
+    return false;
 }
 
 void ai::SilvermoonSkipDestination(uint32 guid, TravelDestination* destination, time_t seconds)
@@ -182,6 +198,8 @@ static SilvermoonScoredGoal ScoreWith(Player* bot, BotSnapshot const& snapshot, 
         c.kind = GoalKind::Repair;
     else if (purpose == TravelDestinationPurpose::Trainer)
         c.kind = GoalKind::Trainer;
+    else if (purpose == TravelDestinationPurpose::Mail)
+        c.kind = GoalKind::Mail;
 
     // crowding (Phase 2a): bots already heading for or working in this 100-yard cell. Capacity is
     // 3 bots for a grind camp, and a third of the spawns (2 to 6) for an indexed objective area.

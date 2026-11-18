@@ -24,6 +24,10 @@ namespace ai
     void SilvermoonLogDecision(Player* bot, SilvermoonScoredGoal const& chosen, SilvermoonScoredGoal const* runnerUp1,
         SilvermoonScoredGoal const* runnerUp2, std::string const& reasonPrefix = "");
 
+    // True when the bot has delivered mail with items or money from a real player (not a bot or
+    // the auction house): the brain then goes to a mailbox without waiting.
+    bool SilvermoonHasPlayerMail(Player* bot);
+
     // Leaves a destination out of this bot's goal lists for a while (Phase 2a stuck give-up).
     void SilvermoonSkipDestination(uint32 guid, TravelDestination* destination, time_t seconds);
 

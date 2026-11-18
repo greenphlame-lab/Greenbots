@@ -17,6 +17,7 @@ namespace silvermoon
         Repair,
         Trainer,
         Explore,
+        Mail,
         Other
     };
 
@@ -29,6 +30,7 @@ namespace silvermoon
         bool urgentRepair = false;     // "should repair"
         bool urgentVendor = false;     // bags over 90%
         uint32_t bagFill = 0;          // bags used, percent
+        bool playerMail = false;       // a real player sent it something by mail
     };
 
     struct GoalCandidate

@@ -3,6 +3,7 @@
 #include "RequestGoalAction.h"
 #include "playerbot/TravelMgr.h"
 #include "playerbot/strategy/actions/ChooseTravelTargetAction.h"
+#include "ChooseGoalAction.h"
 
 using namespace ai;
 
@@ -50,6 +51,11 @@ std::vector<SilvermoonGoalFetch> ai::SilvermoonBuildGoalFetches(PlayerbotAI* ai,
         fetches.push_back({ (uint32)TravelDestinationPurpose::Vendor, {}, 10000.0f });
     if (context->GetValue<bool>("should repair")->Get())
         fetches.push_back({ (uint32)TravelDestinationPurpose::Repair, {}, 10000.0f });
+    // mail: stock bots fetch it after an hour or more (the brain silenced that request), and mail
+    // from a real player right away (Velyna never picked up a cloak sent to her)
+    if (context->GetValue<bool>("can get mail")->Get() &&
+        (SilvermoonHasPlayerMail(bot) || context->GetValue<bool>("should get mail")->Get()))
+        fetches.push_back({ (uint32)TravelDestinationPurpose::Mail, {}, 10000.0f });
     if (context->GetValue<bool>("should travel named", "trainer class")->Get())
     {
         std::vector<int32> trainers = context->GetValue<std::vector<int32>>("available trainers", std::to_string((uint32)TRAINER_TYPE_CLASS))->Get();

@@ -50,6 +50,7 @@ namespace silvermoon
         case GoalKind::Grind: return "grind";
         case GoalKind::Vendor: return "vendor";
         case GoalKind::Repair: return "repair";
+        case GoalKind::Mail: return "mail";
         case GoalKind::Trainer: return "trainer";
         case GoalKind::Explore: return "explore";
         default: return "other";
@@ -103,6 +104,12 @@ namespace silvermoon
             s.value = xpm * (bot.urgentRepair ? CHORE_URGENT_MINUTES : CHORE_NORMAL_MINUTES);
             s.minutes = travel + CHORE_MINUTES;
             s.reason = bot.urgentRepair ? "needs repair" : "repair";
+            break;
+        case GoalKind::Mail:
+            // a gift or delivery from a real player is fetched soon; other mail is a small chore
+            s.value = xpm * (bot.playerMail ? CHORE_URGENT_MINUTES : CHORE_NORMAL_MINUTES);
+            s.minutes = travel + CHORE_MINUTES;
+            s.reason = bot.playerMail ? "mail from a player" : "mail";
             break;
         case GoalKind::Trainer:
             s.value = xpm * TRAINER_MINUTES;
