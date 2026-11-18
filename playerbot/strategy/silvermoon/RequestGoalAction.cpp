@@ -1,4 +1,5 @@
 #include "playerbot/playerbot.h"
+#include "playerbot/silvermoon/BrainTimer.h"
 #include "RequestGoalAction.h"
 #include "playerbot/TravelMgr.h"
 #include "playerbot/strategy/actions/ChooseTravelTargetAction.h"
@@ -67,6 +68,7 @@ FutureDestinations ai::SilvermoonLaunchGoalFetch(Player* bot, std::vector<Silver
     WorldPosition center(bot);
     return std::async(std::launch::async, [partitions = travelPartitions, travelInfo = PlayerTravelInfo(bot), center, fetches]()
         {
+            silvermoon::BrainTimer brainTimer(silvermoon::BrainAsyncMicros());
             PartitionedTravelList list;
             for (auto const& fetch : fetches)
             {
@@ -80,6 +82,7 @@ FutureDestinations ai::SilvermoonLaunchGoalFetch(Player* bot, std::vector<Silver
 
 bool RequestGoalAction::Execute(Event& event)
 {
+    silvermoon::BrainTimer brainTimer(silvermoon::BrainMicros());
     *AI_VALUE(FutureDestinations*, "future travel destinations") = SilvermoonLaunchGoalFetch(bot, SilvermoonBuildGoalFetches(ai, bot));
 
     AI_VALUE(TravelTarget*, "travel target")->SetStatus(TravelStatus::TRAVEL_STATUS_PREPARE);
@@ -91,6 +94,7 @@ bool RequestGoalAction::Execute(Event& event)
 
 bool RequestGoalAction::isUseful()
 {
+    silvermoon::BrainTimer brainTimer(silvermoon::BrainMicros());
     if (bot->InBattleGround() || !ai->AllowActivity(TRAVEL_ACTIVITY))
         return false;
     // Phase 1 is for solo bots: a group (even one this bot leads) keeps the stock travel logic

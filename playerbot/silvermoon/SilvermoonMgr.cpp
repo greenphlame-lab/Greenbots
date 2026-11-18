@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <functional>
 #include "playerbot/PlayerbotAIConfig.h"
+#include "playerbot/silvermoon/BrainTimer.h"
 #include "playerbot/PlayerbotFactory.h"
 #include "playerbot/RandomItemMgr.h"
 #include "Tools/Formulas.h"
@@ -1921,8 +1922,12 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                     lastPerf = nowTime;
                     uint32 online = 0;
                     ForEachPlayerbot([&](Player* p) { if (p && p->IsInWorld()) ++online; });
-                    CharacterDatabase.PExecute("INSERT INTO silvermoon_perf (ts, bots, players, avg_diff, max_diff) VALUES (UNIX_TIMESTAMP(), %u, %u, %u, %u)",
-                        online, uint32(GetPlayers().size()), uint32(sWorld.GetAverageDiff()), uint32(sWorld.GetMaxDiff()));
+                    // brain CPU time over the last 5 minutes: on the bot-update threads, and in the
+                    // background destination fetches (ms, summed over all bots)
+                    uint32 brainMs = uint32(silvermoon::BrainMicros().exchange(0) / 1000);
+                    uint32 brainAsyncMs = uint32(silvermoon::BrainAsyncMicros().exchange(0) / 1000);
+                    CharacterDatabase.PExecute("INSERT INTO silvermoon_perf (ts, bots, players, avg_diff, max_diff, brain_ms, brain_async_ms) VALUES (UNIX_TIMESTAMP(), %u, %u, %u, %u, %u, %u)",
+                        online, uint32(GetPlayers().size()), uint32(sWorld.GetAverageDiff()), uint32(sWorld.GetMaxDiff()), brainMs, brainAsyncMs);
                 }
             }
 

@@ -1,4 +1,5 @@
 #include "playerbot/playerbot.h"
+#include "playerbot/silvermoon/BrainTimer.h"
 #include "RecheckGoalAction.h"
 #include "RequestGoalAction.h"
 #include "ChooseGoalAction.h"
@@ -20,6 +21,7 @@ namespace
 
 bool RecheckGoalAction::Execute(Event& event)
 {
+    silvermoon::BrainTimer brainTimer(silvermoon::BrainMicros());
     uint32 guid = bot->GetGUIDLow();
     FutureDestinations future;
     {
@@ -78,6 +80,7 @@ bool RecheckGoalAction::Execute(Event& event)
 
 bool RecheckGoalAction::isUseful()
 {
+    silvermoon::BrainTimer brainTimer(silvermoon::BrainMicros());
     if (!ai->AllowActivity(TRAVEL_ACTIVITY) || bot->IsInCombat())
         return false;
     if (bot->GetGroup() && bot->GetGroup()->GetMembersCount() > 1)

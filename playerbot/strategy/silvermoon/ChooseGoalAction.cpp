@@ -1,4 +1,5 @@
 #include "playerbot/playerbot.h"
+#include "playerbot/silvermoon/BrainTimer.h"
 #include "ChooseGoalAction.h"
 #include "playerbot/TravelMgr.h"
 #include "playerbot/strategy/values/TravelValues.h"
@@ -227,6 +228,7 @@ void ai::SilvermoonLogDecision(Player* bot, SilvermoonScoredGoal const& chosen, 
 
 bool ChooseGoalAction::Execute(Event& event)
 {
+    silvermoon::BrainTimer brainTimer(silvermoon::BrainMicros());
     TravelTarget* travelTarget = AI_VALUE(TravelTarget*, "travel target");
     if (travelTarget->GetStatus() != TravelStatus::TRAVEL_STATUS_PREPARE)
         return false;
@@ -284,6 +286,7 @@ bool ChooseGoalAction::Execute(Event& event)
 
 bool ChooseGoalAction::isUseful()
 {
+    silvermoon::BrainTimer brainTimer(silvermoon::BrainMicros());
     if (AI_VALUE(TravelTarget*, "travel target")->GetStatus() != TravelStatus::TRAVEL_STATUS_PREPARE)
         return false;
     if (AI_VALUE2(std::string, "manual string", "future travel purpose") != "goal")
