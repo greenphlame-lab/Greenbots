@@ -804,6 +804,27 @@ bool MovementAction::HandleSpecialMovement(TravelPath& path)
     //We are getting 'on' transport.
     if (nextPoint.type == PathNodeType::NODE_TRANSPORT)
     {
+        // Silvermoon patch: elevators (Thunder Bluff and Undercity lifts). Boarding a lift car
+        // never completed, and bots stood at the bottom stop for hours re-picking goals. With
+        // dock-to-dock travel (TransportTeleportType = 2), treat a lift like a dock: go straight to
+        // the first path point after the ride.
+        GameObjectInfo const* liftInfo = sGOStorage.LookupEntry<GameObjectInfo>(nextPoint.entry);
+        if (sPlayerbotAIConfig.transportTeleportType == 2 && liftInfo && liftInfo->type == GAMEOBJECT_TYPE_TRANSPORT)
+        {
+            std::vector<PathNodePoint>& points = path.getPath();
+            auto exit = std::next(points.begin());
+            auto it = exit;
+            while (it != points.end() && it->type == PathNodeType::NODE_TRANSPORT && it->entry == nextPoint.entry)
+                exit = it++;
+            if (it != points.end())
+                exit = it;
+            if (exit->point.getMapId() == bot->GetMapId() && exit->point.distance(WorldPosition(bot)) > 5.0f)
+            {
+                sLog.outBasic("Silvermoon: bot %s took the %s", bot->GetName(), liftInfo->name);
+                return bot->TeleportTo(exit->point.getMapId(), exit->point.getX(), exit->point.getY(), exit->point.getZ(), bot->GetOrientation(), 0);
+            }
+        }
+
         bool usedTransport = UseTransport(ai, nextPoint.entry, nextPoint.point, WorldPosition(), sPlayerbotAIConfig.transportTeleportType > 0);
 
         uint32 lastTransportEntry = 0;
