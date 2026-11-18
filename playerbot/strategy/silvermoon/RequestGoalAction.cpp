@@ -43,7 +43,9 @@ std::vector<SilvermoonGoalFetch> ai::SilvermoonBuildGoalFetches(PlayerbotAI* ai,
     fetches.push_back({ (uint32)TravelDestinationPurpose::Grind, {}, 2000.0f });
 
     // chores when due
-    if (context->GetValue<bool>("should sell")->Get())
+    // only with something a vendor will actually buy: Zugzug's bags were 65%+ full of things it
+    // keeps, so "should sell" stayed true and it walked from vendor to vendor in Tarren Mill
+    if (context->GetValue<bool>("should sell")->Get() && context->GetValue<bool>("can sell")->Get())
         fetches.push_back({ (uint32)TravelDestinationPurpose::Vendor, {}, 10000.0f });
     if (context->GetValue<bool>("should repair")->Get())
         fetches.push_back({ (uint32)TravelDestinationPurpose::Repair, {}, 10000.0f });
