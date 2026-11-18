@@ -11,6 +11,7 @@
 #include "Grids/CellImpl.h"
 
 #include "playerbot/strategy/actions/DestroyItemAction.h"
+#include "playerbot/strategy/values/ItemUsageValue.h"
 
 using namespace ai;
 using namespace MaNGOS;
