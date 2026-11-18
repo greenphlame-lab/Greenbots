@@ -84,6 +84,10 @@ public:
         static bool HandlePlayerbotConsoleCommand(ChatHandler* handler, char const* args);
         bool IsRandomBot(Player* bot);
         bool IsRandomBot(uint32 bot);
+        uint32 SilvermoonDungeonOf(uint32 bot) { return GetEventValue(bot, "silvermoon_dungeon"); }
+        // Silvermoon patch: about 1 random bot in 25 is a crafter: it gathers and crafts more and
+        // levels less, and puts what it makes on the auction house
+        static bool SilvermoonIsCrafter(uint32 bot) { return bot % 25 == 7; }
         bool IsFreeBot(Player* bot) { return IsRandomBot(bot) || sPlayerbotAIConfig.IsFreeAltBot(bot); }
         bool IsFreeBot(uint32 bot) { return IsRandomBot(bot) || sPlayerbotAIConfig.IsFreeAltBot(bot); }
         void InstaRandomize(Player* bot);
