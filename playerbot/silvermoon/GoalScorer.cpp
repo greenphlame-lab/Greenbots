@@ -20,6 +20,7 @@ namespace silvermoon
     static const float CHORE_NORMAL_MINUTES = 3.0f;
     static const float TRAINER_MINUTES = 30.0f;      // a new spell is worth 30 minutes of XP
     static const float EXPLORE_VALUE_MINUTES = 2.0f;
+    static const float CHAIN_XP_SHARE = 0.5f;      // follow-up quests count half (Phase 2a)
 
     static const float DEFAULT_XP_PER_MINUTE_PER_LEVEL = 20.0f; // when the bot's own rate is unknown
 
@@ -64,7 +65,7 @@ namespace silvermoon
         switch (c.kind)
         {
         case GoalKind::QuestTurnIn:
-            s.value = c.questXp;
+            s.value = c.questXp + c.chainXp * CHAIN_XP_SHARE;
             s.minutes = travel + TURN_IN_MINUTES;
             s.reason = "quest xp";
             break;
@@ -74,7 +75,7 @@ namespace silvermoon
             s.reason = "quest xp";
             break;
         case GoalKind::QuestGiver:
-            s.value = c.questXp * GIVER_XP_SHARE;
+            s.value = (c.questXp + c.chainXp * CHAIN_XP_SHARE) * GIVER_XP_SHARE;
             s.minutes = travel + GIVER_MINUTES;
             s.reason = "new quest";
             break;
@@ -118,6 +119,13 @@ namespace silvermoon
             s.minutes = travel + 1.0f;
             s.reason = "other";
             break;
+        }
+
+        // escort, timed and group quests are not solo goals (quest index, Phase 2a)
+        if (c.avoid && (c.kind == GoalKind::QuestObjective || c.kind == GoalKind::QuestGiver))
+        {
+            s.value = 0.0f;
+            s.reason = "avoid: group/escort/timed";
         }
 
         float risk = 1.0f;

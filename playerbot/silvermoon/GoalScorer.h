@@ -39,6 +39,8 @@ namespace silvermoon
         uint32_t objectivesLeft = 1;   // for quest objectives
         float killXp = 0.0f;           // XP per kill for grind spots (rate-adjusted)
         int32_t mobLevel = 0;          // creatures at the destination (0 = none / unknown)
+        float chainXp = 0.0f;          // Phase 2a: XP of follow-up quests (quest index)
+        bool avoid = false;            // Phase 2a: escort, timed or group quest (quest index)
         bool elite = false;
     };
 

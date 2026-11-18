@@ -5,6 +5,8 @@
 #include "playerbot/strategy/values/TravelValues.h"
 #include "Tools/Formulas.h"
 #include "playerbot/silvermoon/DecisionLog.h"
+#include "playerbot/silvermoon/QuestIndex.h"
+#include "playerbot/PlayerbotAIConfig.h"
 #include <deque>
 #include <mutex>
 
@@ -117,10 +119,21 @@ static SilvermoonScoredGoal ScoreWith(Player* bot, BotSnapshot const& snapshot, 
     c.distance = distance;
     TravelDestinationPurpose purpose = destination->GetPurpose();
 
+    // Phase 2a: the quest index adds chain value, avoid flags and the real mob levels and elites
+    // of the objective area. Only with AiPlayerbot.SilvermoonSpread = 1.
+    bool useIndex = sPlayerbotAIConfig.silvermoonSpread && QuestIndex::Loaded();
+    float xpRate = sWorld.getConfig(CONFIG_FLOAT_RATE_XP_QUEST);
+
     if (QuestRelationTravelDestination* q = dynamic_cast<QuestRelationTravelDestination*>(destination))
     {
         c.kind = purpose == TravelDestinationPurpose::QuestTaker ? GoalKind::QuestTurnIn : GoalKind::QuestGiver;
         c.questXp = QuestXp(bot, q->GetQuestId());
+        if (useIndex)
+            if (QuestIndexEntry const* entry = QuestIndex::Get(q->GetQuestId()))
+            {
+                c.chainXp = entry->chainXp * xpRate;
+                c.avoid = (entry->flags & QI_AVOID) != 0;
+            }
     }
     else if (QuestObjectiveTravelDestination* o = dynamic_cast<QuestObjectiveTravelDestination*>(destination))
     {
@@ -128,6 +141,19 @@ static SilvermoonScoredGoal ScoreWith(Player* bot, BotSnapshot const& snapshot, 
         c.questXp = QuestXp(bot, o->GetQuestId());
         c.objectivesLeft = ObjectivesLeft(bot, o->GetQuestId());
         MobInfo(o->GetEntry(), c.mobLevel, c.elite);
+        if (useIndex)
+            if (QuestIndexEntry const* entry = QuestIndex::Get(o->GetQuestId()))
+            {
+                c.avoid = (entry->flags & QI_AVOID) != 0;
+                if (position)
+                    if (QuestArea const* area = QuestIndex::NearestArea(o->GetQuestId(), uint8(o->GetObjective() + 1), position->getMapId(), position->getX(), position->getY()))
+                    {
+                        if (area->maxMobLevel)
+                            c.mobLevel = int32(area->minMobLevel + area->maxMobLevel) / 2;
+                        // an area counts as elite when at least a third of its spawns are elites
+                        c.elite = area->elites && area->elites * 3 >= area->spawns;
+                    }
+            }
     }
     else if (dynamic_cast<GrindTravelDestination*>(destination))
     {

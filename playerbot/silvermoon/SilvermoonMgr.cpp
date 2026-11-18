@@ -85,6 +85,7 @@ using namespace ai;
 using namespace MaNGOS;
 #include "playerbot/RandomPlayerbotMgr.h"
 #include "playerbot/silvermoon/DecisionLog.h"
+#include "playerbot/silvermoon/QuestIndex.h"
 
 // Silvermoon patch: number of guilds with at least one member online, per faction
 // (0 = Alliance, 1 = Horde). Counted once a minute in the world thread and read by
@@ -677,6 +678,7 @@ static void SilvermoonVendorGear(Player* bot)
 void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
 {
     silvermoon::DecisionLog::FlushIfDue(); // brain decisions, batched every 30 seconds
+    silvermoon::QuestIndex::Load();        // Phase 2a quest index, once (always loaded, used only with SilvermoonSpread = 1)
 
     // Silvermoon patch: bots sent into a dungeon with ".rndbot dungeon" commit to it for up to
     // 2.5 hours. Inside, travel/rpg/gathering/fishing are off (those walked them straight back
