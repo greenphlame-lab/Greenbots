@@ -8,6 +8,7 @@
 #include <array>
 #include <deque>
 #include <mutex>
+#include <unordered_map>
 #include <algorithm>
 #include <functional>
 #include "playerbot/PlayerbotAIConfig.h"
@@ -2253,6 +2254,48 @@ void RandomPlayerbotMgr::SilvermoonProcessBot(Player* player, PlayerbotAI* ai, u
             }
             else if (GetEventValue(bot, "silvermoon_city_since"))
                 SetEventValue(bot, "silvermoon_city_since", 0, 0);
+        }
+
+        // Silvermoon patch: no-progress watchdog (stopgap until Phase 2a's stuck recovery). A bot
+        // that can't path out of where it stands (Mowor, in a ravine below the Burning Blade camp)
+        // keeps choosing goals it never reaches, and the skip list then walks it through every
+        // vendor in the world. Every 2 minutes: a solo bot that has moved less than 5 yards in
+        // 15 minutes, while not working at a destination, fishing, sitting or fighting, is sent home.
+        if (ai && sRandomPlayerbotMgr.IsRandomBot(player) && player->IsInWorld() && player->IsAlive() &&
+            !player->IsTaxiFlying() && !player->IsBeingTeleported() && !player->InBattleGround() && !player->GetTransport() &&
+            !player->GetGroup() && !ai->HasRealPlayerMaster() && player->GetMap() && player->GetMap()->IsContinent() &&
+            !GetEventValue(bot, "silvermoon_progress_check"))
+        {
+            SetEventValue(bot, "silvermoon_progress_check", 1, 2 * MINUTE);
+            static std::mutex progressLock;
+            static std::unordered_map<uint32, std::pair<WorldPosition, time_t>> anchors;
+            time_t now = time(nullptr);
+            TravelTarget* travelTarget = ai->GetAiObjectContext()->GetValue<TravelTarget*>("travel target")->Get();
+            bool busy = player->IsInCombat() || player->IsSitState() ||
+                (travelTarget && travelTarget->GetStatus() == TravelStatus::TRAVEL_STATUS_WORK) ||
+                (travelTarget && travelTarget->GetDestination() && travelTarget->GetDestination()->GetPurpose() == TravelDestinationPurpose::GatherFishing);
+            bool sendHome = false;
+            uint32 minutes = 0;
+            {
+                std::lock_guard<std::mutex> guard(progressLock);
+                WorldPosition here(player);
+                auto it = anchors.find(bot);
+                if (busy || it == anchors.end() || it->second.first.getMapId() != here.getMapId() || it->second.first.distance(here) > 5.0f)
+                    anchors[bot] = { here, now };
+                else if (now - it->second.second >= 15 * MINUTE)
+                {
+                    minutes = uint32((now - it->second.second) / MINUTE);
+                    anchors.erase(it);
+                    sendHome = true;
+                }
+            }
+            if (sendHome)
+            {
+                sLog.outBasic("Silvermoon: bot %s (level %u) has not moved for %u minutes, sending it home", player->GetName(), player->GetLevel(), minutes);
+                if (travelTarget)
+                    travelTarget->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
+                player->TeleportToHomebind();
+            }
         }
 
         // Silvermoon patch: brain on saved strategies. A bot whose strategy lists were saved before
