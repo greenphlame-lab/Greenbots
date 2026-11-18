@@ -4,6 +4,7 @@
 #include "AiObjectContext.h"
 #include "NamedObjectContext.h"
 #include "StrategyContext.h"
+#include "silvermoon/SilvermoonContexts.h"
 #include "triggers/TriggerContext.h"
 #include "actions/ActionContext.h"
 #include "triggers/ChatTriggerContext.h"
@@ -23,10 +24,12 @@ AiObjectContext::AiObjectContext(PlayerbotAI* ai) : PlayerbotAIAware(ai)
     strategyContexts.Add(new AssistStrategyContext());
     strategyContexts.Add(new QuestStrategyContext());
     strategyContexts.Add(new FishStrategyContext());
+    strategyContexts.Add(new SilvermoonStrategyContext());
 
     actionContexts.Add(new ActionContext());
     actionContexts.Add(new ChatActionContext());
     actionContexts.Add(new WorldPacketActionContext());
+    actionContexts.Add(new SilvermoonActionContext());
 
     triggerContexts.Add(new TriggerContext());
     triggerContexts.Add(new ChatTriggerContext());
