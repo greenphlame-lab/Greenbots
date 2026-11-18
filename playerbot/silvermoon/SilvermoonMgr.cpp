@@ -1926,8 +1926,9 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                     // background destination fetches (ms, summed over all bots)
                     uint32 brainMs = uint32(silvermoon::BrainMicros().exchange(0) / 1000);
                     uint32 brainAsyncMs = uint32(silvermoon::BrainAsyncMicros().exchange(0) / 1000);
-                    CharacterDatabase.PExecute("INSERT INTO silvermoon_perf (ts, bots, players, avg_diff, max_diff, brain_ms, brain_async_ms) VALUES (UNIX_TIMESTAMP(), %u, %u, %u, %u, %u, %u)",
-                        online, uint32(GetPlayers().size()), uint32(sWorld.GetAverageDiff()), uint32(sWorld.GetMaxDiff()), brainMs, brainAsyncMs);
+                    uint32 liftSkips = silvermoon::LiftSkips().exchange(0);
+                    CharacterDatabase.PExecute("INSERT INTO silvermoon_perf (ts, bots, players, avg_diff, max_diff, brain_ms, brain_async_ms, tp_lift) VALUES (UNIX_TIMESTAMP(), %u, %u, %u, %u, %u, %u, %u)",
+                        online, uint32(GetPlayers().size()), uint32(sWorld.GetAverageDiff()), uint32(sWorld.GetMaxDiff()), brainMs, brainAsyncMs, liftSkips);
                 }
             }
 

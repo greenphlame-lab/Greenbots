@@ -12,6 +12,9 @@ namespace silvermoon
     inline std::atomic<uint64_t>& BrainMicros() { static std::atomic<uint64_t> v{ 0 }; return v; }
     inline std::atomic<uint64_t>& BrainAsyncMicros() { static std::atomic<uint64_t> v{ 0 }; return v; }
 
+    // lift rides skipped dock to dock (Thunder Bluff, Undercity), for silvermoon_perf.tp_lift
+    inline std::atomic<uint32_t>& LiftSkips() { static std::atomic<uint32_t> v{ 0 }; return v; }
+
     class BrainTimer
     {
     public:

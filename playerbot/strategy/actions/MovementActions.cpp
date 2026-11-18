@@ -2,6 +2,7 @@
 #include "playerbot/playerbot.h"
 #include "playerbot/RandomPlayerbotMgr.h"
 #include "MovementActions.h"
+#include "playerbot/silvermoon/BrainTimer.h"
 #include "MotionGenerators/MotionMaster.h"
 #include "MotionGenerators/MovementGenerator.h"
 #include "playerbot/FleeManager.h"
@@ -821,6 +822,7 @@ bool MovementAction::HandleSpecialMovement(TravelPath& path)
             if (exit->point.getMapId() == bot->GetMapId() && exit->point.distance(WorldPosition(bot)) > 5.0f)
             {
                 sLog.outBasic("Silvermoon: bot %s took the %s", bot->GetName(), liftInfo->name);
+                ++silvermoon::LiftSkips();
                 return bot->TeleportTo(exit->point.getMapId(), exit->point.getX(), exit->point.getY(), exit->point.getZ(), bot->GetOrientation(), 0);
             }
         }
