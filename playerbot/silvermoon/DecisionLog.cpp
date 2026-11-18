@@ -16,6 +16,32 @@ namespace silvermoon
         std::vector<DecisionRow> buffer;
         time_t lastFlush = 0;
 
+        // game link markup -> plain [name]: "|cFFFFFF00|Hentry:1866:|h[Ravenclaw Slave]|h|r" becomes
+        // "[Ravenclaw Slave]", so titles stay readable and fit the 96-character columns
+        std::string StripLinks(std::string const& text)
+        {
+            std::string out;
+            size_t i = 0;
+            while (i < text.size())
+            {
+                if (text.compare(i, 2, "|c") == 0)
+                {
+                    size_t open = text.find("|h[", i);
+                    size_t close = open == std::string::npos ? std::string::npos : text.find("]|h", open + 3);
+                    if (close != std::string::npos)
+                    {
+                        out += "[" + text.substr(open + 3, close - open - 3) + "]";
+                        i = close + 3;
+                        if (text.compare(i, 2, "|r") == 0)
+                            i += 2;
+                        continue;
+                    }
+                }
+                out += text[i++];
+            }
+            return out;
+        }
+
         std::string Quote(std::string text, size_t maxLength)
         {
             if (text.size() > maxLength)
@@ -35,6 +61,9 @@ namespace silvermoon
 
     void DecisionLog::Add(DecisionRow row)
     {
+        row.target = StripLinks(row.target);
+        row.runnerUp1 = StripLinks(row.runnerUp1);
+        row.runnerUp2 = StripLinks(row.runnerUp2);
         std::lock_guard<std::mutex> guard(bufferLock);
         if (buffer.size() < MAX_BUFFERED)
             buffer.push_back(std::move(row));
