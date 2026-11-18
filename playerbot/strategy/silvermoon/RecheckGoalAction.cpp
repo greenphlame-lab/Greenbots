@@ -77,7 +77,10 @@ bool RecheckGoalAction::isUseful()
         return false;
     if (!AI_VALUE(TravelTarget*, "travel target")->IsActive())
         return false;
-    // the first check is due 5 minutes after the goal was chosen ("choose goal" sets the time)
+    // the first check is due 5 minutes after the goal was chosen ("choose goal" sets the time).
+    // A bot still on a travel target the brain never chose (set before login, or by stock
+    // code) has no check time; check it right away, or it keeps that target forever and
+    // never makes a decision (Fyrieth, Velyna).
     int checkAt = AI_VALUE2(int, "manual int", "silvermoon goal check at");
-    return checkAt && time(nullptr) >= checkAt;
+    return !checkAt || time(nullptr) >= checkAt;
 }

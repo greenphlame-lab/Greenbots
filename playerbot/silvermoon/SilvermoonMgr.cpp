@@ -2249,6 +2249,33 @@ void RandomPlayerbotMgr::SilvermoonProcessBot(Player* player, PlayerbotAI* ai, u
                 SetEventValue(bot, "silvermoon_city_since", 0, 0);
         }
 
+        // Silvermoon patch: ghost watchdog. Some bots never make it back to their corpse
+        // (Nynitiz and Beardo were ghosts for 40-55 hours). Every 2 minutes: a solo bot that
+        // has been dead for 15+ minutes is revived where it stands.
+        if (ai && sRandomPlayerbotMgr.IsRandomBot(player) && player->IsInWorld() && !player->IsAlive() &&
+            !player->IsBeingTeleported() && !player->InBattleGround() && !ai->HasRealPlayerMaster() &&
+            !SilvermoonDungeonOf(bot) && !GetEventValue(bot, "silvermoon_dead_check"))
+        {
+            SetEventValue(bot, "silvermoon_dead_check", 1, 2 * MINUTE);
+            uint32 since = GetEventValue(bot, "silvermoon_dead_since");
+            uint32 now = uint32(time(nullptr));
+            if (!since)
+                SetEventValue(bot, "silvermoon_dead_since", now, 2 * HOUR);
+            else if (now - since >= 15 * MINUTE)
+            {
+                sLog.outBasic("Silvermoon: bot %s (level %u) dead for %u minutes, reviving it",
+                    player->GetName(), player->GetLevel(), (now - since) / MINUTE);
+                player->ResurrectPlayer(0.5f);
+                player->SpawnCorpseBones();
+                TravelTarget* travelTarget = ai->GetAiObjectContext()->GetValue<TravelTarget*>("travel target")->Get();
+                if (travelTarget)
+                    travelTarget->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
+                SetEventValue(bot, "silvermoon_dead_since", 0, 0);
+            }
+        }
+        else if (ai && player->IsAlive() && GetEventValue(bot, "silvermoon_dead_since"))
+            SetEventValue(bot, "silvermoon_dead_since", 0, 0);
+
         // Silvermoon patch: level-appropriate zones. With DisableRandomLevels = 1 the
         // stock "teleport for level" code below never runs, so bots only leave their
         // starter zone by wandering and the leaders end up grinding grey mobs. A bot
