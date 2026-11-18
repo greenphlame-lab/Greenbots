@@ -254,8 +254,11 @@ bool ChooseGoalAction::Execute(Event& event)
     std::vector<SilvermoonScoredGoal> goals = SilvermoonScoreGoals(bot, ai, list);
     if (goals.empty() || goals.front().score.score <= 0.0f)
     {
-        // nothing worth doing nearby: try again in 30 seconds (the stock reset/grind still run)
+        // nothing worth doing nearby: try again in 30 seconds (the stock reset/grind still run),
+        // and let the level-zone check move the bot now if it has outgrown the area (a level 18
+        // kept picking grey Elwynn mobs until that check came round 45-90 minutes later)
         SET_AI_VALUE2(int, "manual int", "silvermoon goal retry at", int(time(nullptr) + 30));
+        sRandomPlayerbotMgr.SilvermoonCheckLevelZoneNow(bot->GetGUIDLow());
         return false;
     }
 

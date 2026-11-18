@@ -51,6 +51,13 @@ bool RecheckGoalAction::Execute(Event& event)
     SilvermoonScoredGoal const& best = goals.front();
     if (best.destination == current->GetDestination())
         return false;
+    // never switch to a goal worth nothing (grey mobs scored 0 and still won against a 0-score
+    // current goal, so the bot hopped between grey grind spots)
+    if (best.score.score <= 0.0f)
+    {
+        sRandomPlayerbotMgr.SilvermoonCheckLevelZoneNow(bot->GetGUIDLow());
+        return false;
+    }
 
     bool urgent = (best.kind == GoalKind::Repair && AI_VALUE(bool, "should repair")) ||
                   (best.kind == GoalKind::Vendor && AI_VALUE(uint8, "bag space") > 90);

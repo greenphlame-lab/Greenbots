@@ -85,6 +85,8 @@ public:
         bool IsRandomBot(Player* bot);
         bool IsRandomBot(uint32 bot);
         uint32 SilvermoonDungeonOf(uint32 bot) { return GetEventValue(bot, "silvermoon_dungeon"); }
+        // the brain found nothing worth XP within reach: run the level-zone check on the next update
+        void SilvermoonCheckLevelZoneNow(uint32 bot) { SetEventValue(bot, "silvermoon_level_zone", 0, 0); }
         // Silvermoon realm management, defined in silvermoon/SilvermoonMgr.cpp
         void SilvermoonUpdate(uint32 elapsed);
         void SilvermoonProcessBot(Player* player, PlayerbotAI* ai, uint32 bot);
