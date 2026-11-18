@@ -3,6 +3,7 @@
 #include "SilvermoonBrainStrategy.h"
 #include "RequestGoalAction.h"
 #include "ChooseGoalAction.h"
+#include "RecheckGoalAction.h"
 
 namespace ai
 {
@@ -24,6 +25,7 @@ namespace ai
         {
             creators["request goal destinations"] = [](PlayerbotAI* ai) { return new RequestGoalAction(ai); };
             creators["choose goal"] = [](PlayerbotAI* ai) { return new ChooseGoalAction(ai); };
+            creators["recheck goal"] = [](PlayerbotAI* ai) { return new RecheckGoalAction(ai); };
         }
     };
 }
