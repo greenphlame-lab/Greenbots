@@ -2214,6 +2214,41 @@ void RandomPlayerbotMgr::SilvermoonProcessBot(Player* player, PlayerbotAI* ai, u
             }
         }
 
+        // Silvermoon patch: city watchdog. Bots that log in or hearth into a capital often
+        // cannot path out (Thunder Bluff lifts, a goal on the other continent) and re-pick
+        // goals in place for an hour or more; the level-zone check below only catches them
+        // after two 45-90 minute checks. Every 2 minutes: a solo bot that has been in a
+        // capital for 10+ minutes is sent to a level-appropriate zone.
+        if (ai && sRandomPlayerbotMgr.IsRandomBot(player) && player->IsInWorld() && player->IsAlive() &&
+            !player->IsTaxiFlying() && !player->IsBeingTeleported() && !player->InBattleGround() &&
+            !player->InBattleGroundQueue() && !player->IsInCombat() && !player->GetGroup() &&
+            !ai->HasRealPlayerMaster() && player->GetLevel() >= 10 &&
+            player->GetMap() && player->GetMap()->IsContinent() &&
+            !GetEventValue(bot, "silvermoon_city_check"))
+        {
+            SetEventValue(bot, "silvermoon_city_check", 1, 2 * MINUTE);
+            if (ai->IsInCapitalCity())
+            {
+                uint32 since = GetEventValue(bot, "silvermoon_city_since");
+                uint32 now = uint32(time(nullptr));
+                if (!since)
+                    SetEventValue(bot, "silvermoon_city_since", now, 2 * HOUR);
+                else if (now - since >= 10 * MINUTE)
+                {
+                    sLog.outBasic("Silvermoon: bot %s (level %u) stuck in a city for %u minutes, sending it to a level-appropriate zone",
+                        player->GetName(), player->GetLevel(), (now - since) / MINUTE);
+                    TravelTarget* travelTarget = ai->GetAiObjectContext()->GetValue<TravelTarget*>("travel target")->Get();
+                    if (travelTarget)
+                        travelTarget->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
+                    RandomTeleportForLevel(player, false);
+                    SetEventValue(bot, "silvermoon_city_since", 0, 0);
+                    SetEventValue(bot, "silvermoon_bind_home", 1, 10 * MINUTE);
+                }
+            }
+            else if (GetEventValue(bot, "silvermoon_city_since"))
+                SetEventValue(bot, "silvermoon_city_since", 0, 0);
+        }
+
         // Silvermoon patch: level-appropriate zones. With DisableRandomLevels = 1 the
         // stock "teleport for level" code below never runs, so bots only leave their
         // starter zone by wandering and the leaders end up grinding grey mobs. A bot
