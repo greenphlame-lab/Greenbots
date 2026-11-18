@@ -2678,6 +2678,14 @@ bool RandomPlayerbotMgr::SilvermoonConsoleCommand(ChatHandler* handler, char con
         take([&](Player* p) { return isHealer(p) && p->GetLevel() <= tankLevel; });                                               // healer
         if (party.size() == before)
             take(isHealer);
+        // no priest, shaman or druid online at this level: a paladin heals instead (a party of two
+        // paladins went in with neither one healing)
+        auto isPaladin = [](Player* p) { return p->getClass() == CLASS_PALADIN; };
+        if (party.size() == before)
+            take([&](Player* p) { return isPaladin(p) && p->GetLevel() <= tankLevel; });
+        if (party.size() == before)
+            take(isPaladin);
+        Player* healer = party.size() > before ? party.back() : nullptr;
         while (party.size() < 5 && !pool.empty())
         {
             before = party.size();
@@ -2722,13 +2730,13 @@ bool RandomPlayerbotMgr::SilvermoonConsoleCommand(ChatHandler* handler, char con
             sRandomPlayerbotMgr.SetEventValue(p->GetGUIDLow(), "silvermoon_dungeon", d.map, 150 * MINUTE);
             sRandomPlayerbotMgr.SetEventValue(p->GetGUIDLow(), "silvermoon_dungeon_party", leader->GetGUIDLow(), 150 * MINUTE);
             sRandomPlayerbotMgr.SetEventValue(p->GetGUIDLow(), "silvermoon_dungeon_wipes", 0, 0);
-            // roles: 1 = tank (the first pick, a warrior/paladin/druid), 2 = healer (the second
-            // pick when it is a priest/shaman/druid/paladin), 3 = damage
+            // roles: 1 = tank (the first pick, a warrior/paladin/druid), 2 = healer (the healer pick:
+            // a priest/shaman/druid, or a paladin when none is online), 3 = damage
             uint32 role = 3;
             uint8 cls = p->getClass();
             if (p == party.front() && (cls == CLASS_WARRIOR || cls == CLASS_PALADIN || cls == CLASS_DRUID))
                 role = 1;
-            else if (party.size() > 1 && p == party[1] && (cls == CLASS_PRIEST || cls == CLASS_SHAMAN || cls == CLASS_DRUID || cls == CLASS_PALADIN))
+            else if (p == healer)
                 role = 2;
             sRandomPlayerbotMgr.SetEventValue(p->GetGUIDLow(), "silvermoon_dungeon_role", role, 150 * MINUTE);
             SilvermoonStockUp(p);
