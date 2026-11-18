@@ -214,6 +214,16 @@ bool SummonAction::Teleport(Player* requester, Player *summoner, Player *player)
             float z = summoner->GetPositionZ();
             summoner->UpdateGroundPositionZ(x, y, z);
 
+            // Silvermoon patch: the ground lookup at the offset spot can land on a lower floor, in a
+            // cave below or under the terrain (Sayrena ended up below the ground). Only accept a spot
+            // at about the summoner's own height; otherwise use the summoner's exact position.
+            if (std::fabs(z - summoner->GetPositionZ()) > 3.0f)
+            {
+                x = summoner->GetPositionX();
+                y = summoner->GetPositionY();
+                z = summoner->GetPositionZ();
+            }
+
             if (!summoner->IsWithinLOS(x, y, z + player->GetCollisionHeight(), true))
             {
                 x = summoner->GetPositionX();
