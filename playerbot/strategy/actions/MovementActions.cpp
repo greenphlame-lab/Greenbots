@@ -1,5 +1,6 @@
 
 #include "playerbot/playerbot.h"
+#include "playerbot/RandomPlayerbotMgr.h"
 #include "MovementActions.h"
 #include "MotionGenerators/MotionMaster.h"
 #include "MotionGenerators/MovementGenerator.h"
@@ -1088,6 +1089,11 @@ Unit* MovementAction::GetMover(Player* bot)
 bool MovementAction::MoveTo2(const WorldPosition& endPos, bool idle, bool react, bool noPath, bool ignoreEnemyTargets)
 {
     if (!endPos.isValid())
+        return false;
+
+    // Silvermoon patch: a bot committed to a dungeon run never heads for a place on another map
+    // (e.g. its leader or a travel spot outside) - that walked bots straight out into the void.
+    if (endPos.getMapId() != bot->GetMapId() && sRandomPlayerbotMgr.IsRandomBot(bot) && sRandomPlayerbotMgr.SilvermoonDungeonOf(bot->GetGUIDLow()) == bot->GetMapId())
         return false;
 
     UpdateMovementState();

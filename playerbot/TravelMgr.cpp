@@ -455,6 +455,18 @@ uint8 QuestObjectiveTravelDestination::GetObjective() const
     return 0;
 }
 
+// Silvermoon patch: bots below level 5 stay in the zone they are in (their starting zone):
+// a level 2 walked from Northshire to Stormwind Keep for a "town visit".
+static bool SilvermoonLeavesStartZone(const PlayerTravelInfo& info, WorldPosition const& dest)
+{
+    if (info.GetLevel() >= 5)
+        return false;
+    auto zoneOf = [](AreaTableEntry const* a) -> uint32 { return a ? (a->zone ? a->zone : a->ID) : 0; };
+    uint32 here = zoneOf(info.GetPosition().GetArea());
+    uint32 there = zoneOf(dest.GetArea());
+    return here && there && here != there;
+}
+
 bool RpgTravelDestination::IsPossible(const PlayerTravelInfo& info) const
 {   
     //Horde pvp baracks
@@ -464,6 +476,29 @@ bool RpgTravelDestination::IsPossible(const PlayerTravelInfo& info) const
     //Alliance pvp baracks
     if (ClosestMapId(info.GetPosition()) == 449 && info.GetTeam() == HORDE)
         return false;
+
+    // Silvermoon patch: no vendor, trainer, flight master or other npc trips into areas
+    // far above the bot's level or owned by the enemy faction (bots walked through
+    // Arathi and the Hinterlands at level 17 and died over and over).
+    if (info.GetLevel() < DEFAULT_MAX_LEVEL)
+    {
+        if (WorldPosition* point = GetClosestPoint(info.GetPosition()))
+        {
+            if (SilvermoonLeavesStartZone(info, *point))
+                return false;
+            int32 areaLevel = point->getAreaLevel();
+            if (areaLevel > 0 && areaLevel > int32(info.GetLevel()) + 5)
+                return false;
+            if (AreaTableEntry const* area = point->GetArea())
+            {
+                AreaTableEntry const* zone = area->zone ? GetAreaEntryByAreaID(area->zone) : nullptr;
+                for (AreaTableEntry const* entry : { area, zone })
+                    if (entry && ((entry->team == AREATEAM_ALLY && info.GetTeam() == HORDE) ||
+                                  (entry->team == AREATEAM_HORDE && info.GetTeam() == ALLIANCE)))
+                        return false;
+            }
+        }
+    }
 
     return true;
 }
@@ -554,8 +589,29 @@ bool ExploreTravelDestination::IsPossible(const PlayerTravelInfo& info) const
 {
     AreaTableEntry const* area = GetArea();
 
+    // Silvermoon patch: bots never pick exploration targets inside zones that
+    // belong to the enemy faction. Exploration destinations ignored faction, so
+    // low-level bots "explored" enemy starter zones (teleporting along the route
+    // when no player was near) and then fought the guards and townsfolk there.
+    if (area)
+    {
+        AreaTableEntry const* zone = area->zone ? GetAreaEntryByAreaID(area->zone) : nullptr;
+        for (AreaTableEntry const* entry : { area, zone })
+        {
+            if (!entry)
+                continue;
+            if ((entry->team == AREATEAM_ALLY && info.GetTeam() == HORDE) ||
+                (entry->team == AREATEAM_HORDE && info.GetTeam() == ALLIANCE))
+                return false;
+        }
+    }
+
     if (GetLevel() && (uint32)GetLevel() > info.GetLevel() && info.GetLevel() < DEFAULT_MAX_LEVEL)
         return false;
+
+    if (WorldPosition* point = GetClosestPoint(info.GetPosition()))
+        if (SilvermoonLeavesStartZone(info, *point))
+            return false;
 
     return true;
 }

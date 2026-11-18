@@ -1,5 +1,6 @@
 #include "playerbot/playerbot.h"
 #include "TravelValues.h"
+#include "playerbot/ServerFacade.h"
 #include "QuestValues.h"
 #include "SharedValueContext.h"
 #include "BudgetValues.h"
@@ -460,6 +461,43 @@ bool ShouldTravelNamedValue::Calculate()
 
         if (AI_VALUE2(uint32, "train cost", trainerType) == 0) //Has nothing to train
             return false;
+
+        // Silvermoon patch: class training comes first. As soon as the bot can pay for repairs and
+        // at least one new spell, it goes to its trainer (who teaches damage spells first, then
+        // heals, then the rest, as far as the money goes). Half the bots at 10-19 could afford
+        // missing spells but never went, waiting to afford everything on top of other savings.
+        if (trainerType == TRAINER_TYPE_CLASS)
+        {
+            static std::map<uint8, std::vector<std::tuple<uint32, uint32, uint32>>> classSpells; // class -> (level, cost, learned spell)
+            std::vector<std::tuple<uint32, uint32, uint32>>& list = classSpells[bot->getClass()];
+            if (list.empty())
+            {
+                for (uint32 id = 0; id < sCreatureStorage.GetMaxEntry(); ++id)
+                {
+                    CreatureInfo const* co = sCreatureStorage.LookupEntry<CreatureInfo>(id);
+                    if (!co || co->TrainerType != TRAINER_TYPE_CLASS || co->TrainerClass != bot->getClass())
+                        continue;
+                    for (TrainerSpellData const* data : { sObjectMgr.GetNpcTrainerSpells(co->Entry), sObjectMgr.GetNpcTrainerTemplateSpells(co->TrainerTemplateId) })
+                        if (data)
+                            for (auto const& entry : data->spellList)
+                            {
+                                uint32 learned = entry.second.spell;
+                                if (SpellEntry const* teach = sServerFacade.LookupSpellInfo(entry.second.spell))
+                                    for (int j = 0; j < 3; ++j)
+                                        if (teach->Effect[j] == SPELL_EFFECT_LEARN_SPELL && teach->EffectTriggerSpell[j])
+                                            learned = teach->EffectTriggerSpell[j];
+                                list.push_back({ entry.second.reqLevel, entry.second.spellCost, learned });
+                            }
+                }
+                if (list.empty())
+                    list.push_back({ 255, 0, 0 });
+            }
+            uint32 spare = bot->GetMoney() > AI_VALUE(uint32, "max repair cost") ? bot->GetMoney() - AI_VALUE(uint32, "max repair cost") : 0;
+            for (auto const& [level, cost, learned] : list)
+                if (learned && level <= bot->GetLevel() && cost <= spare && !bot->HasSpell(learned))
+                    return true;
+            return false;
+        }
 
         if (!AI_VALUE2(bool, "has all money for", (uint32)budgetType))
             return false;

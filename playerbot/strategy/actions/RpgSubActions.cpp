@@ -183,8 +183,10 @@ bool RpgTaxiAction::Execute(Event& event)
     }
 
     uint32 path = nodes[urand(0, nodes.size() - 1)];
+    // Silvermoon patch: the temporary 10 gold for the fare is only lent right around the
+    // flight call. It used to be added up here, and every early return below (unknown path,
+    // no flight master in reach, path refused) kept it: bots piled up 10 gold per failure.
     uint32 money = bot->GetMoney();
-    bot->SetMoney(money + 100000);
 
     TaxiPathEntry const* entry = sTaxiPathStore.LookupEntry(path);
     if (!entry)
@@ -202,8 +204,10 @@ bool RpgTaxiAction::Execute(Event& event)
 #ifdef MANGOSBOT_TWO                
     bot->OnTaxiFlightEject(true);
 #endif
+    bot->SetMoney(money + 100000);
     if (!bot->ActivateTaxiPathTo({ entry->from, entry->to }, flightMaster, 0))
     {
+        bot->SetMoney(money);
         sLog.outError("Bot %s cannot fly %u (%zu location available)", bot->GetName(), path, nodes.size());
         return false;
     }

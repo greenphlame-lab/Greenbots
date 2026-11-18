@@ -1,5 +1,6 @@
 
 #include "playerbot/playerbot.h"
+#include "playerbot/RandomPlayerbotMgr.h"
 #include "ChooseRpgTargetAction.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/strategy/values/PossibleRpgTargetsValue.h"
@@ -211,6 +212,14 @@ std::unordered_map<ObjectGuid, float> ChooseRpgTargetAction::GetTargets(Player* 
 
         //For all rpg actions that are triggered/possible for this target get the highest relevance.
         float relevance = getMaxRelevance(guidP);
+
+        // Silvermoon patch: less roleplay, more levelling. A random bot of level 5+ on its own
+        // (no real player leading it) only walks over to an npc or object for something useful -
+        // quests, selling, repairs, training, buying, mail, the auction house - not to emote,
+        // chat, stand around, "work" or wave. (Relevance here: trivial actions score 0-10,
+        // useful ones 25+.)
+        if (relevance < 25.0f && !isTravelTarget && bot->GetLevel() >= 5 && sRandomPlayerbotMgr.IsRandomBot(bot) && !ai->HasRealPlayerMaster())
+            continue;
 
         bool travelHasQuest = false;
         if (isTravelTarget && guidP.GetEntry())

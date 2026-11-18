@@ -1,5 +1,6 @@
 
 #include "playerbot/playerbot.h"
+#include "playerbot/RandomPlayerbotMgr.h"
 #include "playerbot/LootObjectStack.h"
 #include "ChooseTravelTargetAction.h"
 #include "playerbot/PlayerbotAIConfig.h"
@@ -789,29 +790,33 @@ bool RequestTravelTargetAction::isAllowed() const
 
     switch (actionPurpose)
     {
-    case TravelDestinationPurpose::Repair:
     case TravelDestinationPurpose::Vendor:
-    case TravelDestinationPurpose::AH:
+        return true; // Silvermoon patch: always go sell when the bags need it (was 90%)
+    case TravelDestinationPurpose::Repair:
         return urand(1, 100) < 90;
+    case TravelDestinationPurpose::AH:
+        return urand(1, 100) < (bot->GetLevel() >= 15 ? 40 : 90); // Silvermoon patch: fewer AH trips once levelling slows
     case TravelDestinationPurpose::Mail:
         if (!AI_VALUE(bool, "should get money"))
-            return urand(1, 100) < 30;
+            return urand(1, 100) < 10; // Silvermoon patch: was 30
         else
             return true;
     case TravelDestinationPurpose::GatherSkinning:
     case TravelDestinationPurpose::GatherMining:
     case TravelDestinationPurpose::GatherHerbalism:
     case TravelDestinationPurpose::GatherFishing:
+        if (sRandomPlayerbotMgr.SilvermoonIsCrafter(bot->GetGUIDLow()) && !bot->GetGroup())
+            return urand(1, 100) < 95; // Silvermoon patch: crafter bots gather whenever they can
         if (bot->GetGroup())
-            return urand(1, 100) < 50;
+            return urand(1, 100) < 15; // Silvermoon patch: was 50
         else
-            return urand(1, 100) < 90;
+            return urand(1, 100) < (bot->GetLevel() >= 15 ? 12 : 30); // Silvermoon patch: was 90; 15+ gathers on the way, rarely as a trip
     case TravelDestinationPurpose::Boss:
         return urand(1, 100) < 50;
     case TravelDestinationPurpose::Explore:
-        return urand(1, 100) < 10;
+        return urand(1, 100) < 2; // Silvermoon patch: was 10
     case TravelDestinationPurpose::GenericRpg:
-        return urand(1, 100) < 50;
+        return urand(1, 100) < (bot->GetLevel() >= 15 ? 6 : 20); // Silvermoon patch: was 50
     case TravelDestinationPurpose::Grind:
         return true;
     default:
