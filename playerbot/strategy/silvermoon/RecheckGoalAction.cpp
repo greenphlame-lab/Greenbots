@@ -73,6 +73,10 @@ bool RecheckGoalAction::Execute(Event& event)
     newTarget.SetRelevance(current->GetRelevance());
     newTarget.SetTarget(best.destination, best.position);
     Player* requester = event.getOwner() ? event.getOwner() : (GetMaster() ? GetMaster() : bot);
+    // The bot keeps one travel target object for its whole life, and SetTarget/CopyTarget never
+    // clear its conditions: a finished quest objective's "need quest objective" condition stayed
+    // on, so every later goal went straight to cooldown and the bot chose again within seconds.
+    current->SetConditions({});
     setNewTarget(requester, &newTarget, current);
     SET_AI_VALUE2(int, "manual int", "silvermoon goal score", int(best.score.score * 1000.0f));
     return true;

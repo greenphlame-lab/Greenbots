@@ -274,6 +274,10 @@ bool ChooseGoalAction::Execute(Event& event)
     newTarget.SetRelevance(AI_VALUE2(int, "manual int", "future travel relevance"));
     newTarget.SetTarget(best.destination, best.position);
     Player* requester = event.getOwner() ? event.getOwner() : (GetMaster() ? GetMaster() : bot);
+    // The bot keeps one travel target object for its whole life, and SetTarget/CopyTarget never
+    // clear its conditions: a finished quest objective's "need quest objective" condition stayed
+    // on, so every later goal went straight to cooldown and the bot chose again within seconds.
+    travelTarget->SetConditions({});
     setNewTarget(requester, &newTarget, travelTarget);
 
     SilvermoonLogDecision(bot, best, goals.size() > 1 ? &goals[1] : nullptr, goals.size() > 2 ? &goals[2] : nullptr);
