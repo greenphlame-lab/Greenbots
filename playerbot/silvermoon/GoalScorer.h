@@ -28,6 +28,7 @@ namespace silvermoon
         uint32_t deathCount = 0;       // "death count" from PlayerTravelInfo
         bool urgentRepair = false;     // "should repair"
         bool urgentVendor = false;     // bags over 90%
+        uint32_t bagFill = 0;          // bags used, percent
     };
 
     struct GoalCandidate

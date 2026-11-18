@@ -17,6 +17,51 @@ using namespace MaNGOS;
 
 using namespace ai;
 
+namespace
+{
+    // Silvermoon patch: make room by value. Drops the cheapest grey or white item the bot would
+    // only ever sell to a vendor (never quest items, trade goods, bags or anything it uses), so
+    // ore, herbs and quest drops are not left on the ground for a 3-copper shirt.
+    bool SilvermoonDropCheapest(PlayerbotAI* ai, Player* bot)
+    {
+        Item* cheapest = nullptr;
+        uint32 cheapestValue = 0;
+        auto consider = [&](Item* item)
+        {
+            if (!item)
+                return;
+            ItemPrototype const* proto = item->GetProto();
+            if (!proto || proto->Quality > ITEM_QUALITY_NORMAL || proto->Class == ITEM_CLASS_TRADE_GOODS ||
+                proto->Class == ITEM_CLASS_QUEST || proto->Class == ITEM_CLASS_CONTAINER || proto->StartQuest)
+                return;
+            ItemUsage usage = ai->GetAiObjectContext()->GetValue<ItemUsage>("item usage", proto->ItemId)->Get();
+            if (usage != ItemUsage::ITEM_USAGE_NONE && usage != ItemUsage::ITEM_USAGE_VENDOR)
+                return;
+            uint32 value = proto->SellPrice * item->GetCount();
+            if (!cheapest || value < cheapestValue)
+            {
+                cheapest = item;
+                cheapestValue = value;
+            }
+        };
+        for (uint8 slot = INVENTORY_SLOT_ITEM_START; slot < INVENTORY_SLOT_ITEM_END; ++slot)
+            consider(bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot));
+        for (uint8 bagSlot = INVENTORY_SLOT_BAG_START; bagSlot < INVENTORY_SLOT_BAG_END; ++bagSlot)
+        {
+            Item* bagItem = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, bagSlot);
+            if (!bagItem || !bagItem->IsBag())
+                continue;
+            Bag* bag = (Bag*)bagItem;
+            for (uint32 j = 0; j < bag->GetBagSize(); ++j)
+                consider(bag->GetItemByPos(j));
+        }
+        if (!cheapest)
+            return false;
+        bot->DestroyItem(cheapest->GetBagSlot(), cheapest->GetSlot(), true);
+        return true;
+    }
+}
+
 bool AddLootAction::Execute(Event& event)
 {
     ObjectGuid guid = event.getObject();
@@ -178,9 +223,18 @@ bool AddAllLootAction::AddLoot(Player* requester, ObjectGuid guid)
 
     if (usedBagSpacePercent > 99 && !ai->CanLootSomethingFromWO(wo))
     {
-        if (ai->HasQuestItemsInWOLootList(wo))
+        // Silvermoon patch: full bags - throw away grey junk first, whatever the loot is
+        if (ai->DoSpecificAction("destroy all gray"))
+            usedBagSpacePercent = AI_VALUE(uint8, "bag space");
+
+        if (usedBagSpacePercent > 99 && ai->HasQuestItemsInWOLootList(wo))
         {
             if (usedBagSpacePercent > 99 && ai->DoSpecificAction("destroy all gray"))
+            {
+                usedBagSpacePercent = AI_VALUE(uint8, "bag space");
+            }
+
+            if (usedBagSpacePercent > 99 && SilvermoonDropCheapest(ai, bot))
             {
                 usedBagSpacePercent = AI_VALUE(uint8, "bag space");
             }
@@ -295,9 +349,21 @@ bool AddGatheringLootAction::AddLoot(Player* requester, ObjectGuid guid)
 
     if (usedBagSpacePercent > 99 && !ai->CanLootSomethingFromWO(wo))
     {
-        if (ai->HasQuestItemsInWOLootList(wo))
+        // Silvermoon patch: full bags at a node - gathered materials are worth more than grey
+        // junk or cheap white vendor items, so make one slot for them
+        if (ai->DoSpecificAction("destroy all gray"))
+            usedBagSpacePercent = AI_VALUE(uint8, "bag space");
+        if (usedBagSpacePercent > 99 && SilvermoonDropCheapest(ai, bot))
+            usedBagSpacePercent = AI_VALUE(uint8, "bag space");
+
+        if (usedBagSpacePercent > 99 && ai->HasQuestItemsInWOLootList(wo))
         {
             if (usedBagSpacePercent > 99 && ai->DoSpecificAction("destroy all gray"))
+            {
+                usedBagSpacePercent = AI_VALUE(uint8, "bag space");
+            }
+
+            if (usedBagSpacePercent > 99 && SilvermoonDropCheapest(ai, bot))
             {
                 usedBagSpacePercent = AI_VALUE(uint8, "bag space");
             }

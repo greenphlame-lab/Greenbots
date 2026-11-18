@@ -538,6 +538,19 @@ if ((proto->Class == ITEM_CLASS_PROJECTILE ||
         if (ahPrice - depositCost - sellPrice < bot->GetMoney() / 500)
             return sellUsage; //Do not move to AH for items with less than 0.2% of bots gold markup.
 
+        // Silvermoon patch: gear and other non-materials only go to the AH when it is clearly worth
+        // the trip (at least 1.5x vendor and 50 silver more), and not at all once the bags are
+        // filling up away from a city - a bot kept a bag of low greens for hours waiting to reach an AH.
+        // Trade goods (ore, herbs, cloth, leather) keep the stock rules.
+        if (proto->Class != ITEM_CLASS_TRADE_GOODS && !RandomPlayerbotMgr::SilvermoonIsCrafter(bot->GetGUIDLow())) // crafters sell what they make
+        {
+            uint32 ahNet = ahPrice - depositCost;
+            if (ahNet * 2 < sellPrice * 3 || ahNet < sellPrice + 5000)
+                return sellUsage;
+            if (AI_VALUE(uint8, "bag space") > 75 && !ai->IsInCapitalCity())
+                return sellUsage;
+        }
+
         if(depositCost > ahMoney && AI_VALUE(uint8, "bag space") > 80) 
             return sellUsage; //We simply do not have the money to put this on AH.
 

@@ -119,6 +119,11 @@ bool BuyAction::Execute(Event& event)
                     // Gold affordability 
                     RESET_AI_VALUE2(uint32, "free money for", moneyKey);
                     uint32 money = AI_VALUE2(uint32, "free money for", moneyKey);
+                    // Silvermoon patch: a bigger bag is worth more than most gear upgrades - buy it
+                    // whenever it costs no more than half the bot's gold (the rest stays for repairs
+                    // and training), even when the gear budget is empty
+                    if (usage == ItemUsage::ITEM_USAGE_EQUIP && proto->Class == ITEM_CLASS_CONTAINER && proto->SubClass == ITEM_SUBCLASS_CONTAINER)
+                        money = std::max(money, uint32(bot->GetMoney() / 2));
                     if (price > money)
                         break;
 

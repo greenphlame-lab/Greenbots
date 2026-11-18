@@ -88,10 +88,16 @@ namespace silvermoon
                 s.value = 0.0f;
             break;
         case GoalKind::Vendor:
-            s.value = xpm * (bot.urgentVendor ? CHORE_URGENT_MINUTES : CHORE_NORMAL_MINUTES);
+        {
+            // worth more the fuller the bags: 3 minutes of XP at 65% full, rising to 20 at 90%,
+            // so a bot stops at a vendor on its way instead of waiting until it is nearly full
+            float fill = std::min(1.0f, std::max(0.0f, (float(bot.bagFill) - 65.0f) / 25.0f));
+            float minutes = bot.urgentVendor ? CHORE_URGENT_MINUTES : CHORE_NORMAL_MINUTES + fill * (CHORE_URGENT_MINUTES - CHORE_NORMAL_MINUTES);
+            s.value = xpm * minutes;
             s.minutes = travel + CHORE_MINUTES;
             s.reason = bot.urgentVendor ? "bags full" : "sell loot";
             break;
+        }
         case GoalKind::Repair:
             s.value = xpm * (bot.urgentRepair ? CHORE_URGENT_MINUTES : CHORE_NORMAL_MINUTES);
             s.minutes = travel + CHORE_MINUTES;

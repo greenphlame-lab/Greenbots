@@ -101,6 +101,11 @@ bool VendorHasUsefulItemValue::Calculate()
 
         ItemUsage usage = AI_VALUE2_LAZY(ItemUsage, "item usage", vendorItem->item);
 
+        // Silvermoon patch: a bag upgrade may use half the bot's gold (matches BuyAction)
+        if (usage == ItemUsage::ITEM_USAGE_EQUIP && proto->Class == ITEM_CLASS_CONTAINER && proto->SubClass == ITEM_SUBCLASS_CONTAINER &&
+            proto->BuyPrice <= bot->GetMoney() / 2)
+            return true;
+
         if (freeMoney.find(usage) == freeMoney.end() || proto->BuyPrice > freeMoney[usage])
             continue;
 

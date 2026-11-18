@@ -60,7 +60,8 @@ namespace
         s.mounted = bot->IsMounted();
         s.deathCount = PlayerTravelInfo(bot).GetUint32Value("death count");
         s.urgentRepair = context->GetValue<bool>("should repair")->Get();
-        s.urgentVendor = context->GetValue<uint8>("bag space")->Get() > 90;
+        s.bagFill = context->GetValue<uint8>("bag space")->Get();
+        s.urgentVendor = s.bagFill > 90;
         return s;
     }
 

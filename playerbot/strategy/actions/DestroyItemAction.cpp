@@ -3,6 +3,7 @@
 #include "DestroyItemAction.h"
 #include "playerbot/strategy/values/ItemCountValue.h"
 
+#include <algorithm>
 using namespace ai;
 
 bool DestroyItemAction::Execute(Event& event)
@@ -95,7 +96,17 @@ bool SmartDestroyItemAction::Execute(Event& event)
     {
         std::list<uint32> items = AI_VALUE2(std::list<uint32>, "inventory item ids", "usage " + std::to_string((uint8)usage));
 
-        items.reverse();
+        // Silvermoon patch: cheapest first (whole stack value), instead of an arbitrary order
+        std::vector<uint32> sorted(items.begin(), items.end());
+        std::sort(sorted.begin(), sorted.end(), [&](uint32 a, uint32 b)
+        {
+            ItemPrototype const* pa = sObjectMgr.GetItemPrototype(a);
+            ItemPrototype const* pb = sObjectMgr.GetItemPrototype(b);
+            uint32 va = pa ? pa->SellPrice * bot->GetItemCount(a) : 0;
+            uint32 vb = pb ? pb->SellPrice * bot->GetItemCount(b) : 0;
+            return va < vb;
+        });
+        items.assign(sorted.begin(), sorted.end());
 
         for (auto& item : items)
         {
