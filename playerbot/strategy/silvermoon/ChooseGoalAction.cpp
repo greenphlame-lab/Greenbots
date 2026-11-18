@@ -131,6 +131,11 @@ static SilvermoonScoredGoal ScoreWith(Player* bot, BotSnapshot const& snapshot, 
     {
         c.kind = GoalKind::Grind;
         MobInfo(destination->GetEntry(), c.mobLevel, c.elite);
+        // rare spawns (one mob, often not up) are no grind spot either: treated like elites,
+        // which the scorer never picks for grinding
+        if (CreatureInfo const* info = ObjectMgr::GetCreatureTemplate(destination->GetEntry()))
+            if (info->Rank == CREATURE_ELITE_RARE || info->Rank == CREATURE_ELITE_RAREELITE)
+                c.elite = true;
         if (c.mobLevel > 0)
             c.killXp = MaNGOS::XP::BaseGain(bot->GetLevel(), uint32(c.mobLevel)) * (c.elite ? 2.5f : 1.0f) * sWorld.getConfig(CONFIG_FLOAT_RATE_XP_KILL);
     }
