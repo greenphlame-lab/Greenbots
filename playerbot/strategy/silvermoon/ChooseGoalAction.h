@@ -20,6 +20,10 @@ namespace ai
     // Scores a single destination at a given distance (used to re-score the current goal).
     SilvermoonScoredGoal SilvermoonScoreOne(Player* bot, PlayerbotAI* ai, TravelDestination* destination, WorldPosition* position, float distance);
 
+    // Writes one decision row (the chosen goal and up to two runners-up) to the decision log.
+    void SilvermoonLogDecision(Player* bot, SilvermoonScoredGoal const& chosen, SilvermoonScoredGoal const* runnerUp1,
+        SilvermoonScoredGoal const* runnerUp2, std::string const& reasonPrefix = "");
+
     // "choose goal": picks the best-scoring destination from the goal list (brain step 5).
     class ChooseGoalAction : public ChooseTravelTargetAction
     {

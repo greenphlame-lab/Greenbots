@@ -3,6 +3,7 @@
 #include "playerbot/TravelMgr.h"
 #include "playerbot/strategy/values/TravelValues.h"
 #include "Tools/Formulas.h"
+#include "playerbot/silvermoon/DecisionLog.h"
 #include <deque>
 #include <mutex>
 
@@ -170,6 +171,32 @@ std::vector<SilvermoonScoredGoal> ai::SilvermoonScoreGoals(Player* bot, Playerbo
     return goals;
 }
 
+void ai::SilvermoonLogDecision(Player* bot, SilvermoonScoredGoal const& chosen, SilvermoonScoredGoal const* runnerUp1,
+    SilvermoonScoredGoal const* runnerUp2, std::string const& reasonPrefix)
+{
+    auto title = [](SilvermoonScoredGoal const* g) -> std::string
+    {
+        if (!g || !g->destination)
+            return "";
+        return std::string(GoalScorer::KindName(g->kind)) + ": " + g->destination->GetTitle();
+    };
+    DecisionRow row;
+    row.ts = uint32(time(nullptr));
+    row.guid = bot->GetGUIDLow();
+    row.goal = GoalScorer::KindName(chosen.kind);
+    row.target = chosen.destination ? chosen.destination->GetTitle() : "";
+    row.score = chosen.score.score;
+    row.runnerUp1 = title(runnerUp1);
+    row.runnerUp1Score = runnerUp1 ? runnerUp1->score.score : 0.0f;
+    row.runnerUp2 = title(runnerUp2);
+    row.runnerUp2Score = runnerUp2 ? runnerUp2->score.score : 0.0f;
+    row.reason = reasonPrefix + chosen.score.reason;
+    row.map = bot->GetMapId();
+    row.x = bot->GetPositionX();
+    row.y = bot->GetPositionY();
+    DecisionLog::Add(std::move(row));
+}
+
 bool ChooseGoalAction::Execute(Event& event)
 {
     TravelTarget* travelTarget = AI_VALUE(TravelTarget*, "travel target");
@@ -202,6 +229,8 @@ bool ChooseGoalAction::Execute(Event& event)
     newTarget.SetTarget(best.destination, best.position);
     Player* requester = event.getOwner() ? event.getOwner() : (GetMaster() ? GetMaster() : bot);
     setNewTarget(requester, &newTarget, travelTarget);
+
+    SilvermoonLogDecision(bot, best, goals.size() > 1 ? &goals[1] : nullptr, goals.size() > 2 ? &goals[2] : nullptr);
 
     // remembered for the 5-minute re-check
     SET_AI_VALUE2(int, "manual int", "silvermoon goal score", int(best.score.score * 1000.0f));

@@ -57,6 +57,9 @@ bool RecheckGoalAction::Execute(Event& event)
     if (!urgent && best.score.score < now.score.score * SWITCH_MARGIN)
         return false;
 
+    // logged as a switch, with the goal it replaced as the first runner-up
+    SilvermoonLogDecision(bot, best, &now, goals.size() > 1 ? &goals[1] : nullptr, urgent ? "switch (urgent): " : "switch: ");
+
     TravelTarget newTarget = TravelTarget(ai);
     newTarget.SetRelevance(current->GetRelevance());
     newTarget.SetTarget(best.destination, best.position);
