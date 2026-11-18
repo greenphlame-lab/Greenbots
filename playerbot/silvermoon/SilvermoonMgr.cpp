@@ -2283,7 +2283,8 @@ void RandomPlayerbotMgr::SilvermoonProcessBot(Player* player, PlayerbotAI* ai, u
         // fighting, dead, flying, on or waiting for a transport, sitting, casting, looting or
         // talking to an NPC resets the check.
         if (ai && sPlayerbotAIConfig.silvermoonSpread && sPlayerbotAIConfig.silvermoonBrain && sRandomPlayerbotMgr.IsRandomBot(player) &&
-            player->IsInWorld() && !ai->HasRealPlayerMaster() && !SilvermoonDungeonOf(bot) && !GetEventValue(bot, "silvermoon_stuck_check"))
+            player->IsInWorld() && !player->GetGroup() && !ai->HasRealPlayerMaster() && !SilvermoonDungeonOf(bot) &&
+            player->GetMap() && player->GetMap()->IsContinent() && !GetEventValue(bot, "silvermoon_stuck_check"))
         {
             SetEventValue(bot, "silvermoon_stuck_check", 1, 30);
             static std::mutex stuckLock;
@@ -2292,22 +2293,35 @@ void RandomPlayerbotMgr::SilvermoonProcessBot(Player* player, PlayerbotAI* ai, u
             AiObjectContext* context = ai->GetAiObjectContext();
             TravelTarget* target = context->GetValue<TravelTarget*>("travel target")->Get();
             LastMovement& lastMove = context->GetValue<LastMovement&>("last movement")->Get();
-            bool waitingForTransport = lastMove.lastTransportEntry != 0 ||
-                (!lastMove.lastPath.empty() && lastMove.lastPath.getPath().size() > 1 &&
-                 std::next(lastMove.lastPath.getPath().begin())->type == PathNodeType::NODE_TRANSPORT);
+            // waiting at a dock: the next path point is a transport and the bot is at it. (The old
+            // "last transport entry" stays set after any ride, which hid every stuck bot that had
+            // ever taken a boat or lift.)
+            bool waitingForTransport = false;
+            if (!lastMove.lastPath.empty() && lastMove.lastPath.getPath().size() > 1)
+            {
+                PathNodePoint const& next = *std::next(lastMove.lastPath.getPath().begin());
+                waitingForTransport = next.type == PathNodeType::NODE_TRANSPORT && next.point.getMapId() == player->GetMapId() &&
+                    next.point.distance(WorldPosition(player)) < 40.0f;
+            }
             WorldPosition here(player);
             GuidPosition rpgTarget = context->GetValue<GuidPosition>("rpg target")->Get();
             bool talking = rpgTarget && rpgTarget.getMapId() == here.getMapId() && rpgTarget.fDist(here) < INTERACTION_DISTANCE * 2;
             bool looting = context->GetValue<LootObjectStack*>("available loot")->Get()->CanLoot(INTERACTION_DISTANCE * 2);
             bool waiting = !player->IsAlive() || player->IsInCombat() || player->IsTaxiFlying() || player->GetTransport() ||
                 waitingForTransport || player->IsSitState() || player->IsNonMeleeSpellCasted(false) || talking || looting;
-            bool travelling = target && target->GetDestination() && target->GetStatus() == TravelStatus::TRAVEL_STATUS_TRAVEL;
+            // any state but working at a destination counts: a stuck bot's goal keeps dropping into
+            // cooldown or expiring and being chosen again, so it is rarely in "travel" right then
+            bool travelling = target && target->GetStatus() != TravelStatus::TRAVEL_STATUS_WORK;
             uint8 stage = 0;
             TravelDestination* dest = travelling ? target->GetDestination() : nullptr;
+            if (dest && typeid(*dest) == typeid(NullTravelDestination))
+                dest = nullptr;
             {
                 std::lock_guard<std::mutex> guard(stuckLock);
                 StuckState& st = stuck[bot];
-                if (!travelling || waiting || st.dest != dest || st.pos.getMapId() != here.getMapId() || st.pos.distance(here) >= 5.0f)
+                // anchored on position only: a bot that re-picks a new destination every few seconds
+                // without moving (Evievera, cycling vendors) is just as stuck
+                if (!travelling || waiting || st.pos.getMapId() != here.getMapId() || st.pos.distance(here) >= 5.0f)
                 {
                     st.pos = here;
                     st.stage = 0;
@@ -2333,12 +2347,13 @@ void RandomPlayerbotMgr::SilvermoonProcessBot(Player* player, PlayerbotAI* ai, u
             }
             else if (stage >= 3)
             {
-                SilvermoonSkipDestination(bot, dest, HOUR);
+                if (dest)
+                    SilvermoonSkipDestination(bot, dest, HOUR);
                 silvermoon::DecisionRow row;
                 row.ts = uint32(time(nullptr));
                 row.guid = bot;
                 row.goal = "stuck give-up";
-                row.target = dest->GetTitle();
+                row.target = dest ? dest->GetTitle() : "no destination";
                 row.reason = "no progress for 90 seconds";
                 row.map = player->GetMapId();
                 row.x = player->GetPositionX();
