@@ -14,6 +14,11 @@ using namespace ai;
 
 ObjectGuid GrindTargetValue::Calculate()
 {
+    // Silvermoon patch: no new fights while resurrection sickness lasts (it is still
+    // defended when attacked); a weakened bot pulling mobs just dies again.
+    if (ai->HasAura(SPELL_ID_PASSIVE_RESURRECTION_SICKNESS, bot) && !ai->HasActivePlayerMaster())
+        return ObjectGuid();
+
     uint32 memberCount = 1;
     Group* group = bot->GetGroup();
     if (group)
@@ -151,6 +156,17 @@ Unit* GrindTargetValue::FindTargetForGrinding(int assistCount)
             }
         }
 #endif
+
+        // Silvermoon patch: a random bot on its own (no real player leading it) leaves alone
+        // mobs 3 or more levels above it and elites it cannot handle alone.
+        if (sRandomPlayerbotMgr.IsRandomBot(bot) && !ai->HasRealPlayerMaster() && (!bot->GetGroup() || bot->GetGroup()->GetMembersCount() < 2) &&
+            !bot->InBattleGround() && unit->GetTypeId() == TYPEID_UNIT)
+        {
+            if (int32(unit->GetLevel()) >= int32(bot->GetLevel()) + 3)
+                continue;
+            if (((Creature*)unit)->IsElite() && int32(unit->GetLevel()) >= int32(bot->GetLevel()) - 2)
+                continue;
+        }
 
         if (abs(bot->GetPositionZ() - unit->GetPositionZ()) > sPlayerbotAIConfig.spellDistance)
         {

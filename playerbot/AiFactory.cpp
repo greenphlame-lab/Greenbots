@@ -1001,12 +1001,16 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
             {
                 if (master->GetPlayerbotAI() || sRandomPlayerbotMgr.IsFreeBot(player))
                 {
+                    // Silvermoon patch: a random bot following a real player stays with them:
+                    // no grinding, questing or rpg trips of its own (it still fights alongside).
+                    bool silvermoonBotMaster = master->GetPlayerbotAI() && !master->GetPlayerbotAI()->IsRealPlayer();
                     nonCombatEngine->addStrategy("collision");
-                    nonCombatEngine->addStrategy("grind");
+                    if (silvermoonBotMaster)
+                        nonCombatEngine->addStrategy("grind");
                     nonCombatEngine->addStrategy("group");
                     nonCombatEngine->addStrategy("guild");
 
-                    if (sPlayerbotAIConfig.autoDoQuests)
+                    if (sPlayerbotAIConfig.autoDoQuests && silvermoonBotMaster)
                     {
                         nonCombatEngine->addStrategy("travel");
                         nonCombatEngine->addStrategy("tfish");

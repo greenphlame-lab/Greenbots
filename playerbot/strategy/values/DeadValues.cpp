@@ -228,9 +228,9 @@ bool ShouldSpiritHealerValue::Calculate()
     if (AI_VALUE2(bool, "manual bool", "enemies near graveyard"))
         return false;
 
-    //Enemies near corpse so try grave first.
-    if (AI_VALUE2(bool, "manual bool", "enemies near corpse"))
-        return true;
+    // Silvermoon patch: enemies near the corpse no longer send the bot to the spirit
+    // healer (10 minutes of resurrection sickness); it can resurrect anywhere within
+    // reach of the corpse, so it keeps trying the corpse.
 
     GuidPosition graveyard = AI_VALUE(GuidPosition, "best graveyard");
 
