@@ -17,6 +17,7 @@ bool GreetAction::Execute(Event& event)
 
     Player* player = dynamic_cast<Player*>(ai->GetUnit(guid));
     if (!player) return false;
+    if (player->IsGameMaster()) return false; // Silvermoon patch: GMs (.gm on) are not greeted
 
     if (!sServerFacade.IsInFront(bot, player, sPlayerbotAIConfig.sightDistance, CAST_ANGLE_IN_FRONT))
         sServerFacade.SetFacingTo(bot, player);

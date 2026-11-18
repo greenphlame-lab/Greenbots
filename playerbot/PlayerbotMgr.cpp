@@ -1088,6 +1088,13 @@ void PlayerbotMgr::HandleMasterIncomingPacket(const WorldPacket& packet)
     {
         if (bot->GetPlayerbotAI()->GetMaster() == GetMaster())
             bot->GetPlayerbotAI()->HandleMasterIncomingPacket(packet);
+        // Silvermoon patch: a shared quest reaches every random bot in the sharer's
+        // group, not only bots whose master is the sharer. Otherwise the core marks
+        // the bot as having a pending share it never answers, and every later share
+        // fails with "<bot> is busy" until the bot logs out.
+        else if (packet.GetOpcode() == CMSG_PUSHQUESTTOPARTY && GetMaster() && bot->GetGroup() &&
+                 bot->GetGroup() == GetMaster()->GetGroup())
+            bot->GetPlayerbotAI()->HandleMasterIncomingPacket(packet);
     });
 
     switch (packet.GetOpcode())

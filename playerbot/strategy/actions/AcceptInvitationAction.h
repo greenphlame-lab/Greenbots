@@ -28,6 +28,18 @@ namespace ai
                 return false;
             }
             
+            // Silvermoon patch: bots don't join groups led by another bot 5 or more levels away
+            // from their own (dungeon runs form their parties directly and don't go through here)
+            if (!inviter->isRealPlayer() && !ai->HasRealPlayerMaster() &&
+                std::abs(int32(inviter->GetLevel()) - int32(bot->GetLevel())) >= 5)
+            {
+                WorldPacket data(SMSG_GROUP_DECLINE, 10);
+                data << bot->GetName();
+                sServerFacade.SendPacket(inviter, data);
+                bot->UninviteFromGroup();
+                return false;
+            }
+
             if (bot->isAFK())
                 bot->ToggleAFK();
 

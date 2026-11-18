@@ -7,6 +7,13 @@
 
 namespace ai
 {
+    // Silvermoon patch: bots only turn a party into a raid inside a raid dungeon or a
+    // battleground. Open-world raids split XP 8+ ways and block most quest credit.
+    static bool SilvermoonRaidAllowed(Player* bot)
+    {
+        return bot && (bot->InBattleGround() || (bot->GetMap() && bot->GetMap()->IsRaid()));
+    }
+
     bool InviteToGroupAction::Invite(Player* inviter, Player* player)
     {
         if (!player)
@@ -22,7 +29,11 @@ namespace ai
         {
             if(player->GetPlayerbotAI() && !player->GetPlayerbotAI()->IsRealPlayer())
                 if (!group->IsRaidGroup() && group->GetMembersCount() > 4)
+                {
+                    if (!SilvermoonRaidAllowed(bot))
+                        return false; // party is full and a raid is not wanted here
                     group->ConvertToRaid();
+                }
         }
 
         WorldPacket p;
@@ -54,7 +65,7 @@ namespace ai
                     return false;
 
                 if(event.getSource() == "create group")
-                    group->ConvertToRaid();
+                    { if (SilvermoonRaidAllowed(bot)) group->ConvertToRaid(); }
                 else 
                     return false;
             }
@@ -244,7 +255,7 @@ namespace ai
                 if (param.empty() || param == "5" || group->IsRaidGroup())
                     return false; //Group or raid is full so stop trying.
                 else
-                    group->ConvertToRaid(); //We want a raid but are in a group so convert and continue.
+                    { if (SilvermoonRaidAllowed(bot)) group->ConvertToRaid(); } //We want a raid but are in a group so convert and continue.
             }
         }
 
@@ -352,7 +363,7 @@ namespace ai
 
             //When inviting the 5th member of the group convert to raid for future invites.
             if (group && ai->GetGrouperType() > GrouperType::LEADER_5 && !group->IsRaidGroup() && bot->GetGroup()->GetMembersCount() > 3)
-                group->ConvertToRaid();
+                { if (SilvermoonRaidAllowed(bot)) group->ConvertToRaid(); }
 
             Guild* guild = sGuildMgr.GetGuildById(bot->GetGuildId());
             if (sPlayerbotAIConfig.inviteChat && (sRandomPlayerbotMgr.IsFreeBot(bot) || !ai->HasActivePlayerMaster()))
@@ -481,14 +492,11 @@ namespace ai
                 if (playerAi->HasActivePlayerMaster()) //Do not invite alts of active players.
                     continue;
 
-                if (player->GetLevel() > bot->GetLevel() + 5) //Invite higher levels that need money so they can grind money and help out.
-                {
-                    if (!ai->IsSafe(player) || !PAI_VALUE(bool, "should get money"))
-                        continue;
-                }
+                if (player->GetLevel() >= bot->GetLevel() + 5) // Silvermoon patch: no bot groups 5+ levels apart (was: invite them for money)
+                    continue;
             }
 
-            if (bot->GetLevel() > player->GetLevel() + 5) //Do not invite members that too low level or risk dragging them to deadly places.
+            if (bot->GetLevel() > player->GetLevel() + 5 || (player->GetPlayerbotAI() && bot->GetLevel() >= player->GetLevel() + 5)) //Do not invite members that too low level or risk dragging them to deadly places. (Silvermoon: bots 5+)
                 continue;
 
             if (!playerAi && sServerFacade.GetDistance2d(bot, player) > sPlayerbotAIConfig.sightDistance)
@@ -498,7 +506,7 @@ namespace ai
             //When inviting the 5th member of the group convert to raid for future invites.
             if (group && ai->GetGrouperType() > GrouperType::LEADER_5 && !group->IsRaidGroup() && bot->GetGroup()->GetMembersCount() > 3)
             {
-                group->ConvertToRaid();
+                { if (SilvermoonRaidAllowed(bot)) group->ConvertToRaid(); }
             }
 
             if (sPlayerbotAIConfig.inviteChat && (sRandomPlayerbotMgr.IsFreeBot(bot) || !ai->HasActivePlayerMaster()))

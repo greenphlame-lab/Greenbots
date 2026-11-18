@@ -1,4 +1,5 @@
 
+#include <set>
 #include "playerbot/playerbot.h"
 #include "LfgActions.h"
 #include "playerbot/strategy/ItemVisitors.h"
@@ -102,15 +103,31 @@ bool LfgJoinAction::JoinLFG()
     if (!dungeons.size())
         return false;
 
+    // Silvermoon patch: dungeons the bot holds an unfinished quest for. A bot with such a
+    // quest queues for that dungeon from anywhere (not only from a city or the dungeon's
+    // continent) and picks it over random dungeons, so bots run dungeons for their quests.
+    std::set<uint32> questAreas;
+    for (uint16 slot = 0; slot < MAX_QUEST_LOG_SIZE; ++slot)
+    {
+        uint32 questId = bot->GetQuestSlotQuestId(slot);
+        if (!questId || bot->GetQuestStatus(questId) != QUEST_STATUS_INCOMPLETE)
+            continue;
+        if (Quest const* quest = sObjectMgr.GetQuestTemplate(questId))
+            if (quest->GetZoneOrSort() > 0)
+                questAreas.insert(uint32(quest->GetZoneOrSort()));
+    }
+    std::vector<MeetingStoneInfo> preferred;
+
     std::vector<MeetingStoneInfo> selected;
     for (std::vector<uint32>::iterator i = dungeons.begin(); i != dungeons.end(); ++i)
     {
         uint32 zoneId = 0;
         uint32 dungeonId = (*i & 0xFFFF);
         zoneId = ((*i >> 16) & 0xFFFF);
+        bool hasDungeonQuest = questAreas.find(dungeonId) != questAreas.end();
 
         // join only if close to closest graveyard
-        if (zoneId)
+        if (zoneId && !hasDungeonQuest)
         {
             WorldSafeLocsEntry const* ClosestGrave = nullptr;
             ClosestGrave = sWorldSafeLocsStore.LookupEntry<WorldSafeLocsEntry>(zoneId);
@@ -138,9 +155,16 @@ bool LfgJoinAction::JoinLFG()
         for (MeetingStoneSet::iterator i = stones.begin(); i != stones.end(); ++i)
         {
             if (i->area == dungeonId)
+            {
                 selected.push_back(*i);
+                if (hasDungeonQuest)
+                    preferred.push_back(*i);
+            }
         }
     }
+
+    if (!preferred.empty())
+        selected = preferred;
 
     if (!selected.size())
         return false;

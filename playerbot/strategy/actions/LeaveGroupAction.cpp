@@ -1,12 +1,17 @@
 
 #include "playerbot/playerbot.h"
 #include "LeaveGroupAction.h"
+#include "playerbot/RandomPlayerbotMgr.h"
 
 namespace ai
 {
 	bool LeaveGroupAction::Leave(Player* player) 
     {
         if (!player)
+            return false;
+
+        // Silvermoon patch: a bot on a dungeon run stays with its party
+        if (sRandomPlayerbotMgr.IsRandomBot(bot) && sRandomPlayerbotMgr.SilvermoonDungeonOf(bot->GetGUIDLow()))
             return false;
 
         Group* group = bot->GetGroup();

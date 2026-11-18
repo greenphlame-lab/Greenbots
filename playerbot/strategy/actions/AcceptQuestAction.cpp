@@ -96,7 +96,11 @@ bool AcceptQuestShareAction::Execute(Event& event)
     Quest const* qInfo = sObjectMgr.GetQuestTemplate(quest);
 
     if (!qInfo || !bot->GetDividerGuid())
+    {
+        // Silvermoon patch: never leave a pending share behind (it makes the bot "busy")
+        bot->SetDividerGuid(ObjectGuid());
         return false;
+    }
 
     quest = qInfo->GetQuestId();
     if( !bot->CanTakeQuest( qInfo, false ) )
