@@ -2,6 +2,7 @@
 #include "playerbot/strategy/NamedObjectContext.h"
 #include "SilvermoonBrainStrategy.h"
 #include "RequestGoalAction.h"
+#include "ChooseGoalAction.h"
 
 namespace ai
 {
@@ -22,6 +23,7 @@ namespace ai
         SilvermoonActionContext()
         {
             creators["request goal destinations"] = [](PlayerbotAI* ai) { return new RequestGoalAction(ai); };
+            creators["choose goal"] = [](PlayerbotAI* ai) { return new ChooseGoalAction(ai); };
         }
     };
 }

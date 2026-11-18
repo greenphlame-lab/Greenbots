@@ -94,6 +94,11 @@ bool ChooseTravelTargetAction::isUseful()
     if (!ai->AllowActivity(TRAVEL_ACTIVITY))
         return false;
 
+    // Silvermoon brain: goal lists are scored by "choose goal", not picked nearest-first here
+    if (AI_VALUE(TravelTarget*, "travel target")->GetStatus() == TravelStatus::TRAVEL_STATUS_PREPARE &&
+        AI_VALUE2(std::string, "manual string", "future travel purpose") == "goal")
+        return false;
+
     if (!AI_VALUE(bool, "can move around"))
         return false;
 

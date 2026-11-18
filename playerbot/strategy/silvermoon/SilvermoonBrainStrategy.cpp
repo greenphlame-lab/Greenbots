@@ -37,6 +37,11 @@ void SilvermoonBrainStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& tri
     triggers.push_back(new TriggerNode(
         "val::not::travel target active",
         NextAction::array(0, new NextAction("request goal destinations", 6.97f), NULL)));
+
+    // the goal list is ready: score it and pick (only for lists fetched by the brain)
+    triggers.push_back(new TriggerNode(
+        "val::not::travel target active",
+        NextAction::array(0, new NextAction("choose goal", 6.985f), NULL)));
 }
 
 void SilvermoonBrainStrategy::InitNonCombatMultipliers(std::list<Multiplier*>& multipliers)
