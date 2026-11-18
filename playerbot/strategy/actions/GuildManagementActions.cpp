@@ -134,7 +134,9 @@ bool GuildManageNearbyAction::Execute(Event& event)
             if (botAi->HasActivePlayerMaster() && !sRandomPlayerbotMgr.IsRandomBot(player)) //Do not invite alts of active players. 
                 continue;
 
-            if (guild->GetMemberSize() >= botAi->GetMaxPreferedGuildSize() || guild->GetMemberSize() < botAi->GetMaxPreferedGuildSize() / 4)
+            // Silvermoon patch: young guilds (under 10 members) may invite anyone; the "too small
+            // for my taste" rule only applies once a guild is established
+            if (guild->GetMemberSize() >= botAi->GetMaxPreferedGuildSize() || (guild->GetMemberSize() >= 10 && guild->GetMemberSize() < botAi->GetMaxPreferedGuildSize() / 4))
                 continue;
 
 

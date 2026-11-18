@@ -14,6 +14,9 @@
 #include "playerbot/ServerFacade.h"
 #include "playerbot/TravelMgr.h"
 #include "Guilds/GuildMgr.h"
+#include <atomic>
+
+extern std::atomic<uint32> g_silvermoonOnlineGuilds[2];
 
 using namespace ai;
 
@@ -79,6 +82,10 @@ bool BuyPetitionAction::isUseful()
 
 bool BuyPetitionAction::canBuyPetition(Player* bot)
 {
+    // Silvermoon patch: bots no longer use guild charters; they found guilds directly
+    // (see RandomPlayerbotMgr::UpdateAIInternal)
+    return false;
+
     if (!sPlayerbotAIConfig.randomBotFormGuild)
         return false;
 
@@ -87,6 +94,20 @@ bool BuyPetitionAction::canBuyPetition(Player* bot)
 
     if (bot->GetGuildIdInvited())
         return false;    
+
+    // Silvermoon patch: only bots of level 15+ found guilds, and only about 15% of them;
+    // the other 85% wait to be recruited into an existing guild. When few guilds have
+    // anyone online for the bot's faction, more bots become founders. The choice is
+    // stable per bot (derived from its guid) so a bot does not flip-flop.
+    if (bot->GetLevel() < 15)
+        return false;
+    {
+        uint32 online = g_silvermoonOnlineGuilds[bot->GetTeam() == ALLIANCE ? 0 : 1];
+        uint32 founderChance = online == 0 ? 60 : (online < 3 ? 35 : 15);
+        uint32 roll = (bot->GetGUIDLow() * 2654435761u >> 16) % 100;
+        if (roll >= founderChance)
+            return false;
+    }
 
     PlayerbotAI* ai = bot->GetPlayerbotAI();
     AiObjectContext* context = ai->GetAiObjectContext();
@@ -317,7 +338,8 @@ bool PetitionTurnInAction::isUseful()
             inCity = true;
     }
 
-    return inCity && !bot->GetGuildId() && AI_VALUE2(uint32, "item count", chat->formatQItem(5863)) && AI_VALUE(uint8, "petition signs") >= sWorld.getConfig(CONFIG_UINT32_MIN_PETITION_SIGNS) && !AI_VALUE(bool, "travel target traveling");
+    (void)inCity; // Silvermoon patch: a full charter sends the bot to a guild master from anywhere, not only from inside a capital
+    return !bot->GetGuildId() && AI_VALUE2(uint32, "item count", chat->formatQItem(5863)) && AI_VALUE(uint8, "petition signs") >= sWorld.getConfig(CONFIG_UINT32_MIN_PETITION_SIGNS) && !AI_VALUE(bool, "travel target traveling");
 };
 
 bool BuyTabardAction::Execute(Event& event)
