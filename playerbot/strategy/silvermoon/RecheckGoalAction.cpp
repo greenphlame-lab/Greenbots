@@ -73,6 +73,8 @@ bool RecheckGoalAction::isUseful()
 {
     if (!ai->AllowActivity(TRAVEL_ACTIVITY) || bot->IsInCombat())
         return false;
+    if (bot->GetGroup() && bot->GetGroup()->GetMembersCount() > 1)
+        return false;
     if (!AI_VALUE(TravelTarget*, "travel target")->IsActive())
         return false;
     // the first check is due 5 minutes after the goal was chosen ("choose goal" sets the time)

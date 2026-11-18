@@ -93,6 +93,9 @@ bool RequestGoalAction::isUseful()
 {
     if (bot->InBattleGround() || !ai->AllowActivity(TRAVEL_ACTIVITY))
         return false;
+    // Phase 1 is for solo bots: a group (even one this bot leads) keeps the stock travel logic
+    if (bot->GetGroup() && bot->GetGroup()->GetMembersCount() > 1)
+        return false;
     if (!AI_VALUE(bool, "can move around"))
         return false;
     TravelTarget* target = AI_VALUE(TravelTarget*, "travel target");
