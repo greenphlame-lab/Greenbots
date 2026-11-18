@@ -2255,6 +2255,21 @@ void RandomPlayerbotMgr::SilvermoonProcessBot(Player* player, PlayerbotAI* ai, u
                 SetEventValue(bot, "silvermoon_city_since", 0, 0);
         }
 
+        // Silvermoon patch: brain on saved strategies. A bot whose strategy lists were saved before
+        // Phase 1 (ai_playerbot_db_store "nc", e.g. after a player gave it commands) loads that
+        // list at login, which has no "silvermoon brain" (Reneliora, Nynitiz, Issanne, Zannor).
+        // Every 5 minutes: a solo random bot that should have the brain gets it back.
+        if (ai && sPlayerbotAIConfig.silvermoonBrain && sRandomPlayerbotMgr.IsRandomBot(player) && player->IsInWorld() &&
+            !ai->HasRealPlayerMaster() && !SilvermoonDungeonOf(bot) && !GetEventValue(bot, "silvermoon_brain_check"))
+        {
+            SetEventValue(bot, "silvermoon_brain_check", 1, 5 * MINUTE);
+            if (ai->HasStrategy("travel", BotState::BOT_STATE_NON_COMBAT) && !ai->HasStrategy("silvermoon brain", BotState::BOT_STATE_NON_COMBAT))
+            {
+                ai->ChangeStrategy("+silvermoon brain", BotState::BOT_STATE_NON_COMBAT);
+                sLog.outBasic("Silvermoon: bot %s had no brain (saved strategies), added it", player->GetName());
+            }
+        }
+
         // Silvermoon patch: ghost watchdog. Some bots never make it back to their corpse
         // (Nynitiz and Beardo were ghosts for 40-55 hours). Every 2 minutes: a solo bot that
         // has been dead for 15+ minutes is revived where it stands.
