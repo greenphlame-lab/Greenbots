@@ -15,6 +15,10 @@ namespace silvermoon
     // lift rides skipped dock to dock (Thunder Bluff, Undercity), for silvermoon_perf.tp_lift
     inline std::atomic<uint32_t>& LiftSkips() { static std::atomic<uint32_t> v{ 0 }; return v; }
 
+    // corrective teleports per 5 minutes, for silvermoon_perf.tp_* (Phase 2a)
+    enum TpKind { TP_LEVEL_ZONE, TP_TOO_DANGEROUS, TP_ENEMY_ZONE, TP_CITY, TP_GOLDSHIRE, TP_FALLBACK, TP_STUCK, TP_COUNT };
+    inline std::atomic<uint32_t>& Tp(TpKind kind) { static std::atomic<uint32_t> v[TP_COUNT]{}; return v[kind]; }
+
     class BrainTimer
     {
     public:

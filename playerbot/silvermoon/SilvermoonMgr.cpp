@@ -1928,8 +1928,15 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                     uint32 brainMs = uint32(silvermoon::BrainMicros().exchange(0) / 1000);
                     uint32 brainAsyncMs = uint32(silvermoon::BrainAsyncMicros().exchange(0) / 1000);
                     uint32 liftSkips = silvermoon::LiftSkips().exchange(0);
-                    CharacterDatabase.PExecute("INSERT INTO silvermoon_perf (ts, bots, players, avg_diff, max_diff, brain_ms, brain_async_ms, tp_lift) VALUES (UNIX_TIMESTAMP(), %u, %u, %u, %u, %u, %u, %u)",
-                        online, uint32(GetPlayers().size()), uint32(sWorld.GetAverageDiff()), uint32(sWorld.GetMaxDiff()), brainMs, brainAsyncMs, liftSkips);
+                    uint32 tp[silvermoon::TP_COUNT];
+                    for (int k = 0; k < silvermoon::TP_COUNT; ++k)
+                        tp[k] = silvermoon::Tp(silvermoon::TpKind(k)).exchange(0);
+                    CharacterDatabase.PExecute("INSERT INTO silvermoon_perf (ts, bots, players, avg_diff, max_diff, brain_ms, brain_async_ms, tp_lift, "
+                        "tp_level_zone, tp_too_dangerous, tp_enemy_zone, tp_city, tp_goldshire, tp_fallback, tp_stuck) "
+                        "VALUES (UNIX_TIMESTAMP(), %u, %u, %u, %u, %u, %u, %u, %u, %u, %u, %u, %u, %u, %u)",
+                        online, uint32(GetPlayers().size()), uint32(sWorld.GetAverageDiff()), uint32(sWorld.GetMaxDiff()), brainMs, brainAsyncMs, liftSkips,
+                        tp[silvermoon::TP_LEVEL_ZONE], tp[silvermoon::TP_TOO_DANGEROUS], tp[silvermoon::TP_ENEMY_ZONE], tp[silvermoon::TP_CITY],
+                        tp[silvermoon::TP_GOLDSHIRE], tp[silvermoon::TP_FALLBACK], tp[silvermoon::TP_STUCK]);
                 }
             }
 
@@ -2082,6 +2089,7 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                         dunMorogh.pop_back();
                         if (TravelTarget* t = p->GetPlayerbotAI()->GetAiObjectContext()->GetValue<TravelTarget*>("travel target")->Get())
                             t->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
+                        ++silvermoon::Tp(silvermoon::TP_GOLDSHIRE);
                         p->TeleportTo(0, -9464.0f + frand(-25.0f, 25.0f), 62.0f + frand(-25.0f, 25.0f), 56.0f, frand(0.0f, 6.28f));
                         SetEventValue(p->GetGUIDLow(), "silvermoon_bind_home", 1, 10 * MINUTE);
                         ++elwynn;
@@ -2210,12 +2218,14 @@ void RandomPlayerbotMgr::SilvermoonProcessBot(Player* player, PlayerbotAI* ai, u
                         player->GetName(), player->GetLevel(), zoneId, areaId);
                     WorldLocation startLoc(start->mapId, start->positionX, start->positionY, start->positionZ, start->orientation);
                     player->SetHomebindToLocation(startLoc, start->areaId);
+                    ++silvermoon::Tp(silvermoon::TP_ENEMY_ZONE);
                     player->TeleportTo(start->mapId, start->positionX, start->positionY, start->positionZ, start->orientation);
                 }
                 else
                 {
                     sLog.outBasic("Silvermoon: bot %s (level %u) was in enemy zone %u area %u, sending it home",
                         player->GetName(), player->GetLevel(), zoneId, areaId);
+                    ++silvermoon::Tp(silvermoon::TP_ENEMY_ZONE);
                     player->TeleportToHomebind();
                 }
             }
@@ -2247,6 +2257,7 @@ void RandomPlayerbotMgr::SilvermoonProcessBot(Player* player, PlayerbotAI* ai, u
                     TravelTarget* travelTarget = ai->GetAiObjectContext()->GetValue<TravelTarget*>("travel target")->Get();
                     if (travelTarget)
                         travelTarget->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
+                    ++silvermoon::Tp(silvermoon::TP_CITY);
                     RandomTeleportForLevel(player, false);
                     SetEventValue(bot, "silvermoon_city_since", 0, 0);
                     SetEventValue(bot, "silvermoon_bind_home", 1, 10 * MINUTE);
@@ -2294,6 +2305,7 @@ void RandomPlayerbotMgr::SilvermoonProcessBot(Player* player, PlayerbotAI* ai, u
                 sLog.outBasic("Silvermoon: bot %s (level %u) has not moved for %u minutes, sending it home", player->GetName(), player->GetLevel(), minutes);
                 if (travelTarget)
                     travelTarget->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
+                ++silvermoon::Tp(silvermoon::TP_STUCK);
                 player->TeleportToHomebind();
             }
         }
@@ -2406,6 +2418,7 @@ void RandomPlayerbotMgr::SilvermoonProcessBot(Player* player, PlayerbotAI* ai, u
                 TravelTarget* travelTarget = ai->GetAiObjectContext()->GetValue<TravelTarget*>("travel target")->Get();
                 if (travelTarget)
                     travelTarget->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
+                ++silvermoon::Tp(silvermoon::TP_LEVEL_ZONE);
                 RandomTeleportForLevel(player, false);
                 SetEventValue(bot, "silvermoon_bind_home", 1, 10 * MINUTE);
             }
@@ -2451,6 +2464,7 @@ void RandomPlayerbotMgr::SilvermoonProcessBot(Player* player, PlayerbotAI* ai, u
                 TravelTarget* travelTarget = ai->GetAiObjectContext()->GetValue<TravelTarget*>("travel target")->Get();
                 if (travelTarget)
                     travelTarget->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
+                ++silvermoon::Tp(silvermoon::TP_TOO_DANGEROUS);
                 RandomTeleportForLevel(player, false);
                 SetEventValue(bot, "silvermoon_bind_home", 1, 10 * MINUTE);
             }

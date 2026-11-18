@@ -789,6 +789,7 @@ bool PlayerbotAIConfig::Initialize()
     sLog.outString("Loading free bots.");
     selfBotLevel = BotSelfBotLevel(config.GetIntDefault("AiPlayerbot.SelfBotLevel", uint32(BotSelfBotLevel::GM_ONLY)));
     silvermoonBrain = config.GetIntDefault("AiPlayerbot.SilvermoonBrain", 0);
+    silvermoonSpread = config.GetIntDefault("AiPlayerbot.SilvermoonSpread", 0);
     LoadListString<std::list<std::string>>(config.GetStringDefault("AiPlayerbot.ToggleAlwaysOnlineAccounts", ""), toggleAlwaysOnlineAccounts);
     LoadListString<std::list<std::string>>(config.GetStringDefault("AiPlayerbot.ToggleAlwaysOnlineChars", ""), toggleAlwaysOnlineChars);
 
