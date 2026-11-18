@@ -72,7 +72,7 @@ bool RepairAllAction::Execute(Event& event)
         {
             std::ostringstream out;
             out << "Repair: " << chat->formatMoney(totalCost) << " (" << unit->GetName() << ")";
-            ai->TellPlayerNoFacing(requester, out.str(),PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
+            ai->TellPlayerNoFacing(requester, out.str(), PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, true, false); // Silvermoon patch: whisper the result to whoever asked (the party-chat route never arrived)
             if (sPlayerbotAIConfig.globalSoundEffects)      
                 bot->PlayDistanceSound(7994);
 
