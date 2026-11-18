@@ -2316,6 +2316,8 @@ void RandomPlayerbotMgr::SilvermoonProcessBot(Player* player, PlayerbotAI* ai, u
             TravelDestination* dest = travelling ? target->GetDestination() : nullptr;
             if (dest && typeid(*dest) == typeid(NullTravelDestination))
                 dest = nullptr;
+            if (!dest)
+                travelling = false;     // no goal at all: idle between goals is not stuck
             {
                 std::lock_guard<std::mutex> guard(stuckLock);
                 StuckState& st = stuck[bot];
