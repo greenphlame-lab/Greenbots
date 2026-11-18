@@ -90,6 +90,7 @@ public:
         // Silvermoon realm management, defined in silvermoon/SilvermoonMgr.cpp
         void SilvermoonUpdate(uint32 elapsed);
         void SilvermoonProcessBot(Player* player, PlayerbotAI* ai, uint32 bot);
+        void SilvermoonFastProcessBot(Player* player, PlayerbotAI* ai, uint32 bot);
         static bool SilvermoonConsoleCommand(ChatHandler* handler, char const* args);
         // Silvermoon patch: about 1 random bot in 25 is a crafter: it gathers and crafts more and
         // levels less, and puts what it makes on the auction house

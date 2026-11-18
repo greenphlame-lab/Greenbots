@@ -684,7 +684,20 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
     silvermoon::DecisionLog::FlushIfDue(); // brain decisions, batched every 30 seconds
     if (sPlayerbotAIConfig.silvermoonSpread)
         silvermoon::Crowd::Recount();      // Phase 2a crowding, every 60 seconds
-    silvermoon::QuestIndex::Load();        // Phase 2a quest index, once (always loaded, used only with SilvermoonSpread = 1)
+    silvermoon::QuestIndex::Load();
+    {
+        static time_t lastFast = 0;
+        time_t nowFast = time(nullptr);
+        if (nowFast - lastFast >= 10)
+        {
+            lastFast = nowFast;
+            ForEachPlayerbot([&](Player* p)
+            {
+                if (p && p->IsInWorld() && !p->IsBeingTeleported() && p->GetPlayerbotAI() && IsRandomBot(p))
+                    SilvermoonFastProcessBot(p, p->GetPlayerbotAI(), p->GetGUIDLow());
+            });
+        }
+    }        // Phase 2a quest index, once (always loaded, used only with SilvermoonSpread = 1)
 
     // Silvermoon patch: bots sent into a dungeon with ".rndbot dungeon" commit to it for up to
     // 2.5 hours. Inside, travel/rpg/gathering/fishing are off (those walked them straight back
@@ -2189,6 +2202,156 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
 }
 
 // Called from RandomPlayerbotMgr::ProcessBot(uint32) for a bot that is due an update.
+// Silvermoon: checks that need to run often. SilvermoonProcessBot only runs when the stock
+// "update" event comes round, every 1 to 25 minutes per bot, far too slow for stuck recovery
+// (3 checks 30 seconds apart) - it gave up on 1 stuck bot in an hour. SilvermoonUpdate calls this
+// for every bot every 10 seconds; each check keeps its own timer.
+void RandomPlayerbotMgr::SilvermoonFastProcessBot(Player* player, PlayerbotAI* ai, uint32 bot)
+{
+    // in-memory timers: event values write to the database on every set, too much at this rate
+    static std::mutex fastLock;
+    static std::unordered_map<uint32, std::pair<time_t, time_t>> nextCheck;   // stuck, progress
+    time_t fastNow = time(nullptr);
+    bool stuckDue = false, progressDue = false;
+    {
+        std::lock_guard<std::mutex> guard(fastLock);
+        auto& next = nextCheck[bot];
+        if (fastNow >= next.first) { stuckDue = true; next.first = fastNow + 30; }
+        if (fastNow >= next.second) { progressDue = true; next.second = fastNow + 2 * MINUTE; }
+    }
+        // Silvermoon brain Phase 2a: stuck recovery. Every 30 seconds while a brain bot travels to a
+        // goal: if it moved less than 5 yards, (1) recompute the path, then (2) skip to the next
+        // waypoint, then (3) give up: the destination is left out of its goals for an hour and the
+        // give-up is logged to silvermoon_decisions with where it happened. Waiting is not stuck:
+        // fighting, dead, flying, on or waiting for a transport, sitting, casting, looting or
+        // talking to an NPC resets the check.
+        if (ai && sPlayerbotAIConfig.silvermoonSpread && sPlayerbotAIConfig.silvermoonBrain && sRandomPlayerbotMgr.IsRandomBot(player) &&
+            player->IsInWorld() && !player->GetGroup() && !ai->HasRealPlayerMaster() && !SilvermoonDungeonOf(bot) &&
+            player->GetMap() && player->GetMap()->IsContinent() && stuckDue)
+        {
+            static std::mutex stuckLock;
+            struct StuckState { WorldPosition pos; uint8 stage = 0; TravelDestination* dest = nullptr; };
+            static std::unordered_map<uint32, StuckState> stuck;
+            AiObjectContext* context = ai->GetAiObjectContext();
+            TravelTarget* target = context->GetValue<TravelTarget*>("travel target")->Get();
+            LastMovement& lastMove = context->GetValue<LastMovement&>("last movement")->Get();
+            // waiting at a dock: the next path point is a transport and the bot is at it. (The old
+            // "last transport entry" stays set after any ride, which hid every stuck bot that had
+            // ever taken a boat or lift.)
+            bool waitingForTransport = false;
+            if (!lastMove.lastPath.empty() && lastMove.lastPath.getPath().size() > 1)
+            {
+                PathNodePoint const& next = *std::next(lastMove.lastPath.getPath().begin());
+                waitingForTransport = next.type == PathNodeType::NODE_TRANSPORT && next.point.getMapId() == player->GetMapId() &&
+                    next.point.distance(WorldPosition(player)) < 40.0f;
+            }
+            WorldPosition here(player);
+            GuidPosition rpgTarget = context->GetValue<GuidPosition>("rpg target")->Get();
+            bool talking = rpgTarget && rpgTarget.getMapId() == here.getMapId() && rpgTarget.fDist(here) < INTERACTION_DISTANCE * 2;
+            bool looting = context->GetValue<LootObjectStack*>("available loot")->Get()->CanLoot(INTERACTION_DISTANCE * 2);
+            bool waiting = !player->IsAlive() || player->IsInCombat() || player->IsTaxiFlying() || player->GetTransport() ||
+                waitingForTransport || player->IsSitState() || player->IsNonMeleeSpellCasted(false) || talking || looting;
+            // any state but working at a destination counts: a stuck bot's goal keeps dropping into
+            // cooldown or expiring and being chosen again, so it is rarely in "travel" right then
+            bool travelling = target && target->GetStatus() != TravelStatus::TRAVEL_STATUS_WORK;
+            uint8 stage = 0;
+            TravelDestination* dest = travelling ? target->GetDestination() : nullptr;
+            if (dest && typeid(*dest) == typeid(NullTravelDestination))
+                dest = nullptr;
+            if (!dest)
+                travelling = false;     // no goal at all: idle between goals is not stuck
+            {
+                std::lock_guard<std::mutex> guard(stuckLock);
+                StuckState& st = stuck[bot];
+                // anchored on position only: a bot that re-picks a new destination every few seconds
+                // without moving (Evievera, cycling vendors) is just as stuck
+                if (!travelling || waiting || st.pos.getMapId() != here.getMapId() || st.pos.distance(here) >= 5.0f)
+                {
+                    st.pos = here;
+                    st.stage = 0;
+                    st.dest = dest;
+                }
+                else
+                    stage = ++st.stage;
+                if (stage >= 3)
+                    st.stage = 0;
+            }
+            if (stage == 1)
+            {
+                ai->StopMoving();
+                lastMove.clear();       // the next move asks for a fresh path
+            }
+            else if (stage == 2)
+            {
+                std::vector<PathNodePoint>& points = lastMove.lastPath.getPath();
+                if (points.size() > 1)
+                    points.erase(points.begin());
+                else
+                    lastMove.clear();
+            }
+            else if (stage >= 3)
+            {
+                if (dest)
+                    SilvermoonSkipDestination(bot, dest, HOUR);
+                silvermoon::DecisionRow row;
+                row.ts = uint32(time(nullptr));
+                row.guid = bot;
+                row.goal = "stuck give-up";
+                row.target = dest ? dest->GetTitle() : "no destination";
+                row.reason = "no progress for 90 seconds";
+                row.map = player->GetMapId();
+                row.x = player->GetPositionX();
+                row.y = player->GetPositionY();
+                silvermoon::DecisionLog::Add(row);
+                target->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
+                lastMove.clear();
+            }
+        }
+
+        // Silvermoon patch: no-progress watchdog (stopgap until Phase 2a's stuck recovery). A bot
+        // that can't path out of where it stands (Mowor, in a ravine below the Burning Blade camp)
+        // keeps choosing goals it never reaches, and the skip list then walks it through every
+        // vendor in the world. Every 2 minutes: a solo bot that has moved less than 5 yards in
+        // 15 minutes, while not working at a destination, fishing, sitting or fighting, is sent home.
+        if (ai && sRandomPlayerbotMgr.IsRandomBot(player) && player->IsInWorld() && player->IsAlive() &&
+            !player->IsTaxiFlying() && !player->IsBeingTeleported() && !player->InBattleGround() && !player->GetTransport() &&
+            !player->GetGroup() && !ai->HasRealPlayerMaster() && player->GetMap() && player->GetMap()->IsContinent() &&
+            progressDue)
+        {
+            static std::mutex progressLock;
+            static std::unordered_map<uint32, std::pair<WorldPosition, time_t>> anchors;
+            time_t now = time(nullptr);
+            TravelTarget* travelTarget = ai->GetAiObjectContext()->GetValue<TravelTarget*>("travel target")->Get();
+            bool busy = player->IsInCombat() || player->IsSitState() ||
+                (travelTarget && travelTarget->GetStatus() == TravelStatus::TRAVEL_STATUS_WORK) ||
+                (travelTarget && travelTarget->GetDestination() && travelTarget->GetDestination()->GetPurpose() == TravelDestinationPurpose::GatherFishing);
+            bool sendHome = false;
+            uint32 minutes = 0;
+            {
+                std::lock_guard<std::mutex> guard(progressLock);
+                WorldPosition here(player);
+                auto it = anchors.find(bot);
+                if (busy || it == anchors.end() || it->second.first.getMapId() != here.getMapId() || it->second.first.distance(here) > 5.0f)
+                    anchors[bot] = { here, now };
+                else if (now - it->second.second >= 15 * MINUTE)
+                {
+                    minutes = uint32((now - it->second.second) / MINUTE);
+                    anchors.erase(it);
+                    sendHome = true;
+                }
+            }
+            if (sendHome)
+            {
+                sLog.outBasic("Silvermoon: bot %s (level %u) has not moved for %u minutes, sending it home", player->GetName(), player->GetLevel(), minutes);
+                if (travelTarget)
+                    travelTarget->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
+                ++silvermoon::Tp(silvermoon::TP_STUCK);
+                player->TeleportToHomebind();
+            }
+        }
+
+}
+
 void RandomPlayerbotMgr::SilvermoonProcessBot(Player* player, PlayerbotAI* ai, uint32 bot)
 {
         // Silvermoon patch: a random bot that ends up inside a zone (or sub-area)
@@ -2294,138 +2457,7 @@ void RandomPlayerbotMgr::SilvermoonProcessBot(Player* player, PlayerbotAI* ai, u
                 SetEventValue(bot, "silvermoon_city_since", 0, 0);
         }
 
-        // Silvermoon brain Phase 2a: stuck recovery. Every 30 seconds while a brain bot travels to a
-        // goal: if it moved less than 5 yards, (1) recompute the path, then (2) skip to the next
-        // waypoint, then (3) give up: the destination is left out of its goals for an hour and the
-        // give-up is logged to silvermoon_decisions with where it happened. Waiting is not stuck:
-        // fighting, dead, flying, on or waiting for a transport, sitting, casting, looting or
-        // talking to an NPC resets the check.
-        if (ai && sPlayerbotAIConfig.silvermoonSpread && sPlayerbotAIConfig.silvermoonBrain && sRandomPlayerbotMgr.IsRandomBot(player) &&
-            player->IsInWorld() && !player->GetGroup() && !ai->HasRealPlayerMaster() && !SilvermoonDungeonOf(bot) &&
-            player->GetMap() && player->GetMap()->IsContinent() && !GetEventValue(bot, "silvermoon_stuck_check"))
-        {
-            SetEventValue(bot, "silvermoon_stuck_check", 1, 30);
-            static std::mutex stuckLock;
-            struct StuckState { WorldPosition pos; uint8 stage = 0; TravelDestination* dest = nullptr; };
-            static std::unordered_map<uint32, StuckState> stuck;
-            AiObjectContext* context = ai->GetAiObjectContext();
-            TravelTarget* target = context->GetValue<TravelTarget*>("travel target")->Get();
-            LastMovement& lastMove = context->GetValue<LastMovement&>("last movement")->Get();
-            // waiting at a dock: the next path point is a transport and the bot is at it. (The old
-            // "last transport entry" stays set after any ride, which hid every stuck bot that had
-            // ever taken a boat or lift.)
-            bool waitingForTransport = false;
-            if (!lastMove.lastPath.empty() && lastMove.lastPath.getPath().size() > 1)
-            {
-                PathNodePoint const& next = *std::next(lastMove.lastPath.getPath().begin());
-                waitingForTransport = next.type == PathNodeType::NODE_TRANSPORT && next.point.getMapId() == player->GetMapId() &&
-                    next.point.distance(WorldPosition(player)) < 40.0f;
-            }
-            WorldPosition here(player);
-            GuidPosition rpgTarget = context->GetValue<GuidPosition>("rpg target")->Get();
-            bool talking = rpgTarget && rpgTarget.getMapId() == here.getMapId() && rpgTarget.fDist(here) < INTERACTION_DISTANCE * 2;
-            bool looting = context->GetValue<LootObjectStack*>("available loot")->Get()->CanLoot(INTERACTION_DISTANCE * 2);
-            bool waiting = !player->IsAlive() || player->IsInCombat() || player->IsTaxiFlying() || player->GetTransport() ||
-                waitingForTransport || player->IsSitState() || player->IsNonMeleeSpellCasted(false) || talking || looting;
-            // any state but working at a destination counts: a stuck bot's goal keeps dropping into
-            // cooldown or expiring and being chosen again, so it is rarely in "travel" right then
-            bool travelling = target && target->GetStatus() != TravelStatus::TRAVEL_STATUS_WORK;
-            uint8 stage = 0;
-            TravelDestination* dest = travelling ? target->GetDestination() : nullptr;
-            if (dest && typeid(*dest) == typeid(NullTravelDestination))
-                dest = nullptr;
-            if (!dest)
-                travelling = false;     // no goal at all: idle between goals is not stuck
-            {
-                std::lock_guard<std::mutex> guard(stuckLock);
-                StuckState& st = stuck[bot];
-                // anchored on position only: a bot that re-picks a new destination every few seconds
-                // without moving (Evievera, cycling vendors) is just as stuck
-                if (!travelling || waiting || st.pos.getMapId() != here.getMapId() || st.pos.distance(here) >= 5.0f)
-                {
-                    st.pos = here;
-                    st.stage = 0;
-                    st.dest = dest;
-                }
-                else
-                    stage = ++st.stage;
-                if (stage >= 3)
-                    st.stage = 0;
-            }
-            if (stage == 1)
-            {
-                ai->StopMoving();
-                lastMove.clear();       // the next move asks for a fresh path
-            }
-            else if (stage == 2)
-            {
-                std::vector<PathNodePoint>& points = lastMove.lastPath.getPath();
-                if (points.size() > 1)
-                    points.erase(points.begin());
-                else
-                    lastMove.clear();
-            }
-            else if (stage >= 3)
-            {
-                if (dest)
-                    SilvermoonSkipDestination(bot, dest, HOUR);
-                silvermoon::DecisionRow row;
-                row.ts = uint32(time(nullptr));
-                row.guid = bot;
-                row.goal = "stuck give-up";
-                row.target = dest ? dest->GetTitle() : "no destination";
-                row.reason = "no progress for 90 seconds";
-                row.map = player->GetMapId();
-                row.x = player->GetPositionX();
-                row.y = player->GetPositionY();
-                silvermoon::DecisionLog::Add(row);
-                target->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
-                lastMove.clear();
-            }
-        }
-
-        // Silvermoon patch: no-progress watchdog (stopgap until Phase 2a's stuck recovery). A bot
-        // that can't path out of where it stands (Mowor, in a ravine below the Burning Blade camp)
-        // keeps choosing goals it never reaches, and the skip list then walks it through every
-        // vendor in the world. Every 2 minutes: a solo bot that has moved less than 5 yards in
-        // 15 minutes, while not working at a destination, fishing, sitting or fighting, is sent home.
-        if (ai && sRandomPlayerbotMgr.IsRandomBot(player) && player->IsInWorld() && player->IsAlive() &&
-            !player->IsTaxiFlying() && !player->IsBeingTeleported() && !player->InBattleGround() && !player->GetTransport() &&
-            !player->GetGroup() && !ai->HasRealPlayerMaster() && player->GetMap() && player->GetMap()->IsContinent() &&
-            !GetEventValue(bot, "silvermoon_progress_check"))
-        {
-            SetEventValue(bot, "silvermoon_progress_check", 1, 2 * MINUTE);
-            static std::mutex progressLock;
-            static std::unordered_map<uint32, std::pair<WorldPosition, time_t>> anchors;
-            time_t now = time(nullptr);
-            TravelTarget* travelTarget = ai->GetAiObjectContext()->GetValue<TravelTarget*>("travel target")->Get();
-            bool busy = player->IsInCombat() || player->IsSitState() ||
-                (travelTarget && travelTarget->GetStatus() == TravelStatus::TRAVEL_STATUS_WORK) ||
-                (travelTarget && travelTarget->GetDestination() && travelTarget->GetDestination()->GetPurpose() == TravelDestinationPurpose::GatherFishing);
-            bool sendHome = false;
-            uint32 minutes = 0;
-            {
-                std::lock_guard<std::mutex> guard(progressLock);
-                WorldPosition here(player);
-                auto it = anchors.find(bot);
-                if (busy || it == anchors.end() || it->second.first.getMapId() != here.getMapId() || it->second.first.distance(here) > 5.0f)
-                    anchors[bot] = { here, now };
-                else if (now - it->second.second >= 15 * MINUTE)
-                {
-                    minutes = uint32((now - it->second.second) / MINUTE);
-                    anchors.erase(it);
-                    sendHome = true;
-                }
-            }
-            if (sendHome)
-            {
-                sLog.outBasic("Silvermoon: bot %s (level %u) has not moved for %u minutes, sending it home", player->GetName(), player->GetLevel(), minutes);
-                if (travelTarget)
-                    travelTarget->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
-                ++silvermoon::Tp(silvermoon::TP_STUCK);
-                player->TeleportToHomebind();
-            }
-        }
+        // (stuck recovery and the no-progress watchdog run from SilvermoonFastProcessBot every 10 s)
 
         // Silvermoon patch: brain on saved strategies. A bot whose strategy lists were saved before
         // Phase 1 (ai_playerbot_db_store "nc", e.g. after a player gave it commands) loads that
