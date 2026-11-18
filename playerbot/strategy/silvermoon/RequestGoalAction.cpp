@@ -87,7 +87,11 @@ bool RequestGoalAction::Execute(Event& event)
 
     AI_VALUE(TravelTarget*, "travel target")->SetStatus(TravelStatus::TRAVEL_STATUS_PREPARE);
     SET_AI_VALUE2(std::string, "manual string", "future travel purpose", "goal");
-    SET_AI_VALUE2(std::string, "manual string", "future travel condition", event.getSource());
+    // No travel condition. The stock requests pass their trigger (e.g. "should sell") so the target
+    // ends when the need is gone; ours was "not travel target active", which turns false as soon as
+    // the goal is set, so the target died within seconds and the bot chose again in place (32%
+    // of decisions came less than 10 seconds apart). A goal ends when its destination does.
+    SET_AI_VALUE2(std::string, "manual string", "future travel condition", "");
     SET_AI_VALUE2(int, "manual int", "future travel relevance", relevance * 100);
     return true;
 }
