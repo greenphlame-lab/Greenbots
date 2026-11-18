@@ -6,6 +6,7 @@
 #include "Tools/Formulas.h"
 #include "playerbot/silvermoon/DecisionLog.h"
 #include "playerbot/silvermoon/QuestIndex.h"
+#include "playerbot/silvermoon/Crowd.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include <deque>
 #include <mutex>
@@ -175,6 +176,18 @@ static SilvermoonScoredGoal ScoreWith(Player* bot, BotSnapshot const& snapshot, 
         c.kind = GoalKind::Repair;
     else if (purpose == TravelDestinationPurpose::Trainer)
         c.kind = GoalKind::Trainer;
+
+    // crowding (Phase 2a): bots already heading for or working in this 100-yard cell. Capacity is
+    // 3 bots for a grind camp, and a third of the spawns (2 to 6) for an indexed objective area.
+    if (sPlayerbotAIConfig.silvermoonSpread && position && (c.kind == GoalKind::Grind || c.kind == GoalKind::QuestObjective))
+    {
+        float capacity = 3.0f;
+        if (QuestObjectiveTravelDestination* o = dynamic_cast<QuestObjectiveTravelDestination*>(destination))
+            if (QuestArea const* area = QuestIndex::NearestArea(o->GetQuestId(), uint8(o->GetObjective() + 1), position->getMapId(), position->getX(), position->getY()))
+                capacity = std::min(6.0f, std::max(2.0f, area->spawns / 3.0f));
+        uint32 crowd = Crowd::At(position->getMapId(), position->getX(), position->getY());
+        c.crowdFactor = std::max(1.0f, (crowd + 1) / capacity);
+    }
 
     goal.kind = c.kind;
     goal.score = GoalScorer::Score(snapshot, c, frand(0.9f, 1.1f));

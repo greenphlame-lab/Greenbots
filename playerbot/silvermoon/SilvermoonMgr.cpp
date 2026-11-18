@@ -86,6 +86,7 @@ using namespace MaNGOS;
 #include "playerbot/RandomPlayerbotMgr.h"
 #include "playerbot/silvermoon/DecisionLog.h"
 #include "playerbot/silvermoon/QuestIndex.h"
+#include "playerbot/silvermoon/Crowd.h"
 
 // Silvermoon patch: number of guilds with at least one member online, per faction
 // (0 = Alliance, 1 = Horde). Counted once a minute in the world thread and read by
@@ -678,6 +679,8 @@ static void SilvermoonVendorGear(Player* bot)
 void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
 {
     silvermoon::DecisionLog::FlushIfDue(); // brain decisions, batched every 30 seconds
+    if (sPlayerbotAIConfig.silvermoonSpread)
+        silvermoon::Crowd::Recount();      // Phase 2a crowding, every 60 seconds
     silvermoon::QuestIndex::Load();        // Phase 2a quest index, once (always loaded, used only with SilvermoonSpread = 1)
 
     // Silvermoon patch: bots sent into a dungeon with ".rndbot dungeon" commit to it for up to
@@ -2069,7 +2072,8 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
             // Goldshire and bound there.
             {
                 static time_t lastBalance = 0;
-                if (nowTime - lastBalance >= 600)
+                // Phase 2a crowding spreads bots out instead, so the sweep is off with SilvermoonSpread = 1
+                if (!sPlayerbotAIConfig.silvermoonSpread && nowTime - lastBalance >= 600)
                 {
                     lastBalance = nowTime;
                     std::vector<Player*> dunMorogh;

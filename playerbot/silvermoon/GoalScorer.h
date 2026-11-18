@@ -41,6 +41,7 @@ namespace silvermoon
         int32_t mobLevel = 0;          // creatures at the destination (0 = none / unknown)
         float chainXp = 0.0f;          // Phase 2a: XP of follow-up quests (quest index)
         bool avoid = false;            // Phase 2a: escort, timed or group quest (quest index)
+        float crowdFactor = 1.0f;      // Phase 2a: expected XP is divided by this (bots already there)
         bool elite = false;
     };
 

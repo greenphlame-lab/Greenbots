@@ -121,6 +121,13 @@ namespace silvermoon
             break;
         }
 
+        // crowding (Phase 2a): a camp or objective area shared with other bots is worth less
+        if (c.crowdFactor > 1.0f && (c.kind == GoalKind::Grind || c.kind == GoalKind::QuestObjective))
+        {
+            s.value /= c.crowdFactor;
+            s.reason = "crowded";
+        }
+
         // escort, timed and group quests are not solo goals (quest index, Phase 2a)
         if (c.avoid && (c.kind == GoalKind::QuestObjective || c.kind == GoalKind::QuestGiver))
         {
