@@ -13,6 +13,15 @@ using namespace silvermoon;
 namespace
 {
     const size_t MAX_CANDIDATES = 40;
+    const time_t ABANDONED_WITHIN = 4 * MINUTE;   // a goal replaced this soon was never reached
+    const time_t SKIP_FOR = 30 * MINUTE;          // ... and is left out of the next lists for a while
+
+    // Destinations each bot gave up on (chosen, then a new goal was needed within a few minutes:
+    // unreachable, no path, wrong side of a wall). Zugzug picked a different far-away vendor every
+    // minute for 12 minutes without moving.
+    std::mutex goalLock;
+    std::map<uint32, std::pair<TravelDestination*, time_t>> lastGoal;   // bot -> last chosen, when
+    std::map<uint32, std::map<TravelDestination*, time_t>> skipUntil;   // bot -> destination -> until
 
     // Each bot's total XP over time, to know its own XP per minute (last ~30 minutes).
     std::mutex xpLock;
@@ -151,6 +160,19 @@ std::vector<SilvermoonScoredGoal> ai::SilvermoonScoreGoals(Player* bot, Playerbo
     PlayerTravelInfo info(bot);
     BotSnapshot snapshot = Snapshot(bot, ai);
 
+    std::map<TravelDestination*, time_t> skip;
+    {
+        std::lock_guard<std::mutex> guard(goalLock);
+        auto it = skipUntil.find(bot->GetGUIDLow());
+        if (it != skipUntil.end())
+        {
+            time_t now = time(nullptr);
+            for (auto i = it->second.begin(); i != it->second.end();)
+                i = i->second <= now ? it->second.erase(i) : std::next(i);
+            skip = it->second;
+        }
+    }
+
     // partitions are ordered by distance, so this walks nearest first
     for (auto& [partition, points] : list)
     {
@@ -158,7 +180,7 @@ std::vector<SilvermoonScoredGoal> ai::SilvermoonScoreGoals(Player* bot, Playerbo
         {
             if (goals.size() >= MAX_CANDIDATES)
                 break;
-            if (!destination || !seen.insert(destination).second)
+            if (!destination || !seen.insert(destination).second || skip.count(destination))
                 continue;
             if (!destination->IsActive(bot, info))
                 continue;
@@ -215,6 +237,15 @@ bool ChooseGoalAction::Execute(Event& event)
     PartitionedTravelList list = futureDestinations->get();
     travelTarget->SetStatus(TravelStatus::TRAVEL_STATUS_NONE);
 
+    // the previous goal was given up within a few minutes: leave it out for a while
+    {
+        std::lock_guard<std::mutex> guard(goalLock);
+        time_t now = time(nullptr);
+        auto last = lastGoal.find(bot->GetGUIDLow());
+        if (last != lastGoal.end() && last->second.first && now - last->second.second < ABANDONED_WITHIN)
+            skipUntil[bot->GetGUIDLow()][last->second.first] = now + SKIP_FOR;
+    }
+
     std::vector<SilvermoonScoredGoal> goals = SilvermoonScoreGoals(bot, ai, list);
     if (goals.empty() || goals.front().score.score <= 0.0f)
     {
@@ -224,6 +255,10 @@ bool ChooseGoalAction::Execute(Event& event)
     }
 
     SilvermoonScoredGoal const& best = goals.front();
+    {
+        std::lock_guard<std::mutex> guard(goalLock);
+        lastGoal[bot->GetGUIDLow()] = { best.destination, time(nullptr) };
+    }
     TravelTarget newTarget = TravelTarget(ai);
     newTarget.SetRelevance(AI_VALUE2(int, "manual int", "future travel relevance"));
     newTarget.SetTarget(best.destination, best.position);
