@@ -82,6 +82,10 @@ namespace silvermoon
             s.value = c.killXp * GRIND_KILLS;
             s.minutes = travel + GRIND_MINUTES;
             s.reason = "grind fallback";
+            // never pick an elite camp or mobs 3+ levels up as a grind spot (a level 16 chose a
+            // level 27 rare elite: the elite XP bonus outweighed the risk factors)
+            if (c.elite || (c.mobLevel > 0 && c.mobLevel >= int32_t(bot.level) + HIGH_LEVEL_GAP))
+                s.value = 0.0f;
             break;
         case GoalKind::Vendor:
             s.value = xpm * (bot.urgentVendor ? CHORE_URGENT_MINUTES : CHORE_NORMAL_MINUTES);
