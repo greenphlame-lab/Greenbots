@@ -58,6 +58,9 @@ namespace
         uint16 hub = 0;
         TravelDestination* destination = nullptr;
         time_t start = 0;
+        float estimateMinutes = 0.0f;
+        uint32 deaths = 0;
+        bool wasAlive = true;
     };
     std::mutex tripLock;
     std::unordered_map<uint32, Trip> trips;
@@ -206,10 +209,15 @@ bool ai::SilvermoonBestRelocate(Player* bot, PlayerbotAI* ai, float bestLocalSco
     return true;
 }
 
-void ai::SilvermoonRelocateStarted(uint32 guid, uint16 hubId, TravelDestination* destination)
+void ai::SilvermoonRelocateStarted(uint32 guid, uint16 hubId, TravelDestination* destination, float estimateMinutes)
 {
     std::lock_guard<std::mutex> guard(tripLock);
-    trips[guid] = { hubId, destination, time(nullptr) };
+    Trip trip;
+    trip.hub = hubId;
+    trip.destination = destination;
+    trip.start = time(nullptr);
+    trip.estimateMinutes = estimateMinutes;
+    trips[guid] = trip;
 }
 
 void ai::SilvermoonWantRelocate(uint32 guid)
@@ -246,6 +254,48 @@ bool ai::SilvermoonRelocateTick(Player* bot, PlayerbotAI* ai)
     if (!hub)
         return false;
     TravelTarget* target = ai->GetAiObjectContext()->GetValue<TravelTarget*>("travel target")->Get();
+    // deaths on the way (the tick also runs while the bot is dead)
+    {
+        std::lock_guard<std::mutex> guard(tripLock);
+        auto it = trips.find(guid);
+        if (it != trips.end())
+        {
+            if (it->second.wasAlive && !bot->IsAlive())
+                ++it->second.deaths;
+            it->second.wasAlive = bot->IsAlive();
+            trip = it->second;
+        }
+    }
+    if (!bot->IsAlive())
+        return false;
+    // abandon a trip that runs over twice its route estimate, cost two deaths, or no longer fits
+    // the bot's level (it out-levelled the hub on the way)
+    std::string abandon;
+    if (trip.estimateMinutes > 0.0f && time(nullptr) - trip.start > time_t(2.0f * trip.estimateMinutes * MINUTE) + 2 * MINUTE)
+        abandon = "over twice the route time";
+    else if (trip.deaths >= 2)
+        abandon = "died twice on the way";
+    else if (int32(bot->GetLevel()) > int32(hub->maxLevel))
+        abandon = "out-levelled the hub";
+    if (!abandon.empty())
+    {
+        DecisionRow row;
+        row.ts = uint32(time(nullptr));
+        row.guid = guid;
+        row.goal = "relocate";
+        row.target = hub->name;
+        row.reason = "relocate abandoned: " + abandon;
+        row.map = bot->GetMapId();
+        row.x = bot->GetPositionX();
+        row.y = bot->GetPositionY();
+        DecisionLog::Add(row);
+        if (target && target->GetDestination() == trip.destination)
+            target->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
+        std::lock_guard<std::mutex> guard(tripLock);
+        trips.erase(guid);
+        ++failures[guid];
+        return false;
+    }
     WorldPosition here(bot);
     WorldPosition dest(hub->map, hub->innkeeper ? hub->innX : hub->x, hub->innkeeper ? hub->innY : hub->y, hub->innkeeper ? hub->innZ : hub->z);
     bool arrived = here.getMapId() == dest.getMapId() && here.fDist(dest) < ARRIVED;

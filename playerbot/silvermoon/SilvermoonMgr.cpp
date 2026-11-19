@@ -2219,10 +2219,11 @@ void RandomPlayerbotMgr::SilvermoonFastProcessBot(Player* player, PlayerbotAI* a
     bool stuckDue = false, progressDue = false;
     // Phase 2b: hubs within 150 yards count as visited (cheap: ~90 distance checks), and relocation
     // trips: arrival (home bind at the innkeeper) and failed trips
-    if (sPlayerbotAIConfig.silvermoonTravel && player->IsAlive() && player->GetMap() && player->GetMap()->IsContinent())
+    if (sPlayerbotAIConfig.silvermoonTravel && player->GetMap() && player->GetMap()->IsContinent())
     {
-        silvermoon::Hubs::NoteVisits(player);
-        SilvermoonRelocateTick(player, ai);
+        if (player->IsAlive())
+            silvermoon::Hubs::NoteVisits(player);
+        SilvermoonRelocateTick(player, ai);   // also while dead: deaths on the way count
     }
     {
         std::lock_guard<std::mutex> guard(fastLock);

@@ -356,7 +356,7 @@ bool ChooseGoalAction::Execute(Event& event)
     travelTarget->SetConditions({});
     setNewTarget(requester, &newTarget, travelTarget);
     if (best.kind == GoalKind::Relocate)
-        SilvermoonRelocateStarted(bot->GetGUIDLow(), relocateHub, best.destination);
+        SilvermoonRelocateStarted(bot->GetGUIDLow(), relocateHub, best.destination, best.score.minutes);
 
     SilvermoonLogDecision(bot, best, goals.size() > 1 ? &goals[1] : nullptr, goals.size() > 2 ? &goals[2] : nullptr);
 

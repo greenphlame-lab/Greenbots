@@ -1,4 +1,6 @@
 #include "TravelNode.h"
+#include <mutex>
+#include <algorithm>
 #include "playerbot/TravelMgr.h"
 
 #include <iomanip>
@@ -1502,6 +1504,40 @@ TravelNode* TravelNodeMap::getNode(WorldPosition pos, std::vector<WorldPosition>
     return NULL;
 }
 
+// Silvermoon brain Phase 2b: how many nodes route searches expand, to set a search cap from real
+// numbers. Every 500 searches the distribution is logged (no behaviour change).
+namespace
+{
+    std::mutex silvermoonRouteLock;
+    std::vector<uint32> silvermoonRouteSameMap, silvermoonRouteCrossMap;
+    uint32 silvermoonRouteFailed = 0;
+
+    void SilvermoonNoteRouteExpansions(uint32 expansions, bool found, bool crossMap)
+    {
+        std::lock_guard<std::mutex> guard(silvermoonRouteLock);
+        (crossMap ? silvermoonRouteCrossMap : silvermoonRouteSameMap).push_back(expansions);
+        if (!found)
+            ++silvermoonRouteFailed;
+        if (silvermoonRouteSameMap.size() + silvermoonRouteCrossMap.size() < 500)
+            return;
+        auto pct = [](std::vector<uint32> v, float p) -> uint32
+        {
+            if (v.empty())
+                return 0;
+            std::sort(v.begin(), v.end());
+            return v[std::min(v.size() - 1, size_t(p * (v.size() - 1)))];
+        };
+        std::vector<uint32> all(silvermoonRouteSameMap);
+        all.insert(all.end(), silvermoonRouteCrossMap.begin(), silvermoonRouteCrossMap.end());
+        sLog.outBasic("Silvermoon: route search expansions over %u searches (%u cross-map, %u not found): p50 %u, p90 %u, p99 %u, max %u; cross-map p99 %u, max %u",
+            uint32(all.size()), uint32(silvermoonRouteCrossMap.size()), silvermoonRouteFailed, pct(all, 0.5f), pct(all, 0.9f), pct(all, 0.99f), pct(all, 1.0f),
+            pct(silvermoonRouteCrossMap, 0.99f), pct(silvermoonRouteCrossMap, 1.0f));
+        silvermoonRouteSameMap.clear();
+        silvermoonRouteCrossMap.clear();
+        silvermoonRouteFailed = 0;
+    }
+}
+
 TravelNodeRoute TravelNodeMap::getRoute(TravelNode* start, TravelNode* goal, Unit* unit)
 {
     float unitSpeed = unit ? unit->GetSpeed(MOVE_RUN) : 7.0f;
@@ -1645,11 +1681,14 @@ TravelNodeRoute TravelNodeMap::getRoute(TravelNode* start, TravelNode* goal, Uni
     std::push_heap(open.begin(), open.end(), [](TravelNodeStub* i, TravelNodeStub* j) {return i->m_f < j->m_f; });
     startStub->open = true;
 
+    uint32 silvermoonExpansions = 0;
+    bool silvermoonCrossMap = start->getPosition()->getMapId() != goal->getPosition()->getMapId();
     while (!open.empty())
     {
         std::sort(open.begin(), open.end(), [](TravelNodeStub* i, TravelNodeStub* j) {return i->m_f < j->m_f; });
 
         currentNode = open.front(); // pop n node from open for which f is minimal
+        ++silvermoonExpansions;
 
         std::pop_heap(open.begin(), open.end(), [](TravelNodeStub* i, TravelNodeStub* j) {return i->m_f < j->m_f; });
         open.pop_back();
@@ -1674,6 +1713,7 @@ TravelNodeRoute TravelNodeMap::getRoute(TravelNode* start, TravelNode* goal, Uni
 
             std::reverse(path.begin(), path.end());
 
+            SilvermoonNoteRouteExpansions(silvermoonExpansions, true, silvermoonCrossMap);
             return TravelNodeRoute(path, portNodes);
         }
 
@@ -1719,6 +1759,7 @@ TravelNodeRoute TravelNodeMap::getRoute(TravelNode* start, TravelNode* goal, Uni
 
     for (auto node : portNodes) delete node;
 
+    SilvermoonNoteRouteExpansions(silvermoonExpansions, false, silvermoonCrossMap);
     return TravelNodeRoute();
 }
 
