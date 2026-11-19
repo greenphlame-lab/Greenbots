@@ -335,6 +335,7 @@ public:
     BotSelfBotLevel selfBotLevel;
     uint32 silvermoonBrain; // Silvermoon: 1 = random bots pick destinations with the goal scorer (brain Phase 1)
     uint32 silvermoonSpread; // Silvermoon: 1 = brain Phase 2a (quest index in scoring, crowding, stuck recovery); needs SilvermoonBrain = 1
+    uint32 silvermoonTravel; // Silvermoon: 1 = brain Phase 2b (hubs, relocation, danger-aware routes); needs SilvermoonSpread = 1
     uint32 iterationsPerTick;
 
     std::string autoPickReward;

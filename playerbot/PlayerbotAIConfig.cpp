@@ -790,6 +790,9 @@ bool PlayerbotAIConfig::Initialize()
     selfBotLevel = BotSelfBotLevel(config.GetIntDefault("AiPlayerbot.SelfBotLevel", uint32(BotSelfBotLevel::GM_ONLY)));
     silvermoonBrain = config.GetIntDefault("AiPlayerbot.SilvermoonBrain", 0);
     silvermoonSpread = config.GetIntDefault("AiPlayerbot.SilvermoonSpread", 0);
+    silvermoonTravel = config.GetIntDefault("AiPlayerbot.SilvermoonTravel", 0);
+    if (!silvermoonSpread || !silvermoonBrain)
+        silvermoonTravel = 0; // 2b builds on 2a and the brain
     LoadListString<std::list<std::string>>(config.GetStringDefault("AiPlayerbot.ToggleAlwaysOnlineAccounts", ""), toggleAlwaysOnlineAccounts);
     LoadListString<std::list<std::string>>(config.GetStringDefault("AiPlayerbot.ToggleAlwaysOnlineChars", ""), toggleAlwaysOnlineChars);
 
