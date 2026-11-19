@@ -356,7 +356,13 @@ bool ChooseGoalAction::Execute(Event& event)
     travelTarget->SetConditions({});
     setNewTarget(requester, &newTarget, travelTarget);
     if (best.kind == GoalKind::Relocate)
+    {
         SilvermoonRelocateStarted(bot->GetGUIDLow(), relocateHub, best.destination, best.score.minutes);
+        // the stock trip timer is twice the straight-line walk; a trip by road, boat or flight can
+        // take longer, so give it twice the route estimate plus 5 minutes (the abandon rule's limit)
+        travelTarget->SetExpireIn(uint32((2.0f * best.score.minutes + 5.0f) * MINUTE * IN_MILLISECONDS));
+        travelTarget->SetForced(true);   // forced targets don't drop into cooldown on the way
+    }
 
     SilvermoonLogDecision(bot, best, goals.size() > 1 ? &goals[1] : nullptr, goals.size() > 2 ? &goals[2] : nullptr);
 

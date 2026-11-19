@@ -43,6 +43,18 @@ hubs = json.load(open(sys.argv[2]))
 npcs = json.load(open(sys.argv[3]))
 dbc = sys.argv[4]
 heights = json.load(open(sys.argv[5]))   # from the 'z' pass
+givers = json.load(open(sys.argv[6])) if len(sys.argv) > 6 else []   # hub_givers.json (quest givers and quest levels)
+
+def core_range(hub, lo, hi):
+    """the hub's core level range: median quest level of the quests given within 150 yards, +-5,
+    inside the 15-85th percentile range (Rut'theran Village's 10-56 came from a few late quests)"""
+    levels = sorted({(int(g[6]), int(g[7])) for g in givers if int(g[0]) == hub['map'] and math.hypot(g[1] - hub['x'], g[2] - hub['y']) < 150})
+    levels = sorted(l for q, l in levels)
+    if not levels:
+        return lo, hi
+    med = levels[len(levels) // 2]
+    return max(lo, med - 5), min(hi, med + 5)
+
 
 def load(f):
     d = open(f, 'rb').read(); _, n, fc, rs, ss = struct.unpack('<4s4I', d[:20])
@@ -88,6 +100,7 @@ for i, h in enumerate(hubs, start=1):
     fm = nearest(h, 8, side)
     withInn += bool(inn); withFm += bool(fm)
     z = heights[i - 1]
+    h['lo'], h['hi'] = core_range(h, h['lo'], h['hi'])
     name = (h['zone'] + ' (' + h['givers'].split(',')[0] + ')').replace("'", "''")[:64]
     rows.append(f"({i},'{side}','{name}',{h['map']},{h['x']},{h['y']},{z:.1f},{h['lo']},{h['hi']},{h['quests']},"
                 f"{inn[1] if inn else 0},{inn[2] if inn else 0:.1f},{inn[3] if inn else 0:.1f},{inn[4] if inn else 0:.1f},{fm[1] if fm else 0})")

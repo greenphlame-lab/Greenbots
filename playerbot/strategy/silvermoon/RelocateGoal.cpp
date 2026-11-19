@@ -65,6 +65,23 @@ namespace
     std::mutex tripLock;
     std::unordered_map<uint32, Trip> trips;
     std::unordered_map<uint32, uint32> failures;
+    std::unordered_map<uint32, std::unordered_map<uint16, time_t>> skipHub;   // guid -> hub -> until (failed trips)
+
+    void FailTrip(uint32 guid, uint16 hub)   // tripLock held
+    {
+        ++failures[guid];
+        skipHub[guid][hub] = time(nullptr) + 30 * MINUTE;
+    }
+
+    bool Skipped(uint32 guid, uint16 hub)
+    {
+        std::lock_guard<std::mutex> guard(tripLock);
+        auto it = skipHub.find(guid);
+        if (it == skipHub.end())
+            return false;
+        auto h = it->second.find(hub);
+        return h != it->second.end() && time(nullptr) < h->second;
+    }
     std::set<uint32> wanted;
 
     float RouteMinutes(Player* bot, WorldPosition const& to)
@@ -152,6 +169,8 @@ bool ai::SilvermoonBestRelocate(Player* bot, PlayerbotAI* ai, float bestLocalSco
             continue;
         if (int32(level) < int32(h.minLevel) - 1 || int32(level) > int32(h.maxLevel) - 2)
             continue;
+        if (Skipped(guid, h.id))
+            continue;                                   // failed to get there recently
         bool visited = Hubs::Visited(guid, h.id);
         if (explore && visited)
             continue;
@@ -296,7 +315,7 @@ bool ai::SilvermoonRelocateTick(Player* bot, PlayerbotAI* ai)
             target->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
         std::lock_guard<std::mutex> guard(tripLock);
         trips.erase(guid);
-        ++failures[guid];
+        FailTrip(guid, trip.hub);
         return false;
     }
     WorldPosition here(bot);
@@ -342,10 +361,24 @@ bool ai::SilvermoonRelocateTick(Player* bot, PlayerbotAI* ai)
     }
     if (!stillGoing)
     {
-        // the trip ended (cooldown, expiry, stuck give-up, or another goal won) without arriving
+        // the trip ended without arriving: log how, so silent ends can be told apart
+        std::string how = !target || !target->GetDestination() ? "no target" :
+            target->GetDestination() != trip.destination ? "another goal took over" :
+            target->GetStatus() == TravelStatus::TRAVEL_STATUS_COOLDOWN ? "could not move there" :
+            target->GetStatus() == TravelStatus::TRAVEL_STATUS_EXPIRED ? "trip timer ran out" : "ended";
+        DecisionRow row;
+        row.ts = uint32(time(nullptr));
+        row.guid = guid;
+        row.goal = "relocate";
+        row.target = hub->name;
+        row.reason = "relocate failed: " + how;
+        row.map = bot->GetMapId();
+        row.x = bot->GetPositionX();
+        row.y = bot->GetPositionY();
+        DecisionLog::Add(row);
         std::lock_guard<std::mutex> guard(tripLock);
         trips.erase(guid);
-        ++failures[guid];
+        FailTrip(guid, trip.hub);
     }
     return false;
 }
