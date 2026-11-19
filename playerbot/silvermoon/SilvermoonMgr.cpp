@@ -86,6 +86,7 @@ using namespace MaNGOS;
 #include "playerbot/RandomPlayerbotMgr.h"
 #include "playerbot/silvermoon/DecisionLog.h"
 #include "playerbot/silvermoon/QuestIndex.h"
+#include "playerbot/silvermoon/Hubs.h"
 #include "playerbot/silvermoon/Crowd.h"
 #include "playerbot/LootObjectStack.h"
 #include "playerbot/strategy/silvermoon/ChooseGoalAction.h"
@@ -685,6 +686,8 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
     if (sPlayerbotAIConfig.silvermoonSpread)
         silvermoon::Crowd::Recount();      // Phase 2a crowding, every 60 seconds
     silvermoon::QuestIndex::Load();
+    silvermoon::Hubs::Load();              // Phase 2b quest hubs and visited memory, once
+    silvermoon::Hubs::SaveIfDue();         // visited hubs, batched every 10 minutes
     {
         static time_t lastFast = 0;
         time_t nowFast = time(nullptr);
@@ -2213,6 +2216,9 @@ void RandomPlayerbotMgr::SilvermoonFastProcessBot(Player* player, PlayerbotAI* a
     static std::unordered_map<uint32, std::pair<time_t, time_t>> nextCheck;   // stuck, progress
     time_t fastNow = time(nullptr);
     bool stuckDue = false, progressDue = false;
+    // Phase 2b: hubs within 150 yards count as visited (cheap: ~90 distance checks)
+    if (sPlayerbotAIConfig.silvermoonTravel && player->IsAlive() && player->GetMap() && player->GetMap()->IsContinent())
+        silvermoon::Hubs::NoteVisits(player);
     {
         std::lock_guard<std::mutex> guard(fastLock);
         auto& next = nextCheck[bot];
