@@ -2252,8 +2252,12 @@ void RandomPlayerbotMgr::SilvermoonFastProcessBot(Player* player, PlayerbotAI* a
             // Hill, Thelsamar, the Crossroads and other hubs while doing chores there
             bool talking = bool(rpgTarget) || player->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_RESTING);
             bool looting = context->GetValue<LootObjectStack*>("available loot")->Get()->CanLoot(INTERACTION_DISTANCE * 2);
+            // resurrection sickness: the bot waits at the spirit healer until it wears off (up to 10
+            // minutes) - every bot in the hub "stuck" clusters (graveyards at Sentinel Hill, the
+            // Crossroads, Southshore, Lakeshire...) had it
+            bool sick = ai->HasAura(SPELL_ID_PASSIVE_RESURRECTION_SICKNESS, player);
             bool waiting = !player->IsAlive() || player->IsInCombat() || player->IsTaxiFlying() || player->GetTransport() ||
-                waitingForTransport || player->IsSitState() || player->IsNonMeleeSpellCasted(false) || talking || looting;
+                waitingForTransport || player->IsSitState() || player->IsNonMeleeSpellCasted(false) || talking || looting || sick;
             // any state but working at a destination counts: a stuck bot's goal keeps dropping into
             // cooldown or expiring and being chosen again, so it is rarely in "travel" right then
             bool travelling = target && target->GetStatus() != TravelStatus::TRAVEL_STATUS_WORK;
