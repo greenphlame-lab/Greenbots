@@ -2216,7 +2216,7 @@ void RandomPlayerbotMgr::SilvermoonFastProcessBot(Player* player, PlayerbotAI* a
     {
         std::lock_guard<std::mutex> guard(fastLock);
         auto& next = nextCheck[bot];
-        if (fastNow >= next.first) { stuckDue = true; next.first = fastNow + 30; }
+        if (fastNow >= next.first) { stuckDue = true; next.first = fastNow + 60; }   // 3 checks = 3 minutes
         if (fastNow >= next.second) { progressDue = true; next.second = fastNow + 2 * MINUTE; }
     }
         // Silvermoon brain Phase 2a: stuck recovery. Every 30 seconds while a brain bot travels to a
@@ -2247,7 +2247,10 @@ void RandomPlayerbotMgr::SilvermoonFastProcessBot(Player* player, PlayerbotAI* a
             }
             WorldPosition here(player);
             GuidPosition rpgTarget = context->GetValue<GuidPosition>("rpg target")->Get();
-            bool talking = rpgTarget && rpgTarget.getMapId() == here.getMapId() && rpgTarget.fDist(here) < INTERACTION_DISTANCE * 2;
+            // any rpg target counts as busy (town chores: selling, training, repairing, chatting),
+            // and so does resting in a town or inn area: 270 bots an hour "gave up" in Sentinel
+            // Hill, Thelsamar, the Crossroads and other hubs while doing chores there
+            bool talking = bool(rpgTarget) || player->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_RESTING);
             bool looting = context->GetValue<LootObjectStack*>("available loot")->Get()->CanLoot(INTERACTION_DISTANCE * 2);
             bool waiting = !player->IsAlive() || player->IsInCombat() || player->IsTaxiFlying() || player->GetTransport() ||
                 waitingForTransport || player->IsSitState() || player->IsNonMeleeSpellCasted(false) || talking || looting;
@@ -2298,13 +2301,13 @@ void RandomPlayerbotMgr::SilvermoonFastProcessBot(Player* player, PlayerbotAI* a
             else if (stage >= 3)
             {
                 if (dest)
-                    SilvermoonSkipDestination(bot, dest, HOUR);
+                    SilvermoonSkipDestination(bot, dest, 20 * MINUTE);   // was an hour: a wrong give-up hid quest turn-ins too long
                 silvermoon::DecisionRow row;
                 row.ts = uint32(time(nullptr));
                 row.guid = bot;
                 row.goal = "stuck give-up";
                 row.target = dest ? dest->GetTitle() : "no destination";
-                row.reason = "no progress for 90 seconds";
+                row.reason = "no progress for 3 minutes";
                 row.map = player->GetMapId();
                 row.x = player->GetPositionX();
                 row.y = player->GetPositionY();
