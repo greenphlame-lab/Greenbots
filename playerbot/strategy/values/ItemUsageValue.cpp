@@ -542,12 +542,15 @@ if ((proto->Class == ITEM_CLASS_PROJECTILE ||
         // the trip (at least 1.5x vendor and 50 silver more), and not at all once the bags are
         // filling up away from a city - a bot kept a bag of low greens for hours waiting to reach an AH.
         // Trade goods (ore, herbs, cloth, leather) keep the stock rules.
+        // Green and better gear keeps the stock AH rules (the margin rule above emptied the AH of
+        // gear): it only goes to a vendor when the bags are nearly full away from a city.
         if (proto->Class != ITEM_CLASS_TRADE_GOODS && !RandomPlayerbotMgr::SilvermoonIsCrafter(bot->GetGUIDLow())) // crafters sell what they make
         {
             uint32 ahNet = ahPrice - depositCost;
-            if (ahNet * 2 < sellPrice * 3 || ahNet < sellPrice + 5000)
+            bool gear = proto->Quality >= ITEM_QUALITY_UNCOMMON && (proto->Class == ITEM_CLASS_WEAPON || proto->Class == ITEM_CLASS_ARMOR);
+            if (!gear && (ahNet * 2 < sellPrice * 3 || ahNet < sellPrice + 5000))
                 return sellUsage;
-            if (AI_VALUE(uint8, "bag space") > 75 && !ai->IsInCapitalCity())
+            if (AI_VALUE(uint8, "bag space") > (gear ? 90 : 75) && !ai->IsInCapitalCity())
                 return sellUsage;
         }
 
