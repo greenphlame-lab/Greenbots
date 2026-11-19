@@ -2459,6 +2459,21 @@ void RandomPlayerbotMgr::SilvermoonProcessBot(Player* player, PlayerbotAI* ai, u
 
         // (stuck recovery and the no-progress watchdog run from SilvermoonFastProcessBot every 10 s)
 
+        // Silvermoon patch: a random bot keeps a real player as its master after leaving that
+        // player's group, and with it the player-bot strategy set ("chat" only for Velyna), so it
+        // stands idle for days. Out of the group: no master, default random-bot strategies.
+        if (ai && sRandomPlayerbotMgr.IsRandomBot(player) && player->IsInWorld() && ai->HasRealPlayerMaster() &&
+            !SilvermoonDungeonOf(bot))
+        {
+            Player* master = ai->GetMaster();
+            if (master && (!player->GetGroup() || !player->GetGroup()->IsMember(master->GetObjectGuid())))
+            {
+                sLog.outBasic("Silvermoon: bot %s left %s's group but kept them as master, freeing it", player->GetName(), master->GetName());
+                ai->SetMaster(nullptr);
+                ai->ResetStrategies(false);
+            }
+        }
+
         // Silvermoon patch: brain on saved strategies. A bot whose strategy lists were saved before
         // Phase 1 (ai_playerbot_db_store "nc", e.g. after a player gave it commands) loads that
         // list at login, which has no "silvermoon brain" (Reneliora, Nynitiz, Issanne, Zannor).
