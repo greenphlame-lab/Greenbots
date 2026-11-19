@@ -2472,6 +2472,14 @@ void RandomPlayerbotMgr::SilvermoonProcessBot(Player* player, PlayerbotAI* ai, u
                 ai->ChangeStrategy("+silvermoon brain", BotState::BOT_STATE_NON_COMBAT);
                 sLog.outBasic("Silvermoon: bot %s had no brain (saved strategies), added it", player->GetName());
             }
+            // a solo bot left with almost no strategies (Velyna: non-combat "chat" only, idle for days,
+            // likely after a group with a player ended): back to the defaults, brain included
+            else if (!player->GetGroup() && !ai->HasStrategy("travel", BotState::BOT_STATE_NON_COMBAT) &&
+                     !ai->HasStrategy("grind", BotState::BOT_STATE_NON_COMBAT) && !ai->HasStrategy("dungeon", BotState::BOT_STATE_NON_COMBAT))
+            {
+                ai->ResetStrategies(false);
+                sLog.outBasic("Silvermoon: bot %s had no travel or grind strategy, reset it to the defaults", player->GetName());
+            }
         }
 
         // Silvermoon patch: ghost watchdog. Some bots never make it back to their corpse
