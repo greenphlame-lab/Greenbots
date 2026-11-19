@@ -172,7 +172,10 @@ bool ai::SilvermoonBestRelocate(Player* bot, PlayerbotAI* ai, float bestLocalSco
     for (Option& o : options)
     {
         o.minutes = o.distance / speed;
-        o.score = value * (o.visited ? 1.0f : UNVISITED_BONUS) / std::max(1.0f, o.minutes);
+        // XP per minute over the whole plan (the trip plus the questing there), the same unit as a
+        // local goal: dividing by the trip alone made a hub 3 minutes away look ~15x better than any
+        // quest, and bots relocated 2,100 times in an hour
+        o.score = value * (o.visited ? 1.0f : UNVISITED_BONUS) / (o.minutes + RELOCATE_MINUTES);
     }
     std::sort(options.begin(), options.end(), [](Option const& a, Option const& b) { return a.score > b.score; });
     // the real route for the top 1-2, re-scored with it: close on the map but far by road loses
@@ -187,7 +190,7 @@ bool ai::SilvermoonBestRelocate(Player* bot, PlayerbotAI* ai, float bestLocalSco
             continue;
         }
         options[i].minutes = minutes;
-        options[i].score = value * (options[i].visited ? 1.0f : UNVISITED_BONUS) / std::max(1.0f, minutes);
+        options[i].score = value * (options[i].visited ? 1.0f : UNVISITED_BONUS) / (minutes + RELOCATE_MINUTES);
     }
     std::sort(options.begin(), options.begin() + std::min(options.size(), ROUTED_HUBS),
         [](Option const& a, Option const& b) { return a.score > b.score; });
@@ -271,7 +274,7 @@ bool ai::SilvermoonRelocateTick(Player* bot, PlayerbotAI* ai)
     // abandon a trip that runs over twice its route estimate, cost two deaths, or no longer fits
     // the bot's level (it out-levelled the hub on the way)
     std::string abandon;
-    if (trip.estimateMinutes > 0.0f && time(nullptr) - trip.start > time_t(2.0f * trip.estimateMinutes * MINUTE) + 2 * MINUTE)
+    if (trip.estimateMinutes > 0.0f && time(nullptr) - trip.start > time_t(2.0f * trip.estimateMinutes * MINUTE) + 5 * MINUTE)
         abandon = "over twice the route time";
     else if (trip.deaths >= 2)
         abandon = "died twice on the way";
