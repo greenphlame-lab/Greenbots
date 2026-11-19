@@ -7,6 +7,7 @@
 #include "playerbot/silvermoon/DecisionLog.h"
 #include "playerbot/silvermoon/QuestIndex.h"
 #include "playerbot/silvermoon/Crowd.h"
+#include "RelocateGoal.h"
 #include "Mails/Mail.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include <deque>
@@ -53,7 +54,9 @@ namespace
         time_t span = now - samples.front().first;
         if (span < 10 * MINUTE || xp < samples.front().second)
             return 0.0f; // unknown yet: the scorer uses its default
-        return float(xp - samples.front().second) / (float(span) / 60.0f);
+        float rate = float(xp - samples.front().second) / (float(span) / 60.0f);
+        SilvermoonNoteXpRate(bot->GetGUIDLow(), bot->GetLevel(), rate);   // feeds the typical rate per level
+        return rate;
     }
 
     BotSnapshot Snapshot(Player* bot, PlayerbotAI* ai)
@@ -318,6 +321,16 @@ bool ChooseGoalAction::Execute(Event& event)
     }
 
     std::vector<SilvermoonScoredGoal> goals = SilvermoonScoreGoals(bot, ai, list);
+
+    // Phase 2b: a quest hub elsewhere, when local options are thin (or now and then an unvisited one)
+    uint16 relocateHub = 0;
+    {
+        SilvermoonScoredGoal relocate;
+        float bestLocal = goals.empty() ? 0.0f : goals.front().score.score;
+        if (SilvermoonBestRelocate(bot, ai, bestLocal, relocate, relocateHub))
+            goals.insert(goals.begin(), relocate);
+    }
+
     if (goals.empty() || goals.front().score.score <= 0.0f)
     {
         // nothing worth doing nearby: try again in 30 seconds (the stock reset/grind still run),
@@ -342,6 +355,8 @@ bool ChooseGoalAction::Execute(Event& event)
     // on, so every later goal went straight to cooldown and the bot chose again within seconds.
     travelTarget->SetConditions({});
     setNewTarget(requester, &newTarget, travelTarget);
+    if (best.kind == GoalKind::Relocate)
+        SilvermoonRelocateStarted(bot->GetGUIDLow(), relocateHub, best.destination);
 
     SilvermoonLogDecision(bot, best, goals.size() > 1 ? &goals[1] : nullptr, goals.size() > 2 ? &goals[2] : nullptr);
 

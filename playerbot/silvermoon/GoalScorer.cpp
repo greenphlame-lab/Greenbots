@@ -51,6 +51,7 @@ namespace silvermoon
         case GoalKind::Vendor: return "vendor";
         case GoalKind::Repair: return "repair";
         case GoalKind::Mail: return "mail";
+        case GoalKind::Relocate: return "relocate";
         case GoalKind::Trainer: return "trainer";
         case GoalKind::Explore: return "explore";
         default: return "other";

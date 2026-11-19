@@ -43,6 +43,10 @@ bool RecheckGoalAction::Execute(Event& event)
     TravelTarget* current = AI_VALUE(TravelTarget*, "travel target");
     if (!current->IsActive() || !current->GetDestination() || !current->GetPosition())
         return false;
+    // a relocation trip (Phase 2b) is not re-scored against local goals on the way: it would lose
+    // every time, since its value is the hub, not the road
+    if (dynamic_cast<TemporaryTravelDestination*>(current->GetDestination()))
+        return false;
 
     PartitionedTravelList list = future.get();
     std::vector<SilvermoonScoredGoal> goals = SilvermoonScoreGoals(bot, ai, list);

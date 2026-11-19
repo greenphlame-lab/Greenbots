@@ -18,6 +18,7 @@ namespace silvermoon
         Trainer,
         Explore,
         Mail,
+        Relocate,
         Other
     };
 

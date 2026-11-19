@@ -90,6 +90,7 @@ using namespace MaNGOS;
 #include "playerbot/silvermoon/Crowd.h"
 #include "playerbot/LootObjectStack.h"
 #include "playerbot/strategy/silvermoon/ChooseGoalAction.h"
+#include "playerbot/strategy/silvermoon/RelocateGoal.h"
 #include "playerbot/strategy/values/LastMovementValue.h"
 
 // Silvermoon patch: number of guilds with at least one member online, per faction
@@ -2216,9 +2217,13 @@ void RandomPlayerbotMgr::SilvermoonFastProcessBot(Player* player, PlayerbotAI* a
     static std::unordered_map<uint32, std::pair<time_t, time_t>> nextCheck;   // stuck, progress
     time_t fastNow = time(nullptr);
     bool stuckDue = false, progressDue = false;
-    // Phase 2b: hubs within 150 yards count as visited (cheap: ~90 distance checks)
+    // Phase 2b: hubs within 150 yards count as visited (cheap: ~90 distance checks), and relocation
+    // trips: arrival (home bind at the innkeeper) and failed trips
     if (sPlayerbotAIConfig.silvermoonTravel && player->IsAlive() && player->GetMap() && player->GetMap()->IsContinent())
+    {
         silvermoon::Hubs::NoteVisits(player);
+        SilvermoonRelocateTick(player, ai);
+    }
     {
         std::lock_guard<std::mutex> guard(fastLock);
         auto& next = nextCheck[bot];
@@ -2602,6 +2607,24 @@ void RandomPlayerbotMgr::SilvermoonProcessBot(Player* player, PlayerbotAI* ai, u
                 if (worthwhile >= 5)
                     outleveled = false;
             }
+            // Phase 2b: an outleveled bot travels to a quest hub itself (Relocate goal); the teleport
+            // is only the fallback after 3 failed trips
+            bool fallback = false;
+            if (outleveled && !lingering && sPlayerbotAIConfig.silvermoonTravel && !player->GetGroup())
+            {
+                if (SilvermoonRelocateFailures(bot) < 3)
+                {
+                    SilvermoonWantRelocate(bot);
+                    outleveled = false;
+                }
+                else
+                {
+                    fallback = true;
+                    SilvermoonResetRelocateFailures(bot);
+                    ++silvermoon::Tp(silvermoon::TP_FALLBACK);
+                    sLog.outBasic("Silvermoon: bot %s failed 3 trips to a quest hub, fallback teleport", player->GetName());
+                }
+            }
             if (lingering || outleveled)
             {
                 sLog.outBasic("Silvermoon: bot %s (level %u%s) outleveled area %u (level %d), teleporting it to a level-appropriate zone",
@@ -2609,7 +2632,8 @@ void RandomPlayerbotMgr::SilvermoonProcessBot(Player* player, PlayerbotAI* ai, u
                 TravelTarget* travelTarget = ai->GetAiObjectContext()->GetValue<TravelTarget*>("travel target")->Get();
                 if (travelTarget)
                     travelTarget->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
-                ++silvermoon::Tp(silvermoon::TP_LEVEL_ZONE);
+                if (!fallback)
+                    ++silvermoon::Tp(silvermoon::TP_LEVEL_ZONE);
                 RandomTeleportForLevel(player, false);
                 SetEventValue(bot, "silvermoon_bind_home", 1, 10 * MINUTE);
             }
