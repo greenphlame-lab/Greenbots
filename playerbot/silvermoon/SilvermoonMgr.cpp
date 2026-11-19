@@ -2260,6 +2260,12 @@ void RandomPlayerbotMgr::SilvermoonFastProcessBot(Player* player, PlayerbotAI* a
                 dest = nullptr;
             if (!dest)
                 travelling = false;     // no goal at all: idle between goals is not stuck
+            // standing close to the goal is not stuck: talking to a quest giver, trainer or vendor,
+            // or waiting for it, kept 300 bots an hour "stuck" in Sentinel Hill, Auberdine and the
+            // Crossroads, and the give-up then hid their quest turn-ins for an hour
+            if (travelling && target->GetPosition() && target->GetPosition()->getMapId() == player->GetMapId() &&
+                target->GetPosition()->distance(WorldPosition(player)) < 40.0f)
+                travelling = false;
             {
                 std::lock_guard<std::mutex> guard(stuckLock);
                 StuckState& st = stuck[bot];
