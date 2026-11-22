@@ -53,6 +53,14 @@ std::vector<SilvermoonGoalFetch> ai::SilvermoonBuildGoalFetches(PlayerbotAI* ai,
     // hour ("can repair" checks the cheapest repair against the money it may spend on repairs)
     if (context->GetValue<bool>("should repair")->Get() && context->GetValue<bool>("can repair")->Get())
         fetches.push_back({ (uint32)TravelDestinationPurpose::Repair, {}, 10000.0f });
+    // broke with damaged gear: gathering is safe money for a miner or herbalist
+    if (context->GetValue<bool>("should repair")->Get() && !context->GetValue<bool>("can repair")->Get())
+    {
+        if (bot->GetSkillValue(SKILL_MINING) > 0)
+            fetches.push_back({ (uint32)TravelDestinationPurpose::GatherMining, {}, 1500.0f });
+        if (bot->GetSkillValue(SKILL_HERBALISM) > 0)
+            fetches.push_back({ (uint32)TravelDestinationPurpose::GatherHerbalism, {}, 1500.0f });
+    }
     // mail: stock bots fetch it after an hour or more (the brain silenced that request), and mail
     // from a real player right away (Velyna never picked up a cloak sent to her)
     if (context->GetValue<bool>("can get mail")->Get() &&

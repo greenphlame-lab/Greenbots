@@ -84,6 +84,7 @@ namespace
         s.bagFill = context->GetValue<uint8>("bag space")->Get();
         s.urgentVendor = s.bagFill > 90;
         s.playerMail = SilvermoonHasPlayerMail(bot);
+        s.broke = s.urgentRepair && !context->GetValue<bool>("can repair")->Get();
         return s;
     }
 
@@ -216,6 +217,8 @@ static SilvermoonScoredGoal ScoreWith(Player* bot, BotSnapshot const& snapshot, 
         c.kind = GoalKind::Trainer;
     else if (purpose == TravelDestinationPurpose::Mail)
         c.kind = GoalKind::Mail;
+    else if (purpose == TravelDestinationPurpose::GatherMining || purpose == TravelDestinationPurpose::GatherHerbalism)
+        c.kind = GoalKind::Gather;
 
     // crowding (Phase 2a): bots already heading for or working in this 100-yard cell. Capacity is
     // 3 bots for a grind camp, and a third of the spawns (2 to 6) for an indexed objective area.

@@ -52,6 +52,7 @@ namespace silvermoon
         case GoalKind::Repair: return "repair";
         case GoalKind::Mail: return "mail";
         case GoalKind::Relocate: return "relocate";
+        case GoalKind::Gather: return "gather";
         case GoalKind::Trainer: return "trainer";
         case GoalKind::Explore: return "explore";
         default: return "other";
@@ -106,6 +107,13 @@ namespace silvermoon
             s.minutes = travel + CHORE_MINUTES;
             s.reason = bot.urgentRepair ? "needs repair" : "repair";
             break;
+        case GoalKind::Gather:
+            // mining or herbalism: worth a few minutes of XP normally, much more when broke
+            // (sellable materials, no fighting)
+            s.value = xpm * (bot.broke ? 6.0f : 1.0f);
+            s.minutes = travel + CHORE_MINUTES;
+            s.reason = bot.broke ? "broke: gather to sell" : "gather";
+            break;
         case GoalKind::Mail:
             // a gift or delivery from a real player is fetched soon; other mail is a small chore
             s.value = xpm * (bot.playerMail ? CHORE_URGENT_MINUTES : CHORE_NORMAL_MINUTES);
@@ -127,6 +135,21 @@ namespace silvermoon
             s.minutes = travel + 1.0f;
             s.reason = "other";
             break;
+        }
+
+        // broke with damaged gear: earn money with easy fights until a full repair is affordable.
+        // Mobs 1-6 levels below are worth double (safe kills, loot to sell), anything at or above
+        // the bot's level much less; harder quest objectives wait.
+        if (bot.broke && c.mobLevel > 0)
+        {
+            int32_t gap = int32_t(bot.level) - c.mobLevel;
+            if (c.kind == GoalKind::Grind && gap >= 1 && gap <= 6)
+            {
+                s.value *= 2.0f;
+                s.reason = "broke: easy grind";
+            }
+            else if ((c.kind == GoalKind::Grind && gap <= 0) || (c.kind == GoalKind::QuestObjective && gap < 0))
+                s.value *= 0.3f;
         }
 
         // crowding (Phase 2a): a camp or objective area shared with other bots is worth less
