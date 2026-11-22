@@ -11,6 +11,7 @@
 #include "Mails/Mail.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include <deque>
+#include <algorithm>
 #include <mutex>
 
 using namespace ai;
@@ -28,6 +29,18 @@ namespace
     std::mutex goalLock;
     std::map<uint32, std::pair<TravelDestination*, time_t>> lastGoal;   // bot -> last chosen, when
     std::map<uint32, std::map<TravelDestination*, time_t>> skipUntil;   // bot -> destination -> until
+
+    // Chores that keep coming back without effect (a broke bot's repairs, a trainer it can't reach,
+    // a vendor that doesn't take what's in the bags): chosen 3 times in 15 minutes, that kind of
+    // chore is left out for 30 minutes. 392 bots made 8+ repair decisions in 2 hours, 73 trainer.
+    std::mutex choreLock;
+    std::map<uint32, std::map<GoalKind, std::deque<time_t>>> choreChoices;   // bot -> kind -> when chosen
+    std::map<uint32, std::map<GoalKind, time_t>> choreBlockedUntil;
+
+    bool IsChore(GoalKind kind)
+    {
+        return kind == GoalKind::Repair || kind == GoalKind::Vendor || kind == GoalKind::Trainer || kind == GoalKind::Mail;
+    }
 
     // Each bot's total XP over time, to know its own XP per minute (last ~30 minutes).
     std::mutex xpLock;
@@ -322,6 +335,21 @@ bool ChooseGoalAction::Execute(Event& event)
 
     std::vector<SilvermoonScoredGoal> goals = SilvermoonScoreGoals(bot, ai, list);
 
+    // drop chore kinds that are on their 30-minute break
+    {
+        std::lock_guard<std::mutex> guard(choreLock);
+        auto it = choreBlockedUntil.find(bot->GetGUIDLow());
+        if (it != choreBlockedUntil.end())
+        {
+            time_t now = time(nullptr);
+            goals.erase(std::remove_if(goals.begin(), goals.end(), [&](SilvermoonScoredGoal const& g)
+            {
+                auto b = it->second.find(g.kind);
+                return b != it->second.end() && now < b->second;
+            }), goals.end());
+        }
+    }
+
     // Phase 2b: a quest hub elsewhere, when local options are thin (or now and then an unvisited one)
     uint16 relocateHub = 0;
     {
@@ -342,6 +370,20 @@ bool ChooseGoalAction::Execute(Event& event)
     }
 
     SilvermoonScoredGoal const& best = goals.front();
+    if (IsChore(best.kind))
+    {
+        std::lock_guard<std::mutex> guard(choreLock);
+        time_t now = time(nullptr);
+        auto& times = choreChoices[bot->GetGUIDLow()][best.kind];
+        times.push_back(now);
+        while (!times.empty() && now - times.front() > 15 * MINUTE)
+            times.pop_front();
+        if (times.size() >= 3)
+        {
+            choreBlockedUntil[bot->GetGUIDLow()][best.kind] = now + 30 * MINUTE;
+            times.clear();
+        }
+    }
     {
         std::lock_guard<std::mutex> guard(goalLock);
         lastGoal[bot->GetGUIDLow()] = { best.destination, time(nullptr) };
