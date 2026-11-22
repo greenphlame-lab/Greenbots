@@ -2,6 +2,7 @@
 #include "playerbot/playerbot.h"
 #include "playerbot/RandomPlayerbotMgr.h"
 #include "MovementActions.h"
+extern thread_local int SilvermoonMoveFail; // Silvermoon: why the last move failed (defined below)
 #include "playerbot/silvermoon/BrainTimer.h"
 #include "MotionGenerators/MotionMaster.h"
 #include "MotionGenerators/MovementGenerator.h"
@@ -754,6 +755,7 @@ bool MovementAction::HandleSpecialMovement(TravelPath& path)
     //Game object portals
     if (currentPoint.type == PathNodeType::NODE_STATIC_PORTAL && currentPoint.entry)
     {
+        SilvermoonMoveFail = 10;
         GameObjectInfo const* goInfo = sGOStorage.LookupEntry<GameObjectInfo>(currentPoint.entry);
         if (!goInfo || goInfo->type != GAMEOBJECT_TYPE_SPELLCASTER)
             return false;
@@ -870,12 +872,16 @@ bool MovementAction::HandleSpecialMovement(TravelPath& path)
     }
     
     if (nextPoint.type == PathNodeType::NODE_FLIGHTPATH && nextPoint.entry)
+    {
+        SilvermoonMoveFail = 11;
         return UseTaxi(ai, nextPoint.entry, true);
+    }
 
     if (nextPoint.type == PathNodeType::NODE_TELEPORT && nextPoint.entry)
     {
         bool canCastNow = !bot->IsFlying() || WorldPosition(bot).currentHeight() < 10.0f;
 
+        SilvermoonMoveFail = nextPoint.entry == 8690 ? 12 : 13;
         if (nextPoint.entry == 8690) // Hearthstone
         {
             if (AI_VALUE2(bool, "action useful", "hearthstone") && canCastNow)
@@ -1201,7 +1207,10 @@ bool MovementAction::MoveTo2(const WorldPosition& endPos, bool idle, bool react,
     bool specialMovement = movePath.UpcommingSpecialMovement(startPos, sPlayerbotAIConfig.reactDistance,bot->GetTransport());
 
     if (specialMovement)
-        return HandleSpecialMovement(movePath) || SilvermoonFail(8);
+    {
+        SilvermoonMoveFail = 8;
+        return HandleSpecialMovement(movePath); // 8 other, 10 portal, 11 flight, 12 hearthstone, 13 teleport spell
+    }
     
     if (bot->GetTransport()) //Transports needed to be handled before now.
         return SilvermoonFail(6);
