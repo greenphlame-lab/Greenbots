@@ -687,6 +687,72 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
     if (sPlayerbotAIConfig.silvermoonSpread)
         silvermoon::Crowd::Recount();      // Phase 2a crowding, every 60 seconds
     silvermoon::QuestIndex::Load();
+    // Silvermoon: characters S asked for (silvermoon_new_chars, custom SQL 55), created once on a
+    // random bot account and kept in the world as ordinary random bots, so their whole life can be
+    // followed ("tracked characters")
+    {
+        static bool silvermoonNewCharsDone = false;
+        if (!silvermoonNewCharsDone)
+        {
+            silvermoonNewCharsDone = true;
+            auto pending = CharacterDatabase.Query("SELECT name, race, class, gender FROM silvermoon_new_chars WHERE guid = 0");
+            if (pending)
+            {
+                do
+                {
+                    Field* f = pending->Fetch();
+                    std::string name = f[0].GetCppString();
+                    uint8 race = f[1].GetUInt8(), cls = f[2].GetUInt8(), gender = f[3].GetUInt8();
+                    if (sObjectMgr.GetPlayerGuidByName(name))
+                    {
+                        sLog.outError("Silvermoon: tracked character name %s is taken", name.c_str());
+                        continue;
+                    }
+                    uint32 accountId = 0;
+                    for (uint32 acc : sPlayerbotAIConfig.randomBotAccounts)
+                    {
+                        auto count = CharacterDatabase.PQuery("SELECT COUNT(*) FROM characters WHERE account = '%u'", acc);
+                        if (count && count->Fetch()[0].GetUInt32() < 10)
+                        {
+                            accountId = acc;
+                            break;
+                        }
+                    }
+                    if (!accountId)
+                    {
+                        sLog.outError("Silvermoon: no random bot account has room for %s", name.c_str());
+                        continue;
+                    }
+                    // same session setup as RandomPlayerbotFactory::CreateRandomBot; the session is
+                    // left alive like there (deleting a socketless session logs a player out)
+                    WorldSession* session = new WorldSession(accountId, NULL, SEC_PLAYER,
+#ifdef MANGOSBOT_ZERO
+                        0, LOCALE_enUS, "", 0);
+#else
+                        2, 0, LOCALE_enUS, "", 0, 0, false);
+#endif
+                    session->SetNoAnticheat();
+                    Player* player = new Player(session);
+                    if (!player->Create(sObjectMgr.GeneratePlayerLowGuid(), name, race, cls, gender, 0, 0, 0, 0, 0, 0))
+                    {
+                        sLog.outError("Silvermoon: could not create tracked character %s", name.c_str());
+                        delete player;
+                        continue;
+                    }
+                    player->setCinematic(2);
+                    player->SetAtLoginFlag(AT_LOGIN_NONE);
+                    player->SaveToDB();
+                    uint32 guid = player->GetGUIDLow();
+                    delete player;
+                    CharacterDatabase.escape_string(name);
+                    CharacterDatabase.PExecute("UPDATE silvermoon_new_chars SET guid = '%u', account = '%u', created = UNIX_TIMESTAMP() WHERE name = '%s'", guid, accountId, name.c_str());
+                    // in the random bot set for a year, so it is never rotated out
+                    SetEventValue(guid, "add", 1, 365 * DAY);
+                    sLog.outBasic("Silvermoon: created tracked character %s (guid %u, account %u)", name.c_str(), guid, accountId);
+                } while (pending->NextRow());
+            }
+        }
+    }
     silvermoon::Hubs::Load();              // Phase 2b quest hubs and visited memory, once
     silvermoon::Hubs::SaveIfDue();         // visited hubs, batched every 10 minutes
     {
