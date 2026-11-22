@@ -7,6 +7,8 @@
 #include "playerbot/silvermoon/DecisionLog.h"
 #include "playerbot/silvermoon/BrainTimer.h"
 #include <algorithm>
+#include <cmath>
+#include <cstdio>
 #include <map>
 #include <mutex>
 #include <set>
@@ -61,6 +63,11 @@ namespace
         float estimateMinutes = 0.0f;
         uint32 deaths = 0;
         bool wasAlive = true;
+        // diagnostics for trips that end without arriving
+        bool sawCooldown = false;
+        uint32 maxMoveRetries = 0;
+        float startX = 0, startY = 0;
+        uint16 startMap = 0xFFFF;
     };
     std::mutex tripLock;
     std::unordered_map<uint32, Trip> trips;
@@ -322,6 +329,24 @@ bool ai::SilvermoonRelocateTick(Player* bot, PlayerbotAI* ai)
     WorldPosition dest(hub->map, hub->innkeeper ? hub->innX : hub->x, hub->innkeeper ? hub->innY : hub->y, hub->innkeeper ? hub->innZ : hub->z);
     bool arrived = here.getMapId() == dest.getMapId() && here.fDist(dest) < ARRIVED;
     bool stillGoing = target && target->GetDestination() == trip.destination && target->IsActive();
+    if (target && target->GetDestination() == trip.destination)
+    {
+        std::lock_guard<std::mutex> guard(tripLock);
+        auto it = trips.find(guid);
+        if (it != trips.end())
+        {
+            if (target->GetStatus() == TravelStatus::TRAVEL_STATUS_COOLDOWN)
+                it->second.sawCooldown = true;
+            it->second.maxMoveRetries = std::max(it->second.maxMoveRetries, target->GetRetryCount(true));
+            if (it->second.startMap == 0xFFFF)
+            {
+                it->second.startMap = here.getMapId();
+                it->second.startX = here.getX();
+                it->second.startY = here.getY();
+            }
+            trip = it->second;
+        }
+    }
 
     if (arrived)
     {
@@ -371,7 +396,14 @@ bool ai::SilvermoonRelocateTick(Player* bot, PlayerbotAI* ai)
         row.guid = guid;
         row.goal = "relocate";
         row.target = hub->name;
-        row.reason = "relocate failed: " + how;
+        // short diagnostics: went into cooldown (moves kept failing), most move retries seen, yards
+        // moved since the trip started, yards still to go
+        float moved = trip.startMap == here.getMapId() ? std::sqrt((here.getX() - trip.startX) * (here.getX() - trip.startX) +
+            (here.getY() - trip.startY) * (here.getY() - trip.startY)) : -1.0f;
+        char diag[64];
+        snprintf(diag, sizeof(diag), " [%s r%u m%d left%d]", trip.sawCooldown ? "cd" : "-", trip.maxMoveRetries,
+            int(moved), int(here.getMapId() == dest.getMapId() ? here.fDist(dest) : -1.0f));
+        row.reason = "relocate failed: " + how + diag;
         row.map = bot->GetMapId();
         row.x = bot->GetPositionX();
         row.y = bot->GetPositionY();
