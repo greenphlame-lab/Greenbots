@@ -19,6 +19,7 @@ namespace silvermoon
         Explore,
         Mail,
         Relocate,
+        Gather,
         Other
     };
 
@@ -32,6 +33,7 @@ namespace silvermoon
         bool urgentVendor = false;     // bags over 90%
         uint32_t bagFill = 0;          // bags used, percent
         bool playerMail = false;       // a real player sent it something by mail
+        bool broke = false;            // gear needs repair and it can't pay: earn money first
     };
 
     struct GoalCandidate
