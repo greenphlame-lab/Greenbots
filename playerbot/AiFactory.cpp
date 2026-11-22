@@ -602,6 +602,7 @@ void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const fa
     // Battleground switch
     if (player->InBattleGround())
     {
+        combatEngine->removeStrategy("dungeon"); // Silvermoon patch: no dungeon-run tactics in a battleground
         BattleGroundTypeId bgType = player->GetBattleGroundTypeId();
 
 #ifdef MANGOSBOT_TWO
@@ -1054,6 +1055,10 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
         nonCombatEngine->removeStrategy("wander");
 
         nonCombatEngine->removeStrategy("grind");
+        // Silvermoon patch: dungeon-run and brain strategies don't belong in a battleground
+        nonCombatEngine->removeStrategy("dungeon");
+        nonCombatEngine->removeStrategy("silvermoon brain");
+        nonCombatEngine->removeStrategy("stay");
 
         BattleGroundTypeId bgType = player->GetBattleGroundTypeId();
 #ifdef MANGOSBOT_TWO

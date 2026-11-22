@@ -2914,7 +2914,10 @@ void PlayerbotAI::ResetStrategies(bool autoLoad)
             stanceValue->Load("near");
     }
 
-    if (autoLoad && HasPlayerRelation()) sPlayerbotDbStore.Load(this);
+    // Silvermoon patch: in a battleground the bot runs the battleground defaults only. Loading the
+    // saved strategy list there added back whatever the bot had outside ("dungeon", "follow",
+    // "stay", ...), so party bots stood at the start until the player typed "reset ai".
+    if (autoLoad && HasPlayerRelation() && !bot->InBattleGround()) sPlayerbotDbStore.Load(this);
 
 #ifdef GenerateBotTests
     for (auto& [state, strats] : testStrategies)
