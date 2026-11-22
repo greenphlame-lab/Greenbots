@@ -49,7 +49,9 @@ std::vector<SilvermoonGoalFetch> ai::SilvermoonBuildGoalFetches(PlayerbotAI* ai,
     // keeps, so "should sell" stayed true and it walked from vendor to vendor in Tarren Mill
     if (context->GetValue<bool>("should sell")->Get() && context->GetValue<bool>("can sell")->Get())
         fetches.push_back({ (uint32)TravelDestinationPurpose::Vendor, {}, 10000.0f });
-    if (context->GetValue<bool>("should repair")->Get())
+    // only when it can pay: Taxes (level 28, 43 copper) walked between Razor Hill's repairers for an
+    // hour ("can repair" checks the cheapest repair against the money it may spend on repairs)
+    if (context->GetValue<bool>("should repair")->Get() && context->GetValue<bool>("can repair")->Get())
         fetches.push_back({ (uint32)TravelDestinationPurpose::Repair, {}, 10000.0f });
     // mail: stock bots fetch it after an hour or more (the brain silenced that request), and mail
     // from a real player right away (Velyna never picked up a cloak sent to her)

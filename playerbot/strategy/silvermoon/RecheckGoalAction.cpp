@@ -65,7 +65,7 @@ bool RecheckGoalAction::Execute(Event& event)
         return false;
     }
 
-    bool urgent = (best.kind == GoalKind::Repair && AI_VALUE(bool, "should repair")) ||
+    bool urgent = (best.kind == GoalKind::Repair && AI_VALUE(bool, "should repair") && AI_VALUE(bool, "can repair")) ||
                   (best.kind == GoalKind::Vendor && AI_VALUE(uint8, "bag space") > 90);
     if (!urgent && best.score.score < now.score.score * SWITCH_MARGIN)
         return false;
