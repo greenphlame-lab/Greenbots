@@ -22,6 +22,7 @@ namespace
     const float RELOCATE_MINUTES = 45.0f;        // expected questing at a fresh hub
     const float UNVISITED_BONUS = 1.3f;
     const float THIN_SHARE = 0.25f;              // local options "thin" below 25% of the typical rate
+    const float OUTGROWN_LOCAL_WEIGHT = 0.25f;   // outgrown bots: local goals count a quarter against relocating
     const uint32 EXPLORE_ONE_IN = 4;             // unvisited in-range hubs in about 1 of 4 decisions
     const size_t MAX_HUBS = 3;
     const size_t ROUTED_HUBS = 2;                // real route time for the top 1-2
@@ -172,7 +173,10 @@ bool ai::SilvermoonBestRelocate(Player* bot, PlayerbotAI* ai, float bestLocalSco
             AreaTableEntry const* entry = id ? GetAreaEntryByAreaID(id) : nullptr;
             if (entry && entry->area_level > 0)
             {
-                outgrown = int32(level) > int32(entry->area_level) + 5;
+                // +3 (was +5): S wants bots that outgrew an area to make getting to a
+                // level-appropriate zone a top priority (90 of 800 level 15+ bots were still in
+                // starter zones, mostly finishing leftover low quests or grinding)
+                outgrown = int32(level) > int32(entry->area_level) + 3;
                 break;
             }
         }
@@ -250,7 +254,9 @@ bool ai::SilvermoonBestRelocate(Player* bot, PlayerbotAI* ai, float bestLocalSco
     std::sort(options.begin(), options.begin() + std::min(options.size(), ROUTED_HUBS),
         [](Option const& a, Option const& b) { return a.score > b.score; });
     Option const& best = options.front();
-    if (best.score <= 0.0f || best.score <= bestLocalScore)
+    // an outgrown bot weighs what it could still do here at a quarter: leftover low-level quests
+    // and grey mobs kept beating the trip
+    if (best.score <= 0.0f || best.score <= bestLocalScore * (outgrown ? OUTGROWN_LOCAL_WEIGHT : 1.0f))
         return false;
 
     Hub const* h = best.hub;
