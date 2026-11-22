@@ -25,6 +25,7 @@
 #include "strategy/ItemVisitors.h"
 
 #include <unordered_set>
+#include <mutex>
 
 using namespace ai;
 
@@ -2965,9 +2966,36 @@ bool PlayerbotFactory::CanEquipWeapon(ItemPrototype const* proto)
    return true;
 }
 
+// Silvermoon patch: honor and reputation rewards (PvP rank gear, battleground and faction
+// quartermaster gear) are earned, never handed out by gear generation. Those are the items with a
+// rank or reputation requirement, plus soulbound gear sold by a vendor - an ordinary vendor sells
+// no soulbound greens or better, so that set is exactly the quartermasters' stock.
+static bool SilvermoonIsEarnedRewardGear(ItemPrototype const* proto)
+{
+    static std::unordered_set<uint32> vendorBound;
+    static std::once_flag loaded;
+    std::call_once(loaded, []()
+    {
+        auto result = WorldDatabase.PQuery("SELECT DISTINCT item FROM npc_vendor UNION SELECT DISTINCT item FROM npc_vendor_template");
+        if (!result)
+            return;
+        do
+        {
+            uint32 entry = result->Fetch()[0].GetUInt32();
+            ItemPrototype const* p = sObjectMgr.GetItemPrototype(entry);
+            if (p && p->Bonding == BIND_WHEN_PICKED_UP && p->Quality >= ITEM_QUALITY_UNCOMMON && p->InventoryType != INVTYPE_NON_EQUIP)
+                vendorBound.insert(entry);
+        } while (result->NextRow());
+    });
+    return proto->RequiredHonorRank || proto->RequiredReputationFaction || vendorBound.count(proto->ItemId);
+}
+
 bool PlayerbotFactory::CanEquipItem(ItemPrototype const* proto, uint32 desiredQuality)
 {
     if (proto->Duration & 0x80000000)
+        return false;
+
+    if (SilvermoonIsEarnedRewardGear(proto))
         return false;
 
     if (proto->Quality != desiredQuality)
