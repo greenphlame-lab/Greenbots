@@ -2539,6 +2539,10 @@ void PlayerbotAI::DoNextAction(bool min)
         }
     }
 
+    // Silvermoon patch: a bot queued for (or in) a battleground loses Resurrection Sickness right away
+    if ((bot->InBattleGroundQueue() || bot->InBattleGround()) && bot->HasAura(15007))
+        bot->RemoveAurasDueToSpell(15007);
+
     // fix bots in BG not having proper strategies
 #ifdef MANGOSBOT_ZERO
     if (bot->InBattleGround() && !HasStrategy("battleground", BotState::BOT_STATE_NON_COMBAT) && time(NULL) - lastTickResetStrategies >= 2)
