@@ -1123,7 +1123,9 @@ bool MovementAction::MoveTo2(const WorldPosition& endPos, bool idle, bool react,
 
     // Silvermoon patch: a bot committed to a dungeon run never heads for a place on another map
     // (e.g. its leader or a travel spot outside) - that walked bots straight out into the void.
-    if (endPos.getMapId() != bot->GetMapId() && sRandomPlayerbotMgr.IsRandomBot(bot) && sRandomPlayerbotMgr.SilvermoonDungeonOf(bot->GetGUIDLow()) == bot->GetMapId())
+    // "No dungeon" is 0, which is also the Eastern Kingdoms map id: without the first check every
+    // random bot in the Eastern Kingdoms was blocked from any trip to another map (boats, zeppelins).
+    if (endPos.getMapId() != bot->GetMapId() && sRandomPlayerbotMgr.IsRandomBot(bot) && sRandomPlayerbotMgr.SilvermoonDungeonOf(bot->GetGUIDLow()) && sRandomPlayerbotMgr.SilvermoonDungeonOf(bot->GetGUIDLow()) == bot->GetMapId())
         return SilvermoonFail(2);
 
     UpdateMovementState();
