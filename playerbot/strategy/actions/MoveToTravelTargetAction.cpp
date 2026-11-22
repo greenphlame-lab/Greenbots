@@ -150,7 +150,12 @@ bool MoveToTravelTargetAction::Execute(Event& event)
     {
         target->IncRetry(true);
 
-        if (target->IsMaxRetry(true))
+        // Silvermoon patch: a forced target (brain relocation trips) doesn't give up after failed
+        // moves - 80% of failed trips went into this cooldown, mostly mid-route; stuck recovery
+        // decides when it's really stuck
+        if (target->IsMaxRetry(true) && target->IsForced())
+            target->SetRetry(true, 0);
+        else if (target->IsMaxRetry(true))
         {
             ai->TellDebug(ai->GetMaster(), "The target is cooling down because we failed to move to it a few times in a row.", "debug travel");
             target->SetStatus(TravelStatus::TRAVEL_STATUS_COOLDOWN);      

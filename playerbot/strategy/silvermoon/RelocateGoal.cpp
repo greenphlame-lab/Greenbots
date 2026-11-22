@@ -203,6 +203,10 @@ bool ai::SilvermoonBestRelocate(Player* bot, PlayerbotAI* ai, float bestLocalSco
             continue;
         options.push_back({ &h, distance, visited, 0.0f, 0.0f });
     }
+    // same continent first: a trip to another continent needs a boat or zeppelin and failed far
+    // more often; other-continent hubs only when none on this one fit
+    if (std::any_of(options.begin(), options.end(), [&](Option const& o) { return o.hub->map == here.getMapId(); }))
+        options.erase(std::remove_if(options.begin(), options.end(), [&](Option const& o) { return o.hub->map != here.getMapId(); }), options.end());
     if (options.empty())
     {
         // an outgrown bot with no hub to go to counts a failed trip, so the level-zone teleport
