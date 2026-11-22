@@ -1,6 +1,9 @@
 
 #include "playerbot/playerbot.h"
 #include "MoveToTravelTargetAction.h"
+#include <mutex>
+#include <algorithm>
+#include <iterator>
 #include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/ServerFacade.h"
 #include "playerbot/LootObjectStack.h"
@@ -10,6 +13,35 @@
 #include <iomanip>
 
 using namespace ai;
+
+extern thread_local int SilvermoonMoveFail;
+
+namespace
+{
+    // Silvermoon brain Phase 2b: why moves fail on forced (relocation) trips, logged every 2000
+    // failures so we know which kind of route gap is worth fixing (no behaviour change)
+    std::mutex silvermoonMoveFailLock;
+    uint32 silvermoonMoveFails[10] = {};
+    uint32 silvermoonNoPathCrossMap = 0;
+
+    void SilvermoonNoteMoveFail(int reason, bool crossMap)
+    {
+        std::lock_guard<std::mutex> guard(silvermoonMoveFailLock);
+        ++silvermoonMoveFails[reason >= 0 && reason < 10 ? reason : 0];
+        if (reason == 5 && crossMap)
+            ++silvermoonNoPathCrossMap;
+        uint32 total = 0;
+        for (uint32 n : silvermoonMoveFails)
+            total += n;
+        if (total < 2000)
+            return;
+        uint32* f = silvermoonMoveFails;
+        sLog.outBasic("Silvermoon: relocation move failures over %u: no path %u (%u cross-map), cut by enemies %u, on transport %u, can't move %u, already there %u, special move %u, dungeon lock %u, invalid %u, other %u, unknown %u",
+            total, f[5], silvermoonNoPathCrossMap, f[7], f[6], f[3], f[4], f[8], f[2], f[1], f[9], f[0]);
+        std::fill(std::begin(silvermoonMoveFails), std::end(silvermoonMoveFails), 0);
+        silvermoonNoPathCrossMap = 0;
+    }
+}
 
 bool MoveToTravelTargetAction::Execute(Event& event)
 {
@@ -153,6 +185,8 @@ bool MoveToTravelTargetAction::Execute(Event& event)
         // Silvermoon patch: a forced target (brain relocation trips) doesn't give up after failed
         // moves - 80% of failed trips went into this cooldown, mostly mid-route; stuck recovery
         // decides when it's really stuck
+        if (target->IsForced())
+            SilvermoonNoteMoveFail(SilvermoonMoveFail, mapId != bot->GetMapId());
         if (target->IsMaxRetry(true) && target->IsForced())
             target->SetRetry(true, 0);
         else if (target->IsMaxRetry(true))

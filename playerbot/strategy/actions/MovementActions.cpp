@@ -1109,20 +1109,27 @@ Unit* MovementAction::GetMover(Player* bot)
     return bot;
 }
 
+// Silvermoon brain Phase 2b: why the last MoveTo2 on this thread failed (1 invalid target,
+// 2 dungeon lock, 3 can't move, 4 already there, 5 no path, 6 on a transport, 7 path cut by
+// enemies, 8 special movement failed, 9 other). Read by MoveToTravelTargetAction for counts.
+thread_local int SilvermoonMoveFail = 0;
+static bool SilvermoonFail(int reason) { SilvermoonMoveFail = reason; return false; }
+
 bool MovementAction::MoveTo2(const WorldPosition& endPos, bool idle, bool react, bool noPath, bool ignoreEnemyTargets)
 {
+    SilvermoonMoveFail = 9;
     if (!endPos.isValid())
-        return false;
+        return SilvermoonFail(1);
 
     // Silvermoon patch: a bot committed to a dungeon run never heads for a place on another map
     // (e.g. its leader or a travel spot outside) - that walked bots straight out into the void.
     if (endPos.getMapId() != bot->GetMapId() && sRandomPlayerbotMgr.IsRandomBot(bot) && sRandomPlayerbotMgr.SilvermoonDungeonOf(bot->GetGUIDLow()) == bot->GetMapId())
-        return false;
+        return SilvermoonFail(2);
 
     UpdateMovementState();
 
     if (!ai->CanMove())
-        return false;
+        return SilvermoonFail(3);
 
     Unit* mover = GetMover(bot);
 
@@ -1158,7 +1165,7 @@ bool MovementAction::MoveTo2(const WorldPosition& endPos, bool idle, bool react,
         else
             mover->InterruptMoving(true);
 
-        return false;
+        return SilvermoonFail(4);
     }
 
     WorldPosition flyMovePosition;
@@ -1173,7 +1180,7 @@ bool MovementAction::MoveTo2(const WorldPosition& endPos, bool idle, bool react,
     lastMove.setPath(movePath);
 
     if (movePath.empty())
-        return false;
+        return SilvermoonFail(5);
 
      
     if (!bot->GetTransport())
@@ -1192,10 +1199,10 @@ bool MovementAction::MoveTo2(const WorldPosition& endPos, bool idle, bool react,
     bool specialMovement = movePath.UpcommingSpecialMovement(startPos, sPlayerbotAIConfig.reactDistance,bot->GetTransport());
 
     if (specialMovement)
-        return HandleSpecialMovement(movePath);
+        return HandleSpecialMovement(movePath) || SilvermoonFail(8);
     
     if (bot->GetTransport()) //Transports needed to be handled before now.
-        return false;
+        return SilvermoonFail(6);
 
     if (!movePath.empty())
     {
@@ -1218,7 +1225,7 @@ bool MovementAction::MoveTo2(const WorldPosition& endPos, bool idle, bool react,
 
     if (movePath.empty())
     {
-        return false;
+        return SilvermoonFail(7);
     }
 
     // Only touch points on the map the bot is actually on, so a cross-map destination can never
