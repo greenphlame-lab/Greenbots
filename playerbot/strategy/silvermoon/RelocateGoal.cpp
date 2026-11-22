@@ -161,7 +161,23 @@ bool ai::SilvermoonBestRelocate(Player* bot, PlayerbotAI* ai, float bestLocalSco
         std::lock_guard<std::mutex> guard(tripLock);
         want = wanted.erase(guid) > 0;
     }
-    bool thin = want || bestLocalScore < THIN_SHARE * typical;
+    // outgrown: the bot is well above its area's level (a level 21-28 crowd stayed in Durotar with
+    // no relocation at all: grinding grey mobs still scored above the "thin" line)
+    bool outgrown = false;
+    {
+        uint32 zoneId = 0, areaId = 0;
+        bot->GetZoneAndAreaId(zoneId, areaId);
+        for (uint32 id : { areaId, zoneId })
+        {
+            AreaTableEntry const* entry = id ? GetAreaEntryByAreaID(id) : nullptr;
+            if (entry && entry->area_level > 0)
+            {
+                outgrown = int32(level) > int32(entry->area_level) + 5;
+                break;
+            }
+        }
+    }
+    bool thin = want || outgrown || bestLocalScore < THIN_SHARE * typical;
     bool explore = !thin && urand(1, EXPLORE_ONE_IN) == 1;
     if (!thin && !explore)
         return false;
