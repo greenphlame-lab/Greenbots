@@ -204,7 +204,16 @@ bool ai::SilvermoonBestRelocate(Player* bot, PlayerbotAI* ai, float bestLocalSco
         options.push_back({ &h, distance, visited, 0.0f, 0.0f });
     }
     if (options.empty())
+    {
+        // an outgrown bot with no hub to go to counts a failed trip, so the level-zone teleport
+        // fallback still comes round after 3
+        if (want || outgrown)
+        {
+            std::lock_guard<std::mutex> guard(tripLock);
+            ++failures[guid];
+        }
         return false;
+    }
     std::sort(options.begin(), options.end(), [](Option const& a, Option const& b) { return a.distance < b.distance; });
     if (options.size() > MAX_HUBS)
         options.resize(MAX_HUBS);
