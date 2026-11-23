@@ -106,13 +106,6 @@ namespace silvermoon
             s.value = xpm * (bot.urgentRepair ? CHORE_URGENT_MINUTES : CHORE_NORMAL_MINUTES);
             s.minutes = travel + CHORE_MINUTES;
             s.reason = bot.urgentRepair ? "needs repair" : "repair";
-            // can't pay for it: going to a vendor changes nothing (Grashnak, 1 silver, walked
-            // between five repair vendors in 15 minutes); broke mode earns the money first
-            if (bot.broke)
-            {
-                s.value = 0.0f;
-                s.reason = "broke: can't afford repair";
-            }
             break;
         case GoalKind::Gather:
             // mining or herbalism: worth a few minutes of XP normally, much more when broke
