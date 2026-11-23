@@ -412,13 +412,18 @@ static void SilvermoonLearnGathering(Player* bot)
     for (uint32 skill : { MIN, HERB, SKIN, BS, LW, ALCH, TAIL, ENG, ENCH })
         if (bot->HasSkill(skill))
             ++primaries;
+    // a profession learned this session may not show as a skill yet (Achris learned Skinning,
+    // Herbalism and Mining within a minute): count the apprentice spells too
+    for (auto const& known : { std::make_pair(uint32(SKIN), 8613u), std::make_pair(uint32(MIN), 2575u), std::make_pair(uint32(HERB), 2366u) })
+        if (!bot->HasSkill(known.first) && bot->HasSpell(known.second))
+            ++primaries;
     if (primaries >= 2)
         return;
     struct Gathering { uint32 skill, spell, tool; };
     std::vector<Gathering> options;
-    if (!bot->HasSkill(SKIN))
+    if (!bot->HasSkill(SKIN) && !bot->HasSpell(8613))
         options.push_back({ SKIN, 8613, 7005 });     // Skinning + Skinning Knife
-    if (!bot->HasSkill(MIN) && !bot->HasSkill(HERB))
+    if (!bot->HasSkill(MIN) && !bot->HasSkill(HERB) && !bot->HasSpell(2575) && !bot->HasSpell(2366))
     {
         if (urand(0, 1))
             options.push_back({ MIN, 2575, 2901 });  // Mining + Mining Pick
