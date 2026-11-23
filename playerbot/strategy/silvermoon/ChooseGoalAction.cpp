@@ -153,7 +153,7 @@ namespace
     // quests right next to the bot are picked up first (S: an orc that spawns in should take
     // "Cutting Teeth" from Gornek at once, not walk past him to a better quest farther out)
     const float NEARBY_GIVER_RANGE = 80.0f;
-    const float NEARBY_GIVER_BOOST = 4.0f;
+    const float NEARBY_GIVER_BOOST = 6.0f;
     std::map<uint32, std::map<uint32, time_t>> newQuests;   // bot -> quest -> taken at (guarded by goalLock)
 
     bool IsFollowUp(uint32 guid, uint32 questId)
