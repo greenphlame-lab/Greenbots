@@ -211,7 +211,7 @@ bool ai::SilvermoonBestRelocate(Player* bot, PlayerbotAI* ai, float bestLocalSco
     {
         if (!Hubs::Knows(guid, h, alliance))
             continue;
-        if (int32(level) < int32(h.minLevel) - 1 || int32(level) > int32(h.maxLevel) - 2)
+        if (int32(level) < int32(h.minLevel) + 2 || int32(level) > int32(h.maxLevel) - 2)
             continue;
         if (Skipped(guid, h.id))
             continue;                                   // failed to get there recently

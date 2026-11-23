@@ -386,8 +386,8 @@ static void SilvermoonLearnGathering(Player* bot)
         if (ItemPrototype const* proto = sObjectMgr.GetItemPrototype(g.tool))
             toolPrice = proto->BuyPrice;
     uint32 cost = 1000 + toolPrice;
-    if (bot->GetMoney() < cost * 2)
-        return;                                  // keep something for repairs
+    if (bot->GetMoney() < cost + 500)
+        return;                                  // keep a little for repairs
     if (toolPrice)
     {
         ItemPosCountVec dest;
@@ -937,9 +937,9 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
             uint64 v[silvermoon::LG_COUNT];
             for (int i = 0; i < silvermoon::LG_COUNT; ++i)
                 v[i] = silvermoon::Ledger(silvermoon::LedgerKind(i)).exchange(0);
-            CharacterDatabase.PExecute("INSERT INTO silvermoon_ledger (ts, seconds, gain, loss, repair, train, sell, gear, deaths) VALUES (%u, %u, %llu, %llu, %llu, %llu, %llu, %llu, %llu)",
+            CharacterDatabase.PExecute("INSERT INTO silvermoon_ledger (ts, seconds, gain, loss, repair, train, sell, gear, deaths, buy) VALUES (%u, %u, %llu, %llu, %llu, %llu, %llu, %llu, %llu, %llu)",
                 uint32(nowFast), uint32(nowFast - ledgerStart), (unsigned long long)v[0], (unsigned long long)v[1], (unsigned long long)v[2],
-                (unsigned long long)v[3], (unsigned long long)v[4], (unsigned long long)v[5], (unsigned long long)v[6]);
+                (unsigned long long)v[3], (unsigned long long)v[4], (unsigned long long)v[5], (unsigned long long)v[6], (unsigned long long)v[7]);
             sLog.outBasic("Silvermoon: ledger last hour (copper): gained %llu, lost %llu, repairs %llu, training %llu, vendor sales %llu, bags and tools %llu, deaths %llu",
                 (unsigned long long)v[0], (unsigned long long)v[1], (unsigned long long)v[2], (unsigned long long)v[3], (unsigned long long)v[4], (unsigned long long)v[5], (unsigned long long)v[6]);
             ledgerStart = nowFast;

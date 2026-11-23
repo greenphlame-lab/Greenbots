@@ -1,5 +1,7 @@
 
 #include "playerbot/playerbot.h"
+#include "playerbot/RandomPlayerbotMgr.h"
+#include "playerbot/silvermoon/BrainTimer.h"
 #include "RepairAllAction.h"
 
 #include "playerbot/ServerFacade.h"
@@ -67,6 +69,9 @@ bool RepairAllAction::Execute(Event& event)
 
         //Totalcost is bugged in core. For now we use this work-around.
         totalCost = botMoney - bot->GetMoney();
+
+        if (totalCost > 0 && sRandomPlayerbotMgr.IsRandomBot(bot))
+            silvermoon::Ledger(silvermoon::LG_REPAIR) += totalCost;   // Silvermoon money ledger
 
         if (totalCost > 0)
         {

@@ -1,5 +1,7 @@
 
 #include "playerbot/playerbot.h"
+#include "playerbot/RandomPlayerbotMgr.h"
+#include "playerbot/silvermoon/BrainTimer.h"
 #include "BuyAction.h"
 #include "playerbot/strategy/ItemVisitors.h"
 #include "playerbot/strategy/values/ItemCountValue.h"
@@ -310,6 +312,8 @@ bool BuyAction::BuyItem(Player* requester, VendorItemData const* tItems, ObjectG
 #else
             bot->BuyItemFromVendor(vendorguid, itemId, 1, NULL_BAG, NULL_SLOT);
 #endif
+            if (!ai->HasCheat(BotCheatMask::gold) && botMoney > bot->GetMoney() && sRandomPlayerbotMgr.IsRandomBot(bot))
+                silvermoon::Ledger(silvermoon::LG_BUY) += botMoney - bot->GetMoney();   // Silvermoon money ledger
             if (ai->HasCheat(BotCheatMask::gold))
             {
                 bot->SetMoney(botMoney);
