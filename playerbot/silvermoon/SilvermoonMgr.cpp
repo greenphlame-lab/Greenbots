@@ -2535,6 +2535,9 @@ void RandomPlayerbotMgr::SilvermoonFastProcessBot(Player* player, PlayerbotAI* a
             SilvermoonClearDeaths(bot);
             ++silvermoon::Tp(silvermoon::TP_TOO_DANGEROUS);
             RandomTeleportForLevel(player, false);
+            // crash 2026-11-23 (x3): after a teleport to another map the rest of this function
+            // called GetMap() on a bot that had no map yet (assert in WorldObject::GetMap)
+            return;
         }
 
         // starter rescue: a bot under level 6 that died twice in 30 minutes far from where it
@@ -2555,6 +2558,7 @@ void RandomPlayerbotMgr::SilvermoonFastProcessBot(Player* player, PlayerbotAI* a
                         target->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
                     player->TeleportTo(start->mapId, start->positionX, start->positionY, start->positionZ, start->orientation);
                     SilvermoonClearDeaths(bot);
+                    return;   // the bot may have left its map: nothing below may touch GetMap() now
                 }
             }
     }
