@@ -30,6 +30,8 @@ namespace ai
 
     // Leaves a destination out of this bot's goal lists for a while (Phase 2a stuck give-up).
     void SilvermoonSkipDestination(uint32 guid, TravelDestination* destination, time_t seconds);
+    // a quest the bot just took (follow-up priority: its nearby objectives score higher for a while)
+    void SilvermoonNoteNewQuest(uint32 guid, uint32 questId);
 
     // "choose goal": picks the best-scoring destination from the goal list (brain step 5).
     class ChooseGoalAction : public ChooseTravelTargetAction

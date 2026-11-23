@@ -2,6 +2,8 @@
 #include "TakeQuestsAction.h"
 #include "playerbot/TravelMgr.h"
 #include "playerbot/ServerFacade.h"
+#include "ChooseGoalAction.h"
+#include <set>
 
 using namespace ai;
 
@@ -53,8 +55,16 @@ bool TakeQuestsAction::Execute(Event& event)
         return MoveNear(giver, INTERACTION_DISTANCE - 2.0f);
 
     SET_AI_VALUE2(int, "manual int", "silvermoon take quests " + std::to_string(giver->GetEntry()), int(time(nullptr) + RETRY_SECONDS));
+    std::set<uint32> before;
+    for (uint8 slot = 0; slot < MAX_QUEST_LOG_SIZE; ++slot)
+        if (uint32 id = bot->GetQuestSlotQuestId(slot))
+            before.insert(id);
     bool done = ai->DoSpecificAction("talk to quest giver", Event("silvermoon take quests", giver->GetObjectGuid()), true);
     done |= ai->DoSpecificAction("accept all quests", Event("silvermoon take quests", giver->GetObjectGuid()), true);
+    for (uint8 slot = 0; slot < MAX_QUEST_LOG_SIZE; ++slot)
+        if (uint32 id = bot->GetQuestSlotQuestId(slot))
+            if (!before.count(id))
+                SilvermoonNoteNewQuest(bot->GetGUIDLow(), id);
     // errand done: end the goal so the brain picks the next one now instead of the bot idling
     // (and grinding) by the quest giver until the travel target times out
     if (done)

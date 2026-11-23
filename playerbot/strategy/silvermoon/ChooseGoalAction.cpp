@@ -143,6 +143,36 @@ bool ai::SilvermoonHasPlayerMail(Player* bot)
     return false;
 }
 
+namespace
+{
+    // follow-up priority (S): right after taking a quest, its objective - if close and level
+    // appropriate - comes first, so taking Sarkoth leads to killing Sarkoth, not another errand
+    const time_t FOLLOW_UP_SECONDS = 20 * MINUTE;
+    const float FOLLOW_UP_RANGE = 600.0f;
+    const float FOLLOW_UP_BOOST = 2.0f;
+    std::map<uint32, std::map<uint32, time_t>> newQuests;   // bot -> quest -> taken at (guarded by goalLock)
+
+    bool IsFollowUp(uint32 guid, uint32 questId)
+    {
+        std::lock_guard<std::mutex> guard(goalLock);
+        auto it = newQuests.find(guid);
+        if (it == newQuests.end())
+            return false;
+        auto q = it->second.find(questId);
+        return q != it->second.end() && time(nullptr) - q->second < FOLLOW_UP_SECONDS;
+    }
+}
+
+void ai::SilvermoonNoteNewQuest(uint32 guid, uint32 questId)
+{
+    std::lock_guard<std::mutex> guard(goalLock);
+    auto& quests = newQuests[guid];
+    time_t now = time(nullptr);
+    for (auto i = quests.begin(); i != quests.end();)
+        i = now - i->second >= FOLLOW_UP_SECONDS ? quests.erase(i) : std::next(i);
+    quests[questId] = now;
+}
+
 void ai::SilvermoonSkipDestination(uint32 guid, TravelDestination* destination, time_t seconds)
 {
     std::lock_guard<std::mutex> guard(goalLock);
@@ -234,6 +264,14 @@ static SilvermoonScoredGoal ScoreWith(Player* bot, BotSnapshot const& snapshot, 
 
     goal.kind = c.kind;
     goal.score = GoalScorer::Score(snapshot, c, frand(0.9f, 1.1f));
+    if (c.kind == GoalKind::QuestObjective && distance < FOLLOW_UP_RANGE && !c.elite && !c.avoid &&
+        (c.mobLevel <= 0 || c.mobLevel <= int32(bot->GetLevel()) + 2))
+        if (QuestObjectiveTravelDestination* o = dynamic_cast<QuestObjectiveTravelDestination*>(destination))
+            if (IsFollowUp(bot->GetGUIDLow(), o->GetQuestId()))
+            {
+                goal.score.score *= FOLLOW_UP_BOOST;
+                goal.score.reason = "follow-up: " + goal.score.reason;
+            }
     return goal;
 }
 
