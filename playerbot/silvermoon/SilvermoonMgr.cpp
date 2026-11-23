@@ -845,6 +845,59 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
         static time_t lastFast = 0;
         time_t nowFast = time(nullptr);
         static time_t ledgerStart = nowFast;
+        static time_t lastClusterCheck = nowFast;
+        if (nowFast - lastClusterCheck >= 10 * MINUTE)
+        {
+            lastClusterCheck = nowFast;
+            static std::map<uint64, std::set<uint32>> previous;   // cell -> bots seen there last check
+            static std::set<uint32> nudged;                       // bots whose goal was ended last check
+            std::map<uint64, std::vector<Player*>> cells;
+            ForEachPlayerbot([&](Player* p)
+            {
+                if (!p || !p->IsInWorld() || !p->IsAlive() || p->IsInCombat() || p->IsTaxiFlying() || p->IsBeingTeleported() ||
+                    !IsRandomBot(p) || !p->GetMap() || !p->GetMap()->IsContinent() || p->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_RESTING) ||
+                    p->GetGroup() || SilvermoonDungeonOf(p->GetGUIDLow()))
+                    return;
+                uint64 key = (uint64(p->GetMapId()) << 48) | (uint64(int64(p->GetPositionX() / 10.0f) + 100000) << 24) | uint64(int64(p->GetPositionY() / 10.0f) + 100000);
+                cells[key].push_back(p);
+            });
+            std::map<uint64, std::set<uint32>> current;
+            std::set<uint32> nudgedNow;
+            for (auto const& [key, bots] : cells)
+            {
+                if (bots.size() < 3)
+                    continue;
+                std::set<uint32> ids;
+                for (Player* p : bots)
+                    ids.insert(p->GetGUIDLow());
+                current[key] = ids;
+                auto prev = previous.find(key);
+                if (prev == previous.end())
+                    continue;
+                std::vector<Player*> stayed;
+                for (Player* p : bots)
+                    if (prev->second.count(p->GetGUIDLow()))
+                        stayed.push_back(p);
+                if (stayed.size() < 3)
+                    continue;
+                sLog.outBasic("Silvermoon: stuck spot: %u bots at map %u (%.0f, %.0f) for 10+ minutes", uint32(stayed.size()),
+                    stayed.front()->GetMapId(), stayed.front()->GetPositionX(), stayed.front()->GetPositionY());
+                for (Player* p : stayed)
+                {
+                    if (nudged.count(p->GetGUIDLow()))
+                    {
+                        ++silvermoon::Tp(silvermoon::TP_STUCK);
+                        RandomTeleportForLevel(p, false);
+                        continue;
+                    }
+                    if (TravelTarget* target = p->GetPlayerbotAI()->GetAiObjectContext()->GetValue<TravelTarget*>("travel target")->Get())
+                        target->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
+                    nudgedNow.insert(p->GetGUIDLow());
+                }
+            }
+            previous = std::move(current);
+            nudged = std::move(nudgedNow);
+        }
         if (nowFast - ledgerStart >= HOUR)
         {
             uint64 v[silvermoon::LG_COUNT];

@@ -143,7 +143,8 @@ namespace silvermoon
         if (bot.broke && c.mobLevel > 0)
         {
             int32_t gap = int32_t(bot.level) - c.mobLevel;
-            if (c.kind == GoalKind::Grind && gap >= 1 && gap <= 6)
+            // 1-4 below (was 1-6): broke level 20s farmed Elwynn
+            if (c.kind == GoalKind::Grind && gap >= 1 && gap <= 4)
             {
                 s.value *= 2.0f;
                 s.reason = "broke: easy grind";

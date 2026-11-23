@@ -319,6 +319,21 @@ static SilvermoonScoredGoal ScoreWith(Player* bot, BotSnapshot const& snapshot, 
 
     goal.kind = c.kind;
     goal.score = GoalScorer::Score(snapshot, c, frand(0.9f, 1.1f));
+    // gathering stays near the bot's level: no nodes in an area more than 8 levels below it
+    // (broke level 16-24 bots went back to Elwynn for Peacebloom, Silverleaf and copper)
+    if (c.kind == GoalKind::Gather && position)
+    {
+        uint32 zoneId = 0, areaId = 0;
+        sTerrainMgr.GetZoneAndAreaId(zoneId, areaId, position->getMapId(), position->getX(), position->getY(), position->getZ());
+        for (uint32 id : { areaId, zoneId })
+            if (AreaTableEntry const* entry = id ? GetAreaEntryByAreaID(id) : nullptr)
+                if (entry->area_level > 0)
+                {
+                    if (int32(entry->area_level) + 8 < int32(bot->GetLevel()))
+                        goal.score.score = 0.0f;
+                    break;
+                }
+    }
     // a bot under level 6 doesn't leave its starting area for a trainer: the only trainer with its
     // next rank was out in Razor Hill and Grashnak (level 1-2) died to the scorpids on the way.
     // The spell waits until the bot outgrows the valley anyway.
