@@ -325,7 +325,7 @@ static SilvermoonScoredGoal ScoreWith(Player* bot, BotSnapshot const& snapshot, 
     {
         uint32 zoneId = 0, areaId = 0;
         sTerrainMgr.GetZoneAndAreaId(zoneId, areaId, position->getMapId(), position->getX(), position->getY(), position->getZ());
-        for (uint32 id : { areaId, zoneId })
+        for (uint32 id : { zoneId, areaId })
             if (AreaTableEntry const* entry = id ? GetAreaEntryByAreaID(id) : nullptr)
                 if (entry->area_level > 0)
                 {

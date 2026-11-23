@@ -170,7 +170,9 @@ bool ai::SilvermoonBestRelocate(Player* bot, PlayerbotAI* ai, float bestLocalSco
     {
         uint32 zoneId = 0, areaId = 0;
         bot->GetZoneAndAreaId(zoneId, areaId);
-        for (uint32 id : { areaId, zoneId })
+        // the zone's level, not the town's (S: a hub is as high as its whole zone - Menethil
+        // Harbor's own lower level made level 27s "outgrow" Wetlands on arrival and fly on)
+        for (uint32 id : { zoneId, areaId })
         {
             AreaTableEntry const* entry = id ? GetAreaEntryByAreaID(id) : nullptr;
             if (entry && entry->area_level > 0)
@@ -187,22 +189,8 @@ bool ai::SilvermoonBestRelocate(Player* bot, PlayerbotAI* ai, float bestLocalSco
     // Mesa - another race's starting valley - two minutes after logging in)
     if (level < 6 && !outgrown && !want)
         return false;
-    // Hub ping-pong (S: 20+ bots never seemed to leave Elwynn/Stormwind): a bot arrived at a hub
-    // that fits its level, but the hub town's own area level is lower, so "outgrown" fired at once
-    // and it flew to the next hub, then the next (Anmo: Duskwood, Wetlands, Duskwood, Wetlands...).
-    // A hub that fits the bot within 800 yards means it has not outgrown where it is...
-    if (outgrown)
-    {
-        WorldPosition at(bot);
-        for (Hub const& h : Hubs::All())
-            if (h.map == at.getMapId() && int32(level) >= int32(h.minLevel) - 1 && int32(level) <= int32(h.maxLevel) &&
-                at.fDist(WorldPosition(h.map, h.x, h.y, h.z)) < 800.0f && Hubs::Knows(guid, h, bot->GetTeam() == ALLIANCE))
-            {
-                outgrown = false;
-                break;
-            }
-    }
-    // ...and after arriving it stays at least 45 minutes before choosing another trip
+    // Hub ping-pong (S: 20+ bots never seemed to leave Elwynn/Stormwind): after arriving at a hub
+    // a bot stays at least 45 minutes before choosing another trip
     if (!want)
     {
         std::lock_guard<std::mutex> guard(tripLock);
