@@ -6,6 +6,7 @@
 #include "RecheckGoalAction.h"
 #include "TakeQuestsAction.h"
 #include "SurviveStrategy.h"
+#include "CheetahAction.h"
 
 namespace ai
 {
@@ -31,6 +32,7 @@ namespace ai
             creators["recheck goal"] = [](PlayerbotAI* ai) { return new RecheckGoalAction(ai); };
             creators["silvermoon take quests"] = [](PlayerbotAI* ai) { return new TakeQuestsAction(ai); };
             creators["silvermoon flee outmatched"] = [](PlayerbotAI* ai) { return new FleeOutmatchedAction(ai); };
+            creators["silvermoon travel cheetah"] = [](PlayerbotAI* ai) { return new TravelCheetahAction(ai); };
         }
     };
 }
