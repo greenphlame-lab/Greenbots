@@ -168,6 +168,9 @@ namespace
         int32 questLevel = quest->GetQuestLevel() > 0 ? quest->GetQuestLevel() : level;
         int32 diff = questLevel - level;
         if (diff >= 5)  { tag = "red quest: ";    return 0.2f; }
+        // starting-area quests are often 3-4 levels above a fresh character (Sarkoth is level 5,
+        // offered at level 1): under level 10 orange counts as yellow
+        if (diff >= 3 && level < 10) { tag = ""; return 1.5f; }
         if (diff >= 3)  { tag = "orange quest: "; return 0.6f; }
         if (diff >= -2) { tag = "";               return 1.5f; }   // yellow
         if (questLevel > int32(MaNGOS::XP::GetGrayLevel(uint32(level)))) { tag = ""; return 1.0f; }   // green
