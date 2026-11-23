@@ -341,6 +341,53 @@ static void SilvermoonFixProfessions(Player* bot)
 // (Fizzlewick, Grashnak), missing the easiest earned money. A random bot of level 5+ resting in
 // town with a free profession slot learns a gathering one - Skinning first, then Mining or
 // Herbalism - paying the 10 silver fee and the vendor price of the tool it needs.
+// Silvermoon patch: dual wield (S: a level 10 rogue should train Dual Wield and get a second
+// weapon first). In town, before professions and bags: a rogue from 10, or a warrior or hunter
+// from 20, without Dual Wield pays the trainer fee and learns it; a bot with Dual Wield, a
+// one-handed main hand and an empty off hand buys the best plain vendor one-hander it can use
+// (dagger, sword, axe or mace by its weapon skills) for at most half its money.
+static void SilvermoonDualWield(Player* bot)
+{
+    uint8 cls = bot->getClass();
+    uint32 level = bot->GetLevel();
+    uint32 fee = cls == CLASS_ROGUE ? 300 : 2200;
+    if (!((cls == CLASS_ROGUE && level >= 10) || ((cls == CLASS_WARRIOR || cls == CLASS_HUNTER) && level >= 20)))
+        return;
+    if (!bot->HasSpell(674))
+    {
+        if (bot->GetMoney() < fee)
+            return;
+        bot->learnSpell(674, false);
+        bot->ModifyMoney(-int32(fee));
+        sLog.outBasic("Silvermoon: bot %s (level %u) learned Dual Wield for %u copper", bot->GetName(), level, fee);
+    }
+    if (bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND))
+        return;
+    Item* main = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND);
+    if (!main || main->GetProto()->InventoryType == INVTYPE_2HWEAPON)
+        return;
+    // plain vendor one-handers: { item, weapon skill, required level }, best first
+    static const uint32 weapons[][3] = {
+        { 2526, 173, 29 }, { 2209, 173, 19 }, { 927, 44, 19 }, { 2028, 54, 16 }, { 2029, 44, 15 },
+        { 2208, 173, 14 }, { 2027, 43, 14 }, { 2207, 173, 11 }, { 853, 44, 11 }, { 851, 43, 10 },
+        { 852, 54, 9 }, { 2490, 44, 4 }, { 2488, 43, 4 }, { 2494, 173, 3 }, { 2492, 54, 2 } };
+    for (auto const& w : weapons)
+    {
+        if (w[2] > level || !bot->HasSkill(w[1]))
+            continue;
+        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(w[0]);
+        if (!proto || proto->BuyPrice * 2 > bot->GetMoney())
+            continue;
+        uint16 dest;
+        if (bot->CanEquipNewItem(EQUIPMENT_SLOT_OFFHAND, dest, w[0], false) != EQUIP_ERR_OK)
+            continue;
+        bot->EquipNewItem(dest, w[0], true);
+        bot->ModifyMoney(-int32(proto->BuyPrice));
+        sLog.outBasic("Silvermoon: bot %s bought an off-hand %s for %u copper", bot->GetName(), proto->Name1, proto->BuyPrice);
+        return;
+    }
+}
+
 static void SilvermoonLearnGathering(Player* bot)
 {
     enum { MIN = 186, HERB = 182, SKIN = 393, BS = 164, LW = 165, ALCH = 171, TAIL = 197, ENG = 202, ENCH = 333 };
@@ -2413,6 +2460,7 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                 uint32 m0 = p->GetMoney();
                 SilvermoonRepairNearby(p);
                 uint32 m1 = p->GetMoney();
+                SilvermoonDualWield(p);
                 SilvermoonLearnGathering(p);
                 SilvermoonBuyBag(p);
                 uint32 m2 = p->GetMoney();
