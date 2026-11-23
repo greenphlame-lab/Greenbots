@@ -4,6 +4,7 @@
 #include "Config/Config.h"
 
 #include "playerbot/playerbot.h"
+#include "playerbot/TravelNode.h"
 #include <atomic>
 #include <array>
 #include <deque>
@@ -2291,6 +2292,21 @@ void RandomPlayerbotMgr::SilvermoonFastProcessBot(Player* player, PlayerbotAI* a
     static std::unordered_map<uint32, std::pair<time_t, time_t>> nextCheck;   // stuck, progress
     time_t fastNow = time(nullptr);
     bool stuckDue = false, progressDue = false;
+    // Phase 2b step 4: deaths, so routes avoid places a bot died twice in the last 2 hours
+    {
+        static std::mutex aliveLock;
+        static std::unordered_map<uint32, bool> wasAlive;
+        bool alive = player->IsAlive();
+        bool died = false;
+        {
+            std::lock_guard<std::mutex> guard(aliveLock);
+            auto it = wasAlive.find(bot);
+            died = it != wasAlive.end() && it->second && !alive;
+            wasAlive[bot] = alive;
+        }
+        if (died)
+            SilvermoonNoteDeath(bot, player->GetMapId(), player->GetPositionX(), player->GetPositionY());
+    }
     // Phase 2b: hubs within 150 yards count as visited (cheap: ~90 distance checks), and relocation
     // trips: arrival (home bind at the innkeeper) and failed trips
     if (sPlayerbotAIConfig.silvermoonTravel && player->GetMap() && player->GetMap()->IsContinent())

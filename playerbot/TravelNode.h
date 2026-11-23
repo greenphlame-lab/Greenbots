@@ -456,3 +456,5 @@ namespace ai
 // Silvermoon: a bot that kept failing to take a planned flight plans without flights for a while
 void SilvermoonNoFlights(uint32 guid, uint32 seconds);
 bool SilvermoonFlightsOff(uint32 guid);
+// Silvermoon step 4: a bot death, so routes avoid places it died twice in the last 2 hours
+void SilvermoonNoteDeath(uint32 guid, uint32 map, float x, float y);

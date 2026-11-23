@@ -1,6 +1,10 @@
 #include "TravelNode.h"
 #include <mutex>
 #include <unordered_map>
+#include <shared_mutex>
+#include <set>
+#include <cmath>
+#include "playerbot/PlayerbotAIConfig.h"
 #include <algorithm>
 #include "playerbot/TravelMgr.h"
 
@@ -128,6 +132,143 @@ bool SilvermoonFlightsOff(uint32 guid)
     return false;
 }
 
+// ---------------------------------------------------------------------------------------------
+// Silvermoon brain Phase 2b step 4: danger-aware routes (with AiPlayerbot.SilvermoonTravel = 1).
+// Walk links cost more through mobs 2+ levels above the bot (+20% per level) and past hostile
+// outdoor elites (+25% each), x3 where the bot died twice in the last 2 hours, and enemy ground
+// (enemy capitals and starter zones, any enemy zone under level 20) is impassable.
+namespace
+{
+    // bot deaths, kept in memory (2 hours)
+    struct SilvermoonDeath { uint32 map; float x, y; time_t at; };
+    std::mutex silvermoonDeathLock;
+    std::unordered_map<uint32, std::vector<SilvermoonDeath>> silvermoonDeaths;
+
+    // hostile elite spawns on the continents, in 50-yard cells: first = hostile to Alliance, second = to Horde
+    const float ELITE_CELL = 50.0f;
+    std::once_flag silvermoonEliteOnce;
+    std::unordered_map<uint64, std::pair<uint16, uint16>> silvermoonElites;
+
+    uint64 EliteCellKey(uint32 map, float x, float y)
+    {
+        int64 cx = int64(std::floor(x / ELITE_CELL)) + 100000, cy = int64(std::floor(y / ELITE_CELL)) + 100000;
+        return (uint64(map) << 48) | (uint64(cx) << 24) | uint64(cy);
+    }
+
+    void LoadElites()
+    {
+        uint32 started = WorldTimer::getMSTime();
+        auto result = WorldDatabase.Query("SELECT c.map, c.position_x, c.position_y, t.Faction FROM creature c JOIN creature_template t ON t.entry = c.id WHERE t.Rank IN (1, 2) AND c.map IN (0, 1)");
+        uint32 count = 0;
+        if (result)
+        {
+            do
+            {
+                Field* f = result->Fetch();
+                FactionTemplateEntry const* faction = sFactionTemplateStore.LookupEntry(f[3].GetUInt32());
+                bool aFriend = faction && PlayerbotAI::friendToAlliance(faction);
+                bool hFriend = faction && PlayerbotAI::friendToHorde(faction);
+                if (aFriend && hFriend)
+                    continue;
+                auto& cell = silvermoonElites[EliteCellKey(f[0].GetUInt32(), f[1].GetFloat(), f[2].GetFloat())];
+                if (!aFriend)
+                    ++cell.first;
+                if (!hFriend)
+                    ++cell.second;
+                ++count;
+            } while (result->NextRow());
+        }
+        sLog.outBasic("Silvermoon: danger routes: %u hostile outdoor elites in %u cells, loaded in %u ms", count, uint32(silvermoonElites.size()), WorldTimer::getMSTimeDiff(started, WorldTimer::getMSTime()));
+    }
+
+    // per walk link, worked out once: hostile elites along it and the enemy ground it crosses
+    struct SilvermoonLinkDanger { uint16 elitesA = 0, elitesH = 0; uint8 owner = 0; bool alwaysOff = false; };
+    std::shared_mutex silvermoonLinkLock;
+    std::unordered_map<TravelNodePath const*, SilvermoonLinkDanger> silvermoonLinks;
+
+    SilvermoonLinkDanger LinkDanger(TravelNodePath const* link, std::vector<WorldPosition> const& path)
+    {
+        {
+            std::shared_lock<std::shared_mutex> guard(silvermoonLinkLock);
+            auto it = silvermoonLinks.find(link);
+            if (it != silvermoonLinks.end())
+                return it->second;
+        }
+        std::call_once(silvermoonEliteOnce, LoadElites);
+        SilvermoonLinkDanger d;
+        std::set<uint64> cells;
+        for (WorldPosition const& p : path)
+            cells.insert(EliteCellKey(p.getMapId(), p.getX(), p.getY()));
+        for (uint64 key : cells)
+        {
+            auto it = silvermoonElites.find(key);
+            if (it != silvermoonElites.end())
+            {
+                d.elitesA += it->second.first;
+                d.elitesH += it->second.second;
+            }
+        }
+        // enemy ground: start, middle and end of the link
+        static const std::set<uint32> earlyZones = { 12, 1, 141, 40, 38, 148, 14, 215, 85, 130 };
+        if (!path.empty())
+            for (size_t i : { size_t(0), path.size() / 2, path.size() - 1 })
+            {
+                WorldPosition const& p = path[i];
+                uint32 zoneId = 0, areaId = 0;
+                sTerrainMgr.GetZoneAndAreaId(zoneId, areaId, p.getMapId(), p.getX(), p.getY(), p.getZ());
+                for (uint32 id : { zoneId, areaId })
+                {
+                    AreaTableEntry const* entry = id ? GetAreaEntryByAreaID(id) : nullptr;
+                    if (!entry)
+                        continue;
+                    uint8 owner = entry->team == AREATEAM_ALLY ? 1 : entry->team == AREATEAM_HORDE ? 2 : 0;
+                    if (owner)
+                    {
+                        d.owner = owner;
+                        if ((entry->flags & AREA_FLAG_CAPITAL) || earlyZones.count(zoneId))
+                            d.alwaysOff = true;
+                    }
+                }
+            }
+        std::unique_lock<std::shared_mutex> guard(silvermoonLinkLock);
+        silvermoonLinks[link] = d;
+        return d;
+    }
+
+    uint32 DeathsNear(uint32 guid, std::vector<WorldPosition> const& path)
+    {
+        if (path.empty())
+            return 0;
+        std::lock_guard<std::mutex> guard(silvermoonDeathLock);
+        auto it = silvermoonDeaths.find(guid);
+        if (it == silvermoonDeaths.end())
+            return 0;
+        time_t since = time(nullptr) - 2 * HOUR;
+        uint32 n = 0;
+        for (SilvermoonDeath const& d : it->second)
+        {
+            if (d.at < since)
+                continue;
+            for (size_t i : { size_t(0), path.size() / 2, path.size() - 1 })
+                if (path[i].getMapId() == d.map && path[i].distance(WorldPosition(d.map, d.x, d.y, path[i].getZ())) < 150.0f)
+                {
+                    ++n;
+                    break;
+                }
+        }
+        return n;
+    }
+}
+
+void SilvermoonNoteDeath(uint32 guid, uint32 map, float x, float y)
+{
+    std::lock_guard<std::mutex> guard(silvermoonDeathLock);
+    auto& deaths = silvermoonDeaths[guid];
+    time_t now = time(nullptr);
+    deaths.erase(std::remove_if(deaths.begin(), deaths.end(), [now](SilvermoonDeath const& d) { return d.at < now - 2 * HOUR; }), deaths.end());
+    deaths.push_back({ map, x, y, now });
+}
+
 float TravelNodePath::getCost(Unit* unit, uint32 cGold)
 {
     float modifier = 1.0f; //Global modifier
@@ -227,14 +368,28 @@ float TravelNodePath::getCost(Unit* unit, uint32 cGold)
             else if (!isAlliance)
                 factionAnnoyance = (maxLevelCreature[1] - level) - 10;
 
+            // Silvermoon step 4: mobs 2+ levels above the bot, +20% per level (stock: 10 levels below, +10%)
+            if (sPlayerbotAIConfig.silvermoonTravel)
+                mobAnnoyance = int(maxLevelCreature[0]) - int(level) - 2;
             if (mobAnnoyance > 0)
-                modifier += 0.1 * mobAnnoyance;     //For each level the whole path takes 10% longer.
+                modifier += (sPlayerbotAIConfig.silvermoonTravel ? 0.2 : 0.1) * mobAnnoyance;     //For each level the whole path takes 10% longer.
             if (factionAnnoyance > 0)
                 modifier += 0.3 * factionAnnoyance; //For each level the whole path takes 30% longer.
         }
     }
     else if (getPathType() == TravelNodePathType::flightPath)
         return -1;
+
+    if (bot && sPlayerbotAIConfig.silvermoonTravel && getPathType() == TravelNodePathType::walk && bot->GetMap() && bot->GetMap()->IsContinent())
+    {
+        SilvermoonLinkDanger d = LinkDanger(this, path);
+        bool alliance = bot->GetTeam() == ALLIANCE;
+        if (d.owner && d.owner != (alliance ? 1 : 2) && (d.alwaysOff || bot->GetLevel() < 20))
+            return -1;                                           // enemy ground
+        modifier += 0.25f * (alliance ? d.elitesA : d.elitesH);  // hostile elites along the way
+        if (DeathsNear(bot->GetGUIDLow(), path) >= 2)
+            modifier *= 3.0f;                                     // died here twice lately
+    }
 
 
     if (getPathType() != TravelNodePathType::walk)
@@ -1716,6 +1871,9 @@ TravelNodeRoute TravelNodeMap::getRoute(TravelNode* start, TravelNode* goal, Uni
 
         currentNode = open.front(); // pop n node from open for which f is minimal
         ++silvermoonExpansions;
+        // Silvermoon step 4: search cap, about twice the measured 99th percentile (440)
+        if (sPlayerbotAIConfig.silvermoonTravel && silvermoonExpansions > 900)
+            break;
 
         std::pop_heap(open.begin(), open.end(), [](TravelNodeStub* i, TravelNodeStub* j) {return i->m_f < j->m_f; });
         open.pop_back();
