@@ -303,11 +303,7 @@ void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const fa
 
     if (!player->InBattleGround())
     {
-        combatEngine->addStrategies("racials", "default", "duel", NULL);
-        // Silvermoon: random bots don't go looking for world PvP (a quarter of all bot deaths were to
-        // other players); in battlegrounds, and for bots a player leads, it stays on
-        if (player->InBattleGround() || !sRandomPlayerbotMgr.IsRandomBot(player) || facade->HasRealPlayerMaster())
-            combatEngine->addStrategy("pvp");
+        combatEngine->addStrategies("racials", "default", "duel", "pvp", NULL);
     }
 
     switch (player->getClass())
