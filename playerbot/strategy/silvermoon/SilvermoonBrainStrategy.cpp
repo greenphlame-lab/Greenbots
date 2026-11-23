@@ -43,6 +43,11 @@ void SilvermoonBrainStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& tri
         "val::not::travel target active",
         NextAction::array(0, new NextAction("choose goal", 6.985f), NULL)));
 
+    // the goal is a quest giver and the bot is near it: walk up and take its quests
+    triggers.push_back(new TriggerNode(
+        "val::travel target active",
+        NextAction::array(0, new NextAction("silvermoon take quests", 6.995f), NULL)));
+
     // every 5 minutes with a goal: is something clearly better now? (switch at 1.25x, chores sooner)
     triggers.push_back(new TriggerNode(
         "val::travel target active",
