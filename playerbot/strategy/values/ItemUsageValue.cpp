@@ -512,11 +512,17 @@ if ((proto->Class == ITEM_CLASS_PROJECTILE ||
         // (An earlier version also vendored whenever "free money for ah" was 0 - that is money
         // left after reserves, 0 for most bots - and the auction houses emptied to ~50 listings.
         // Now only a deposit the bot really can't pay sends the item to a vendor, below.)
-        if (!ahMoney && AI_VALUE(uint8, "bag space") > 80)
+        // gathered materials the bot can't craft with (it already kept what its crafting needs,
+        // above): with two or more it posts them on the AH instead of vendoring them, broke or not
+        // (bots carried hundreds of herbs while the AH saw about 30 material listings a day)
+        bool spareMaterials = proto->Class == ITEM_CLASS_TRADE_GOODS && proto->Stackable > 1 &&
+            bot->GetItemCount(proto->ItemId) >= 2 && sRandomPlayerbotMgr.IsRandomBot(bot);
+
+        if (!ahMoney && AI_VALUE(uint8, "bag space") > 80 && !spareMaterials)
             return sellUsage;
         // ...except rare and better: those are worth far more on the AH (3 blues were listed in
         // 3 days while bots vendored them), so they keep going there whenever the deposit is payable
-        if (AI_VALUE(bool, "should repair") && !AI_VALUE(bool, "can repair") && proto->Quality < ITEM_QUALITY_RARE)
+        if (AI_VALUE(bool, "should repair") && !AI_VALUE(bool, "can repair") && proto->Quality < ITEM_QUALITY_RARE && !spareMaterials)
             return sellUsage;
 
         if (!IsMoreProfitableToSellToAHThanToVendor(proto, bot))
