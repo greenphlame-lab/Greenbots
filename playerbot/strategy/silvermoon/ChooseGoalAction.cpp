@@ -324,6 +324,21 @@ static SilvermoonScoredGoal ScoreWith(Player* bot, BotSnapshot const& snapshot, 
     // The spell waits until the bot outgrows the valley anyway.
     if (c.kind == GoalKind::Trainer && bot->GetLevel() < 6 && distance > 300.0f)
         goal.score.score = 0.0f;
+    if (c.kind == GoalKind::QuestTurnIn)
+    {
+        uint32 finished = 0;
+        for (uint8 slot = 0; slot < MAX_QUEST_LOG_SIZE; ++slot)
+            if (uint32 id = bot->GetQuestSlotQuestId(slot))
+                if (bot->GetQuestStatus(id) == QUEST_STATUS_COMPLETE)
+                    ++finished;
+        // finished quests waiting to be handed in are money and XP sitting idle (the tracked bots
+        // carried about 12 each)
+        if (finished > 1)
+        {
+            goal.score.score *= std::min(3.0f, 1.0f + 0.25f * finished);
+            goal.score.reason = "hand-in (" + std::to_string(finished) + " done): " + goal.score.reason;
+        }
+    }
     uint32 colourQuest = 0;
     if (c.kind == GoalKind::QuestGiver)
         if (QuestRelationTravelDestination* q = dynamic_cast<QuestRelationTravelDestination*>(destination))

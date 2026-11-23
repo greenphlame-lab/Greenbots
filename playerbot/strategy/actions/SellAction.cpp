@@ -1,6 +1,7 @@
 
 #include "playerbot/playerbot.h"
 #include "SellAction.h"
+#include "playerbot/RandomPlayerbotMgr.h"
 #include "playerbot/strategy/ItemVisitors.h"
 #include "playerbot/strategy/values/ItemUsageValue.h"
 
@@ -116,7 +117,8 @@ bool SellAction::Execute(Event& event)
         if (Sell(requester, *i))
             soldItems++;
 
-        if (event.getSource() == "rpg action" && soldItems >= shouldSell)
+        // Silvermoon patch: a vendor visit sells everything sellable (was a random 20-80% share)
+        if (event.getSource() == "rpg action" && soldItems >= shouldSell && !sRandomPlayerbotMgr.IsRandomBot(bot))
             break;
     }
 

@@ -166,6 +166,23 @@ Unit* GrindTargetValue::FindTargetForGrinding(int assistCount)
                 continue;
             if (((Creature*)unit)->IsElite() && int32(unit->GetLevel()) >= int32(bot->GetLevel()) - 2)
                 continue;
+            // single pulls: skip a mob with another idle hostile mob right next to it (two at once
+            // is how most ordinary fights were lost)
+            bool pack = false;
+            for (ObjectGuid const& other : targets)
+            {
+                if (other == unit->GetObjectGuid())
+                    continue;
+                Unit* near = ai->GetUnit(other);
+                if (near && near->IsAlive() && !near->IsInCombat() && near->GetTypeId() == TYPEID_UNIT && !((Creature*)near)->IsCritter() &&
+                    near->IsHostileTo(bot) && near->GetDistance(unit) < 8.0f)
+                {
+                    pack = true;
+                    break;
+                }
+            }
+            if (pack)
+                continue;
         }
 
         if (abs(bot->GetPositionZ() - unit->GetPositionZ()) > sPlayerbotAIConfig.spellDistance)
