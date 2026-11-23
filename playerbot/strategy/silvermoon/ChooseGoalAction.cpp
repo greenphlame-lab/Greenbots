@@ -178,6 +178,30 @@ namespace
         return 0.0f;
     }
 
+    // goals inside enemy ground are never chosen: the same rule as the enemy-zone watchdog
+    // (enemy capitals and starter zones at any level, any enemy zone under level 20). Alliance
+    // bots kept picking quest objectives in Durotar and were sent home again and again.
+    bool EnemyGround(Player* bot, WorldPosition const& pos)
+    {
+        uint32 zoneId = 0, areaId = 0;
+        sTerrainMgr.GetZoneAndAreaId(zoneId, areaId, pos.getMapId(), pos.getX(), pos.getY(), pos.getZ());
+        bool enemy = false, capital = false;
+        for (uint32 id : { zoneId, areaId })
+        {
+            AreaTableEntry const* entry = id ? GetAreaEntryByAreaID(id) : nullptr;
+            if (!entry)
+                continue;
+            if ((entry->team == AREATEAM_ALLY && bot->GetTeam() == HORDE) || (entry->team == AREATEAM_HORDE && bot->GetTeam() == ALLIANCE))
+                enemy = true;
+            if (entry->flags & AREA_FLAG_CAPITAL)
+                capital = true;
+        }
+        if (!enemy)
+            return false;
+        static const std::set<uint32> earlyZones = { 12, 1, 141, 40, 38, 148, 14, 215, 85, 130 };
+        return bot->GetLevel() < 20 || capital || earlyZones.count(zoneId);
+    }
+
     const float NEARBY_GIVER_RANGE = 80.0f;
     const float NEARBY_GIVER_BOOST = 6.0f;
     std::map<uint32, std::map<uint32, time_t>> newQuests;   // bot -> quest -> taken at (guarded by goalLock)
@@ -368,6 +392,8 @@ std::vector<SilvermoonScoredGoal> ai::SilvermoonScoreGoals(Player* bot, Playerbo
             if (!destination || !seen.insert(destination).second || skip.count(destination))
                 continue;
             if (!destination->IsActive(bot, info))
+                continue;
+            if (position && EnemyGround(bot, *position))
                 continue;
             goals.push_back(ScoreWith(bot, snapshot, destination, position, distance));
         }
