@@ -384,11 +384,11 @@ void RogueStealthStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
 
     triggers.push_back(new TriggerNode(
         "behind target",
-        NextAction::array(0, new NextAction("ambush", ACTION_NORMAL + 3), NULL)));
+        NextAction::array(0, new NextAction("pick pocket", ACTION_NORMAL + 4), new NextAction("ambush", ACTION_NORMAL + 3), NULL)));
 
     triggers.push_back(new TriggerNode(
         "not behind target",
-        NextAction::array(0, new NextAction("cheap shot", ACTION_NORMAL + 2), NULL)));
+        NextAction::array(0, new NextAction("pick pocket", ACTION_NORMAL + 4), new NextAction("cheap shot", ACTION_NORMAL + 2), NULL)));
 
     triggers.push_back(new TriggerNode(
         "kick",
@@ -824,11 +824,11 @@ void RogueStealthStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
 
     triggers.push_back(new TriggerNode(
         "behind target",
-        NextAction::array(0, new NextAction("ambush", ACTION_NORMAL + 3), NULL)));
+        NextAction::array(0, new NextAction("pick pocket", ACTION_NORMAL + 4), new NextAction("ambush", ACTION_NORMAL + 3), NULL)));
 
     triggers.push_back(new TriggerNode(
         "not behind target",
-        NextAction::array(0, new NextAction("cheap shot", ACTION_NORMAL + 2), NULL)));
+        NextAction::array(0, new NextAction("pick pocket", ACTION_NORMAL + 4), new NextAction("cheap shot", ACTION_NORMAL + 2), NULL)));
 
     triggers.push_back(new TriggerNode(
         "kick",
@@ -1264,11 +1264,11 @@ void RogueStealthStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
 
     triggers.push_back(new TriggerNode(
         "behind target",
-        NextAction::array(0, new NextAction("ambush", ACTION_NORMAL + 3), NULL)));
+        NextAction::array(0, new NextAction("pick pocket", ACTION_NORMAL + 4), new NextAction("ambush", ACTION_NORMAL + 3), NULL)));
 
     triggers.push_back(new TriggerNode(
         "not behind target",
-        NextAction::array(0, new NextAction("cheap shot", ACTION_NORMAL + 2), NULL)));
+        NextAction::array(0, new NextAction("pick pocket", ACTION_NORMAL + 4), new NextAction("cheap shot", ACTION_NORMAL + 2), NULL)));
 
     triggers.push_back(new TriggerNode(
         "kick",

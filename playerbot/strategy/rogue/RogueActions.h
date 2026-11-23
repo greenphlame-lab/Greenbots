@@ -238,6 +238,37 @@ namespace ai
         CastGarroteAction(PlayerbotAI* ai) : CastMeleeSpellAction(ai, "garrote") {}
     };
 
+    // Silvermoon patch: a stealthed rogue picks a humanoid's pocket once before its opener (rogue
+    // bots never did; real rogues get coins and items this way)
+    class CastPickPocketAction : public CastMeleeSpellAction
+    {
+    public:
+        CastPickPocketAction(PlayerbotAI* ai) : CastMeleeSpellAction(ai, "pick pocket") {}
+
+        virtual bool isUseful() override
+        {
+            if (!ai->HasAura("stealth", bot))
+                return false;
+            Unit* target = GetTarget();
+            Creature* creature = target ? dynamic_cast<Creature*>(target) : nullptr;
+            if (!creature || !creature->IsAlive() || creature->IsInCombat() || creature->GetCreatureType() != CREATURE_TYPE_HUMANOID)
+                return false;
+            CreatureInfo const* info = creature->GetCreatureInfo();
+            if (!info || !info->PickpocketLootId)
+                return false;
+            // once per mob: the last pocket picked is remembered
+            return AI_VALUE2(int, "manual int", "silvermoon pick pocket") != int(creature->GetGUIDLow());
+        }
+
+        virtual bool Execute(Event& event) override
+        {
+            Unit* target = GetTarget();
+            if (target)
+                SET_AI_VALUE2(int, "manual int", "silvermoon pick pocket", int(target->GetGUIDLow()));
+            return CastMeleeSpellAction::Execute(event);
+        }
+    };
+
     class CastCheapShotAction : public CastMeleeSpellAction
     {
     public:
