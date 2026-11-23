@@ -468,8 +468,8 @@ bool ShouldTravelNamedValue::Calculate()
         // missing spells but never went, waiting to afford everything on top of other savings.
         if (trainerType == TRAINER_TYPE_CLASS)
         {
-            static std::map<uint8, std::vector<std::tuple<uint32, uint32, uint32>>> classSpells; // class -> (level, cost, learned spell)
-            std::vector<std::tuple<uint32, uint32, uint32>>& list = classSpells[bot->getClass()];
+            static std::map<uint8, std::vector<std::tuple<uint32, uint32, uint32, TrainerSpell const*>>> classSpells; // class -> (level, cost, learned spell, entry)
+            std::vector<std::tuple<uint32, uint32, uint32, TrainerSpell const*>>& list = classSpells[bot->getClass()];
             if (list.empty())
             {
                 for (uint32 id = 0; id < sCreatureStorage.GetMaxEntry(); ++id)
@@ -486,15 +486,19 @@ bool ShouldTravelNamedValue::Calculate()
                                     for (int j = 0; j < 3; ++j)
                                         if (teach->Effect[j] == SPELL_EFFECT_LEARN_SPELL && teach->EffectTriggerSpell[j])
                                             learned = teach->EffectTriggerSpell[j];
-                                list.push_back({ entry.second.reqLevel, entry.second.spellCost, learned });
+                                list.push_back({ entry.second.reqLevel, entry.second.spellCost, learned, &entry.second });
                             }
                 }
                 if (list.empty())
-                    list.push_back({ 255, 0, 0 });
+                    list.push_back({ 255, 0, 0, nullptr });
             }
             uint32 spare = bot->GetMoney() > AI_VALUE(uint32, "max repair cost") ? bot->GetMoney() - AI_VALUE(uint32, "max repair cost") : 0;
-            for (auto const& [level, cost, learned] : list)
-                if (learned && level <= bot->GetLevel() && cost <= spare && !bot->HasSpell(learned))
+            // only spells this bot can actually learn now (Silvermoon: a night elf priest looped
+            // between trainers for an hour over dwarf/human-only priest spells it can never learn,
+            // or ranks missing their previous rank): the trainer's own check decides
+            for (auto const& [level, cost, learned, tSpell] : list)
+                if (learned && level <= bot->GetLevel() && cost <= spare && !bot->HasSpell(learned) &&
+                    tSpell && bot->GetTrainerSpellState(tSpell, level) == TRAINER_SPELL_GREEN)
                     return true;
             return false;
         }
