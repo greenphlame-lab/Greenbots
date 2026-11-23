@@ -508,10 +508,11 @@ if ((proto->Class == ITEM_CLASS_PROJECTILE ||
         //if item value is significantly higher than its vendor sell price and we actually have money to place the item on ah.
         uint32 ahMoney = AI_VALUE2(uint32, "free money for", (uint32)NeedMoneyFor::ah);
 
-        // Silvermoon patch: no money for AH deposits, or broke with gear to repair: sell to a vendor
-        // right away for quick money instead of holding items for an AH trip it can't pay for
-        // (was: only once the bags were over 80% full)
-        if (!ahMoney)
+        // Silvermoon patch: broke with gear to repair: sell to a vendor right away for quick money.
+        // (An earlier version also vendored whenever "free money for ah" was 0 - that is money
+        // left after reserves, 0 for most bots - and the auction houses emptied to ~50 listings.
+        // Now only a deposit the bot really can't pay sends the item to a vendor, below.)
+        if (!ahMoney && AI_VALUE(uint8, "bag space") > 80)
             return sellUsage;
         if (AI_VALUE(bool, "should repair") && !AI_VALUE(bool, "can repair"))
             return sellUsage;
@@ -559,8 +560,10 @@ if ((proto->Class == ITEM_CLASS_PROJECTILE ||
                 return sellUsage;
         }
 
-        if (depositCost > ahMoney)
-            return sellUsage; //We simply do not have the money to put this on AH. (Silvermoon: whatever the bag space)
+        if (depositCost > bot->GetMoney())
+            return sellUsage; // Silvermoon: can't pay the deposit at all - vendor it, whatever the bag space
+        if (depositCost > ahMoney && AI_VALUE(uint8, "bag space") > 80)
+            return sellUsage; //We simply do not have the money to put this on AH.
 
         if(!item) 
             return ItemUsage::ITEM_USAGE_AH;   //We can't determine if this item is soulboud (yet) or broken so we assume we can AH this.      
