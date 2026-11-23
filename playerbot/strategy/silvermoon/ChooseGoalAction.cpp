@@ -150,6 +150,10 @@ namespace
     const time_t FOLLOW_UP_SECONDS = 20 * MINUTE;
     const float FOLLOW_UP_RANGE = 600.0f;
     const float FOLLOW_UP_BOOST = 2.0f;
+    // quests right next to the bot are picked up first (S: an orc that spawns in should take
+    // "Cutting Teeth" from Gornek at once, not walk past him to a better quest farther out)
+    const float NEARBY_GIVER_RANGE = 80.0f;
+    const float NEARBY_GIVER_BOOST = 4.0f;
     std::map<uint32, std::map<uint32, time_t>> newQuests;   // bot -> quest -> taken at (guarded by goalLock)
 
     bool IsFollowUp(uint32 guid, uint32 questId)
@@ -264,6 +268,11 @@ static SilvermoonScoredGoal ScoreWith(Player* bot, BotSnapshot const& snapshot, 
 
     goal.kind = c.kind;
     goal.score = GoalScorer::Score(snapshot, c, frand(0.9f, 1.1f));
+    if (c.kind == GoalKind::QuestGiver && distance < NEARBY_GIVER_RANGE && !c.avoid)
+    {
+        goal.score.score *= NEARBY_GIVER_BOOST;
+        goal.score.reason = "next door: " + goal.score.reason;
+    }
     if (c.kind == GoalKind::QuestObjective && distance < FOLLOW_UP_RANGE && !c.elite && !c.avoid &&
         (c.mobLevel <= 0 || c.mobLevel <= int32(bot->GetLevel()) + 2))
         if (QuestObjectiveTravelDestination* o = dynamic_cast<QuestObjectiveTravelDestination*>(destination))
