@@ -318,6 +318,11 @@ static SilvermoonScoredGoal ScoreWith(Player* bot, BotSnapshot const& snapshot, 
 
     goal.kind = c.kind;
     goal.score = GoalScorer::Score(snapshot, c, frand(0.9f, 1.1f));
+    // a bot under level 6 doesn't leave its starting area for a trainer: the only trainer with its
+    // next rank was out in Razor Hill and Grashnak (level 1-2) died to the scorpids on the way.
+    // The spell waits until the bot outgrows the valley anyway.
+    if (c.kind == GoalKind::Trainer && bot->GetLevel() < 6 && distance > 300.0f)
+        goal.score.score = 0.0f;
     uint32 colourQuest = 0;
     if (c.kind == GoalKind::QuestGiver)
         if (QuestRelationTravelDestination* q = dynamic_cast<QuestRelationTravelDestination*>(destination))
