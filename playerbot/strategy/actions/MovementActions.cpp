@@ -2,6 +2,8 @@
 #include "playerbot/playerbot.h"
 #include "playerbot/RandomPlayerbotMgr.h"
 #include "MovementActions.h"
+#include <unordered_map>
+#include <mutex>
 extern thread_local int SilvermoonMoveFail; // Silvermoon: why the last move failed (defined below)
 #include "playerbot/silvermoon/BrainTimer.h"
 #include "MotionGenerators/MotionMaster.h"
@@ -874,7 +876,33 @@ bool MovementAction::HandleSpecialMovement(TravelPath& path)
     if (nextPoint.type == PathNodeType::NODE_FLIGHTPATH && nextPoint.entry)
     {
         SilvermoonMoveFail = 11;
-        return UseTaxi(ai, nextPoint.entry, true);
+        if (UseTaxi(ai, nextPoint.entry, true))
+            return true;
+        // Silvermoon patch: the flight step starts while the flight master can still be up to
+        // react distance away, and taking the flight needs it within reach, so bots stood next to
+        // it failing (70-85% of failed relocation moves). Walk up to it; if the flight still
+        // can't be taken after ~20 tries, plan without flights for 10 minutes (walk instead).
+        static std::mutex flightFailLock;
+        static std::unordered_map<uint32, uint32> flightFails;
+        uint32 fails;
+        {
+            std::lock_guard<std::mutex> guard(flightFailLock);
+            fails = ++flightFails[bot->GetGUIDLow()];
+            if (fails >= 20)
+                flightFails.erase(bot->GetGUIDLow());
+        }
+        if (fails >= 20)
+        {
+            SilvermoonNoFlights(bot->GetGUIDLow(), 10 * MINUTE);
+            AI_VALUE(LastMovement&, "last movement").clear();
+            return false;
+        }
+        if (currentPoint.point.getMapId() == bot->GetMapId() && currentPoint.point.distance(WorldPosition(bot)) > INTERACTION_DISTANCE - 1.0f)
+        {
+            bot->GetMotionMaster()->MovePoint(0, currentPoint.point.getX(), currentPoint.point.getY(), currentPoint.point.getZ(), FORCED_MOVEMENT_RUN, true);
+            return true;
+        }
+        return false;
     }
 
     if (nextPoint.type == PathNodeType::NODE_TELEPORT && nextPoint.entry)

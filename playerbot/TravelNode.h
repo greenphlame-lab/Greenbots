@@ -452,3 +452,7 @@ namespace ai
 }
 
 #define sTravelNodeMap MaNGOS::Singleton<TravelNodeMap>::Instance()
+
+// Silvermoon: a bot that kept failing to take a planned flight plans without flights for a while
+void SilvermoonNoFlights(uint32 guid, uint32 seconds);
+bool SilvermoonFlightsOff(uint32 guid);

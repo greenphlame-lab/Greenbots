@@ -1,5 +1,6 @@
 #include "TravelNode.h"
 #include <mutex>
+#include <unordered_map>
 #include <algorithm>
 #include "playerbot/TravelMgr.h"
 
@@ -103,6 +104,30 @@ void TravelNodePath::calculateCost(bool distanceOnly)
 }
 
 //The cost to travel this path. 
+namespace
+{
+    std::mutex silvermoonFlightLock;
+    std::unordered_map<uint32, time_t> silvermoonNoFlightUntil;
+}
+
+void SilvermoonNoFlights(uint32 guid, uint32 seconds)
+{
+    std::lock_guard<std::mutex> guard(silvermoonFlightLock);
+    silvermoonNoFlightUntil[guid] = time(nullptr) + seconds;
+}
+
+bool SilvermoonFlightsOff(uint32 guid)
+{
+    std::lock_guard<std::mutex> guard(silvermoonFlightLock);
+    auto it = silvermoonNoFlightUntil.find(guid);
+    if (it == silvermoonNoFlightUntil.end())
+        return false;
+    if (time(nullptr) < it->second)
+        return true;
+    silvermoonNoFlightUntil.erase(it);
+    return false;
+}
+
 float TravelNodePath::getCost(Unit* unit, uint32 cGold)
 {
     float modifier = 1.0f; //Global modifier
@@ -154,6 +179,8 @@ float TravelNodePath::getCost(Unit* unit, uint32 cGold)
         if (getPathType() == TravelNodePathType::flightPath && pathObject)
         {
             if (!bot->IsAlive())
+                return -1;
+            if (SilvermoonFlightsOff(bot->GetGUIDLow()))
                 return -1;
 
             TaxiPathEntry const* taxiPath = sTaxiPathStore.LookupEntry(pathObject);
