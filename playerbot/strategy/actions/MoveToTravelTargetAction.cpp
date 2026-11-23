@@ -36,8 +36,8 @@ namespace
         if (total < 2000)
             return;
         uint32* f = silvermoonMoveFails;
-        sLog.outBasic("Silvermoon: relocation move failures over %u: no path %u (%u cross-map), cut by enemies %u, on transport %u, can't move %u, already there %u, special move: portal %u, flight %u, hearthstone %u, teleport spell %u, other %u; dungeon lock %u, invalid %u, other %u, unknown %u",
-            total, f[5], silvermoonNoPathCrossMap, f[7], f[6], f[3], f[4], f[10], f[11], f[12], f[13], f[8], f[2], f[1], f[9], f[0]);
+        sLog.outBasic("Silvermoon: relocation move failures over %u: no path %u (%u cross-map), cut by enemies %u, on transport %u, can't move %u, already there %u, special move: portal %u, flight %u, hearthstone %u, teleport spell %u, area trigger %u, none matched %u, other %u; dungeon lock %u, invalid %u, other %u, unknown %u",
+            total, f[5], silvermoonNoPathCrossMap, f[7], f[6], f[3], f[4], f[10], f[11], f[12], f[13], f[14], f[15], f[8], f[2], f[1], f[9], f[0]);
         std::fill(std::begin(silvermoonMoveFails), std::end(silvermoonMoveFails), 0);
         silvermoonNoPathCrossMap = 0;
     }

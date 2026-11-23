@@ -800,6 +800,7 @@ bool MovementAction::HandleSpecialMovement(TravelPath& path)
 
     if (currentPoint.type == PathNodeType::NODE_AREA_TRIGGER)
     {
+        SilvermoonMoveFail = 14;
         if (currentPoint.entry)
             AI_VALUE(LastMovement&, "last area trigger").lastAreaTrigger = currentPoint.entry;
         else
@@ -1147,7 +1148,8 @@ Unit* MovementAction::GetMover(Player* bot)
 // 2 dungeon lock, 3 can't move, 4 already there, 5 no path, 6 on a transport, 7 path cut by
 // enemies, 8 special movement failed, 9 other). Read by MoveToTravelTargetAction for counts.
 thread_local int SilvermoonMoveFail = 0;
-static bool SilvermoonFail(int reason) { SilvermoonMoveFail = reason; return false; }
+static bool SilvermoonFail(int reason) { SilvermoonMoveFail = reason; SilvermoonMoveFail = SilvermoonMoveFail == 8 ? 15 : SilvermoonMoveFail; // 15: no special step matched
+    return false; }
 
 bool MovementAction::MoveTo2(const WorldPosition& endPos, bool idle, bool react, bool noPath, bool ignoreEnemyTargets)
 {
