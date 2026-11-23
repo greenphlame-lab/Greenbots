@@ -2292,6 +2292,28 @@ void RandomPlayerbotMgr::SilvermoonFastProcessBot(Player* player, PlayerbotAI* a
     static std::unordered_map<uint32, std::pair<time_t, time_t>> nextCheck;   // stuck, progress
     time_t fastNow = time(nullptr);
     bool stuckDue = false, progressDue = false;
+    // gold watch: a bot whose money jumps by 5 gold or more within one 10-second check is logged
+    // with what it is doing (5 Horde casters gained 50-96 gold in one hour on 2026-11-22 and the
+    // cause could not be traced afterwards)
+    {
+        static std::mutex moneyLock;
+        static std::unordered_map<uint32, uint32> lastMoney;
+        uint32 money = player->GetMoney();
+        uint32 before = 0;
+        {
+            std::lock_guard<std::mutex> guard(moneyLock);
+            auto it = lastMoney.find(bot);
+            before = it != lastMoney.end() ? it->second : money;
+            lastMoney[bot] = money;
+        }
+        if (money >= before + 50000)
+        {
+            TravelTarget* target = ai->GetAiObjectContext()->GetValue<TravelTarget*>("travel target")->Get();
+            sLog.outError("Silvermoon: gold watch: bot %s (level %u, zone %u) went from %u to %u copper in 10 s; goal: %s",
+                player->GetName(), player->GetLevel(), player->GetZoneId(), before, money,
+                target && target->GetDestination() ? target->GetDestination()->GetTitle().c_str() : "none");
+        }
+    }
     // Phase 2b step 4: deaths, so routes avoid places a bot died twice in the last 2 hours
     {
         static std::mutex aliveLock;
