@@ -73,6 +73,8 @@ namespace
     std::mutex tripLock;
     std::unordered_map<uint32, Trip> trips;
     std::unordered_map<uint32, uint32> failures;
+    std::unordered_map<uint32, time_t> arrivedAt;   // guid -> last arrival at a hub (stay a while)
+    const time_t STAY_AFTER_ARRIVAL = 45 * MINUTE;
     std::unordered_map<uint32, std::unordered_map<uint16, time_t>> skipHub;   // guid -> hub -> until (failed trips)
 
     void FailTrip(uint32 guid, uint16 hub)   // tripLock held
@@ -185,6 +187,29 @@ bool ai::SilvermoonBestRelocate(Player* bot, PlayerbotAI* ai, float bestLocalSco
     // Mesa - another race's starting valley - two minutes after logging in)
     if (level < 6 && !outgrown && !want)
         return false;
+    // Hub ping-pong (S: 20+ bots never seemed to leave Elwynn/Stormwind): a bot arrived at a hub
+    // that fits its level, but the hub town's own area level is lower, so "outgrown" fired at once
+    // and it flew to the next hub, then the next (Anmo: Duskwood, Wetlands, Duskwood, Wetlands...).
+    // A hub that fits the bot within 800 yards means it has not outgrown where it is...
+    if (outgrown)
+    {
+        WorldPosition at(bot);
+        for (Hub const& h : Hubs::All())
+            if (h.map == at.getMapId() && int32(level) >= int32(h.minLevel) - 1 && int32(level) <= int32(h.maxLevel) &&
+                at.fDist(WorldPosition(h.map, h.x, h.y, h.z)) < 800.0f && Hubs::Knows(guid, h, bot->GetTeam() == ALLIANCE))
+            {
+                outgrown = false;
+                break;
+            }
+    }
+    // ...and after arriving it stays at least 45 minutes before choosing another trip
+    if (!want)
+    {
+        std::lock_guard<std::mutex> guard(tripLock);
+        auto it = arrivedAt.find(guid);
+        if (it != arrivedAt.end() && time(nullptr) - it->second < STAY_AFTER_ARRIVAL)
+            return false;
+    }
     bool thin = want || outgrown || bestLocalScore < THIN_SHARE * typical;
     bool explore = !thin && urand(1, EXPLORE_ONE_IN) == 1;
     if (!thin && !explore)
@@ -421,6 +446,7 @@ bool ai::SilvermoonRelocateTick(Player* bot, PlayerbotAI* ai)
         std::lock_guard<std::mutex> guard(tripLock);
         trips.erase(guid);
         failures.erase(guid);
+        arrivedAt[guid] = time(nullptr);
         return true;
     }
     if (!stillGoing)
