@@ -1,5 +1,6 @@
 #include "PlayerbotMgr.h"
 #include "playerbot/playerbot.h"
+#include <mutex>
 #include <stdarg.h>
 #include <iomanip>
 
@@ -2542,6 +2543,39 @@ void PlayerbotAI::DoNextAction(bool min)
     // Silvermoon patch: a bot queued for (or in) a battleground loses Resurrection Sickness right away
     if ((bot->InBattleGroundQueue() || bot->InBattleGround()) && bot->HasAura(15007))
         bot->RemoveAurasDueToSpell(15007);
+
+    // Silvermoon: log speed buffs a bot gets inside a battleground, with the spell and who applied it
+    // (Sayrena showed a "Goblin Rocket Boots" buff on a flag pickup without the boots or the spell)
+    if (bot->InBattleGround())
+    {
+        static std::mutex speedLogLock;
+        static std::map<uint64, time_t> speedLogged;   // (bot << 32 | spell) -> last logged
+        for (auto const& entry : bot->GetSpellAuraHolderMap())
+        {
+            SpellAuraHolder* holder = entry.second;
+            if (!holder || !holder->GetSpellProto())
+                continue;
+            SpellEntry const* proto = holder->GetSpellProto();
+            bool speed = false;
+            for (int i = 0; i < MAX_EFFECT_INDEX; ++i)
+                if (proto->EffectApplyAuraName[i] == SPELL_AURA_MOD_INCREASE_SPEED || proto->EffectApplyAuraName[i] == SPELL_AURA_MOD_SPEED_ALWAYS)
+                    speed = true;
+            if (!speed)
+                continue;
+            uint64 key = (uint64(bot->GetGUIDLow()) << 32) | proto->Id;
+            time_t now = time(nullptr);
+            {
+                std::lock_guard<std::mutex> guard(speedLogLock);
+                auto it = speedLogged.find(key);
+                if (it != speedLogged.end() && now - it->second < 60)
+                    continue;
+                speedLogged[key] = now;
+            }
+            Unit* caster = holder->GetCaster();
+            sLog.outBasic("Silvermoon: bg speed buff on %s: spell %u (%s) from %s (item guid %u)", bot->GetName(), proto->Id, proto->SpellName[0],
+                caster ? caster->GetName() : "unknown", holder->GetCastItemGuid().GetCounter());
+        }
+    }
 
     // fix bots in BG not having proper strategies
 #ifdef MANGOSBOT_ZERO
