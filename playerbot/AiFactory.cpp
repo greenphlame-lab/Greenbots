@@ -988,7 +988,11 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
 
                 // Silvermoon brain (Phase 1): the goal scorer picks where to go. Not for bots led by
                 // a real player or on a dungeon run (a run that starts later removes it).
-                if (sPlayerbotAIConfig.silvermoonBrain && !facade->HasRealPlayerMaster() &&
+                // Always-online alts count as led by their account's logged-in character even when
+                // it is far away and not grouped with them, so they never got the brain (Guile sat in
+                // Brill at level 9 for hours): an ungrouped always-online alt gets it too.
+                if (sPlayerbotAIConfig.silvermoonBrain &&
+                    (!facade->HasRealPlayerMaster() || (sPlayerbotAIConfig.IsFreeAltBot(player) && !player->GetGroup())) &&
                     !sRandomPlayerbotMgr.SilvermoonDungeonOf(player->GetGUIDLow()))
                     nonCombatEngine->addStrategy("silvermoon brain");
             }
