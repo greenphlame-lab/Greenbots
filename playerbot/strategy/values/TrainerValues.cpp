@@ -189,7 +189,11 @@ std::vector<int32> AvailableTrainersValue::Calculate()
 
             for (auto& [trainerSpell, trainers] : trainerSpellList)
             {
-                if (std::find(trainableSpells.begin(), trainableSpells.end(), trainerSpell) == trainableSpells.end())
+                // Silvermoon patch: match by spell id, not by entry pointer - every trainer has its own
+                // TrainerSpell entries, so only the one trainer whose entries made the "trainable
+                // spells" list was ever offered (Grashnak was sent from the Valley of Trials to Razor
+                // Hill for Stealth while Rwag, 110 yards away, teaches it too)
+                if (std::find_if(trainableSpells.begin(), trainableSpells.end(), [&](TrainerSpell const* t) { return t->spell == trainerSpell->spell; }) == trainableSpells.end())
                     continue;
 
                 for (auto& trainer : trainers)
