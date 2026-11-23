@@ -90,6 +90,13 @@ namespace silvermoon
             // level 27 rare elite: the elite XP bonus outweighed the risk factors)
             if (c.elite || (c.mobLevel > 0 && c.mobLevel >= int32_t(bot.level) + HIGH_LEVEL_GAP))
                 s.value = 0.0f;
+            // destitute (S: can't even fix its weapon - find some way to make money): grey mobs give
+            // no XP but drop coin and vendor loot, and are safe with a broken weapon
+            else if (bot.destitute && c.mobLevel > 0 && c.mobLevel <= bot.greyLevel && int32_t(bot.level) - c.mobLevel <= 12)
+            {
+                s.value = xpm * 4.0f;
+                s.reason = "destitute: safe money";
+            }
             break;
         case GoalKind::Vendor:
         {
@@ -152,12 +159,23 @@ namespace silvermoon
         // mobs - 3+ levels below and still giving XP - are worth fighting; anything closer to the
         // bot's level waits, quest objectives included. 673 of 800 bots had 3+ broken items and
         // 40% of deaths were to mobs 3+ levels below the bot.
+        // Resurrection Sickness (S: play safe until it wears off): no new fights at all; turn-ins,
+        // town chores and resting in town keep their value
+        if (bot.resSick && (c.kind == GoalKind::Grind || c.kind == GoalKind::QuestObjective || c.kind == GoalKind::Gather))
+        {
+            s.value = 0.0f;
+            s.reason = "res sickness: rest";
+        }
+        if (bot.resSick && (c.kind == GoalKind::Vendor || c.kind == GoalKind::Repair || c.kind == GoalKind::Trainer || c.kind == GoalKind::Mail))
+            s.value *= 2.0f;
         bool careful = bot.broke || bot.brokenGear || bot.recentDeaths >= 3;
         if (careful && c.mobLevel > 0 && (c.kind == GoalKind::Grind || c.kind == GoalKind::QuestObjective))
         {
             int32_t gap = int32_t(bot.level) - c.mobLevel;
             bool green = gap >= 3 && c.mobLevel > bot.greyLevel;
-            if (green)
+            if (bot.destitute && c.kind == GoalKind::Grind && c.mobLevel <= bot.greyLevel)
+                ;   // grey: valued above as safe money
+            else if (green)
             {
                 if (c.kind == GoalKind::Grind)
                     s.value *= 2.5f;

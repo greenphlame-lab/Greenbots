@@ -38,6 +38,8 @@ namespace silvermoon
         uint32_t recentDeaths = 0;     // deaths in the last 30 minutes
         int32_t greyLevel = 0;         // mobs at or below this level give no XP
         bool repairCooldown = false;   // a repair visit in the last 30 min left gear damaged
+        bool destitute = false;        // weapon broken and no money to fix it
+        bool resSick = false;          // Resurrection Sickness
     };
 
     struct GoalCandidate

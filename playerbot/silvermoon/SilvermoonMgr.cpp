@@ -432,9 +432,11 @@ static void SilvermoonLearnGathering(Player* bot)
     if (g.tool && !bot->HasItemCount(g.tool, 1))
         if (ItemPrototype const* proto = sObjectMgr.GetItemPrototype(g.tool))
             toolPrice = proto->BuyPrice;
-    uint32 cost = 1000 + toolPrice;
-    if (bot->GetMoney() < cost + 500)
-        return;                                  // keep a little for repairs
+    // the trainers' real apprentice fee is 10 copper (was charged as 10 silver, which kept most
+    // broke bots from ever learning a way to earn without fighting)
+    uint32 cost = 10 + toolPrice;
+    if (bot->GetMoney() < cost + 50)
+        return;
     if (toolPrice)
     {
         ItemPosCountVec dest;

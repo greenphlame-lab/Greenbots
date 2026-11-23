@@ -167,6 +167,8 @@ Unit* GrindTargetValue::FindTargetForGrinding(int assistCount)
                     if (item->GetUInt32Value(ITEM_FIELD_MAXDURABILITY) && !item->GetUInt32Value(ITEM_FIELD_DURABILITY))
                         broken += slot == EQUIPMENT_SLOT_MAINHAND ? 4 : 1;
             careful = (broken >= 3 || SilvermoonRecentDeaths(bot->GetGUIDLow(), 30 * MINUTE) >= 3) ? 1 : 0;
+            if (bot->HasAura(15007))
+                careful = 2;    // Resurrection Sickness: no new fights until it wears off
         }
         // Silvermoon patch: a random bot on its own (no real player leading it) leaves alone
         // mobs 3 or more levels above it and elites it cannot handle alone.
@@ -179,6 +181,9 @@ Unit* GrindTargetValue::FindTargetForGrinding(int assistCount)
                 continue;
             // careful mode (S): with broken gear (weapon or 3+ items at 0 durability) or 3+ deaths
             // in 30 minutes, only green mobs (3+ levels below) are picked as new targets
+            if (careful == 2)
+                continue;
+            // destitute bots pick grey mobs too (coin and vendor loot, no danger)
             if (careful && int32(unit->GetLevel()) > int32(bot->GetLevel()) - 3)
                 continue;
             // single pulls: skip a mob with another idle hostile mob right next to it (two at once

@@ -97,6 +97,9 @@ namespace
                         broken += 3;
                 }
         s.brokenGear = broken >= 3;
+        if (Item* weapon = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND))
+            s.destitute = s.broke && weapon->GetUInt32Value(ITEM_FIELD_MAXDURABILITY) && !weapon->GetUInt32Value(ITEM_FIELD_DURABILITY);
+        s.resSick = bot->HasAura(15007);
         s.recentDeaths = SilvermoonRecentDeaths(bot->GetGUIDLow(), 30 * MINUTE);
         s.greyLevel = int32(MaNGOS::XP::GetGrayLevel(bot->GetLevel()));
         s.repairCooldown = silvermoon::RepairOnCooldown(bot->GetGUIDLow(), bot->GetMoney());
