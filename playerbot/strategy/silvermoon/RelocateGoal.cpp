@@ -181,6 +181,10 @@ bool ai::SilvermoonBestRelocate(Player* bot, PlayerbotAI* ai, float bestLocalSco
             }
         }
     }
+    // a bot under level 6 stays in its starting area (Grashnak, level 1, set off for Red Cloud
+    // Mesa - another race's starting valley - two minutes after logging in)
+    if (level < 6 && !outgrown && !want)
+        return false;
     bool thin = want || outgrown || bestLocalScore < THIN_SHARE * typical;
     bool explore = !thin && urand(1, EXPLORE_ONE_IN) == 1;
     if (!thin && !explore)

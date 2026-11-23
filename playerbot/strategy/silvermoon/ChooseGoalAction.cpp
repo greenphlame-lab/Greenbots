@@ -318,6 +318,15 @@ static SilvermoonScoredGoal ScoreWith(Player* bot, BotSnapshot const& snapshot, 
                 goal.score.score *= FOLLOW_UP_BOOST;
                 goal.score.reason = "follow-up: " + goal.score.reason;
             }
+    // a just-taken quest that is turned in nearby (talk-to quests like "Your Place In The World":
+    // take it from Kaltunk, hand it to Gornek) is a follow-up too
+    if (c.kind == GoalKind::QuestTurnIn && distance < FOLLOW_UP_RANGE)
+        if (QuestRelationTravelDestination* q = dynamic_cast<QuestRelationTravelDestination*>(destination))
+            if (IsFollowUp(bot->GetGUIDLow(), q->GetQuestId()))
+            {
+                goal.score.score *= FOLLOW_UP_BOOST;
+                goal.score.reason = "follow-up: " + goal.score.reason;
+            }
     return goal;
 }
 
