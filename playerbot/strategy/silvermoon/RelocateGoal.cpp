@@ -198,6 +198,25 @@ bool ai::SilvermoonBestRelocate(Player* bot, PlayerbotAI* ai, float bestLocalSco
         if (it != arrivedAt.end() && time(nullptr) - it->second < STAY_AFTER_ARRIVAL)
             return false;
     }
+    // open quests here keep the bot here (Grashnak, level 11 with 13 Durotar quests open, was sent
+    // to the Crossroads twice and walked straight back to the Southfury River each time, ~2 hours):
+    // 3+ unfinished quests for this zone that aren't far below the bot block a trip
+    if (!want)
+    {
+        uint32 zoneId = bot->GetZoneId();
+        uint32 open = 0;
+        for (uint16 slot = 0; slot < MAX_QUEST_LOG_SIZE; ++slot)
+        {
+            uint32 questId = bot->GetQuestSlotQuestId(slot);
+            if (!questId || bot->GetQuestStatus(questId) != QUEST_STATUS_INCOMPLETE)
+                continue;
+            Quest const* quest = sObjectMgr.GetQuestTemplate(questId);
+            if (quest && quest->GetZoneOrSort() == int32(zoneId) && quest->GetQuestLevel() + 4 >= int32(level))
+                ++open;
+        }
+        if (open >= 3)
+            return false;
+    }
     bool thin = want || outgrown || bestLocalScore < THIN_SHARE * typical;
     bool explore = !thin && urand(1, EXPLORE_ONE_IN) == 1;
     if (!thin && !explore)

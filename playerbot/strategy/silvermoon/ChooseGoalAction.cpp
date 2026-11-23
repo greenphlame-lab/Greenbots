@@ -14,6 +14,7 @@
 #include <deque>
 #include <algorithm>
 #include <mutex>
+#include <unordered_map>
 
 using namespace ai;
 using namespace silvermoon;
@@ -153,6 +154,24 @@ namespace
     const float FOLLOW_UP_BOOST = 2.0f;
     // quests right next to the bot are picked up first (S: an orc that spawns in should take
     // "Cutting Teeth" from Gornek at once, not walk past him to a better quest farther out)
+    // creature spawns per entry, counted once from the world's creature data
+    uint32 SpawnCount(uint32 entry)
+    {
+        static std::once_flag once;
+        static std::unordered_map<uint32, uint32> counts;
+        std::call_once(once, []()
+        {
+            auto worker = [](CreatureDataPair const& dataPair)
+            {
+                ++counts[dataPair.second.id];
+                return false;
+            };
+            sObjectMgr.DoCreatureData(worker);
+        });
+        auto it = counts.find(entry);
+        return it == counts.end() ? 0 : it->second;
+    }
+
     // quest colour (S): grey quests are ignored except class quests; class > yellow > green >
     // orange > red
     float QuestColourFactor(Player* bot, uint32 questId, std::string& tag)
@@ -352,6 +371,18 @@ static SilvermoonScoredGoal ScoreWith(Player* bot, BotSnapshot const& snapshot, 
         {
             goal.score.score *= std::min(3.0f, 1.0f + 0.25f * finished);
             goal.score.reason = "hand-in (" + std::to_string(finished) + " done): " + goal.score.reason;
+        }
+    }
+    // a quest objective on a creature with only a few spawns waits behind one with many (Kron's
+    // Amulet drops from 49 Dreadmaw Crocolisks and 2 Corrupted ones; the bot kept walking to the
+    // 2, found them dead or camped and gave up after 3 minutes)
+    if (c.kind == GoalKind::QuestObjective && destination->GetEntry() > 0)
+    {
+        uint32 spawns = SpawnCount(uint32(destination->GetEntry()));
+        if (spawns < 6)
+        {
+            goal.score.score *= 0.4f + 0.1f * float(spawns);
+            goal.score.reason = "few spawns: " + goal.score.reason;
         }
     }
     uint32 colourQuest = 0;
