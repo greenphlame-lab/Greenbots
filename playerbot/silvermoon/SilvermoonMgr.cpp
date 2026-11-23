@@ -747,7 +747,7 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                     CharacterDatabase.escape_string(name);
                     CharacterDatabase.PExecute("UPDATE silvermoon_new_chars SET guid = '%u', account = '%u', created = UNIX_TIMESTAMP() WHERE name = '%s'", guid, accountId, name.c_str());
                     // in the random bot set for a year, so it is never rotated out
-                    SetEventValue(guid, "add", 1, 365 * DAY);
+                    SetEventValue(guid, "add", 1, 365 * DAY); currentBots.push_back(guid); // the bot list is read from the database only at startup
                     sLog.outBasic("Silvermoon: created tracked character %s (guid %u, account %u)", name.c_str(), guid, accountId);
                 } while (pending->NextRow());
             }
