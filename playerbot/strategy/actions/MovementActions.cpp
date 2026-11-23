@@ -282,7 +282,10 @@ bool MovementAction::UseTaxi(PlayerbotAI* ai, uint32 entry, bool needNpc)
     }
 
     uint32 botMoney = bot->GetMoney();
-    if (ai->HasCheat(BotCheatMask::gold) || ai->HasCheat(BotCheatMask::taxi))
+    // Silvermoon patch: no credit for the taxi cheat. ActivateTaxiPathTo with a spell id (1, below)
+    // does not charge the flight at all, so the credited price was kept every flight: Horde bots
+    // that flew a lot gained 35-96 gold in an hour (gold watch, 2026-11-22/23). Gold cheat only.
+    if (ai->HasCheat(BotCheatMask::gold))
     {
         bot->SetMoney(botMoney + tEntry->price);
     }

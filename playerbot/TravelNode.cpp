@@ -260,6 +260,20 @@ namespace
     }
 }
 
+uint32 SilvermoonDeathsNearPoint(uint32 guid, uint32 map, float x, float y, float radius, uint32 seconds)
+{
+    std::lock_guard<std::mutex> guard(silvermoonDeathLock);
+    auto it = silvermoonDeaths.find(guid);
+    if (it == silvermoonDeaths.end())
+        return 0;
+    time_t since = time(nullptr) - seconds;
+    uint32 n = 0;
+    for (SilvermoonDeath const& d : it->second)
+        if (d.at >= since && d.map == map && (d.x - x) * (d.x - x) + (d.y - y) * (d.y - y) < radius * radius)
+            ++n;
+    return n;
+}
+
 void SilvermoonClearDeaths(uint32 guid)
 {
     std::lock_guard<std::mutex> guard(silvermoonDeathLock);

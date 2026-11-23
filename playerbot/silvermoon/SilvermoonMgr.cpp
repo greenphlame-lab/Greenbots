@@ -2327,7 +2327,24 @@ void RandomPlayerbotMgr::SilvermoonFastProcessBot(Player* player, PlayerbotAI* a
             wasAlive[bot] = alive;
         }
         if (died)
+        {
             SilvermoonNoteDeath(bot, player->GetMapId(), player->GetPositionX(), player->GetPositionY());
+            // second death here within the hour: drop the goal, the brain then avoids this spot
+            if (SilvermoonDeathsNearPoint(bot, player->GetMapId(), player->GetPositionX(), player->GetPositionY(), 250.0f, HOUR) >= 2)
+                if (TravelTarget* target = ai->GetAiObjectContext()->GetValue<TravelTarget*>("travel target")->Get())
+                    target->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
+        }
+
+        // death-loop rescue: 5 deaths in an hour at level 6+ -> a zone that fits its level
+        if (alive && player->GetLevel() >= 6 && !player->GetGroup() && !ai->HasRealPlayerMaster() && !player->IsInCombat() &&
+            !player->InBattleGround() && !SilvermoonDungeonOf(bot) && SilvermoonRecentDeaths(bot, HOUR) >= 5)
+        {
+            sLog.outBasic("Silvermoon: death-loop rescue: bot %s (level %u) died 5 times in an hour, moving it to a zone for its level",
+                player->GetName(), player->GetLevel());
+            SilvermoonClearDeaths(bot);
+            ++silvermoon::Tp(silvermoon::TP_TOO_DANGEROUS);
+            RandomTeleportForLevel(player, false);
+        }
 
         // starter rescue: a bot under level 6 that died twice in 30 minutes far from where it
         // started (wandered into level 5-6 mobs) goes back to its starting spot, hearthstone included,

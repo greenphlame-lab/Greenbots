@@ -2,6 +2,7 @@
 #include "playerbot/silvermoon/BrainTimer.h"
 #include "ChooseGoalAction.h"
 #include "playerbot/TravelMgr.h"
+#include "playerbot/TravelNode.h"
 #include "playerbot/strategy/values/TravelValues.h"
 #include "Tools/Formulas.h"
 #include "playerbot/silvermoon/DecisionLog.h"
@@ -399,6 +400,10 @@ std::vector<SilvermoonScoredGoal> ai::SilvermoonScoreGoals(Player* bot, Playerbo
             if (!destination->IsActive(bot, info))
                 continue;
             if (position && EnemyGround(bot, *position))
+                continue;
+            // death-loop guard: no goal within 250 yards of a spot where the bot died twice in
+            // the last hour (10 bots died 61-95 times in one night, going back to the same place)
+            if (position && SilvermoonDeathsNearPoint(bot->GetGUIDLow(), position->getMapId(), position->getX(), position->getY(), 250.0f, HOUR) >= 2)
                 continue;
             goals.push_back(ScoreWith(bot, snapshot, destination, position, distance));
         }

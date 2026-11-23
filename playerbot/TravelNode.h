@@ -460,3 +460,4 @@ bool SilvermoonFlightsOff(uint32 guid);
 void SilvermoonNoteDeath(uint32 guid, uint32 map, float x, float y);
 uint32 SilvermoonRecentDeaths(uint32 guid, uint32 seconds);
 void SilvermoonClearDeaths(uint32 guid);
+uint32 SilvermoonDeathsNearPoint(uint32 guid, uint32 map, float x, float y, float radius, uint32 seconds);
