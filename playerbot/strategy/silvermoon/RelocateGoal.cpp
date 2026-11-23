@@ -293,6 +293,25 @@ bool ai::SilvermoonBestRelocate(Player* bot, PlayerbotAI* ai, float bestLocalSco
 void ai::SilvermoonRelocateStarted(uint32 guid, uint16 hubId, TravelDestination* destination, float estimateMinutes)
 {
     std::lock_guard<std::mutex> guard(tripLock);
+    // a trip to the same hub picked again within 2 minutes means the last one was dropped at once
+    // (the travel target went inactive within seconds - no route out, blocked by enemy ground, the
+    // search cap...): 1,144 of ~2,000 relocation choices in an hour were the same hub re-picked
+    // every ~5 seconds by a bot standing still. Count it as a failed trip, so the hub is skipped
+    // for 30 minutes and the level-zone teleport fallback comes after 3 failures.
+    auto previous = trips.find(guid);
+    if (previous != trips.end() && previous->second.hub == hubId && time(nullptr) - previous->second.start < 2 * MINUTE)
+    {
+        FailTrip(guid, hubId);
+        DecisionRow row;
+        row.ts = uint32(time(nullptr));
+        row.guid = guid;
+        row.goal = "relocate";
+        row.target = "";
+        row.reason = "relocate failed: dropped at once";
+        DecisionLog::Add(row);
+        trips.erase(previous);
+        return;
+    }
     Trip trip;
     trip.hub = hubId;
     trip.destination = destination;
