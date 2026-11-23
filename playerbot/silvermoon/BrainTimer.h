@@ -2,6 +2,9 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <ctime>
+#include <mutex>
+#include <unordered_map>
 
 // Silvermoon brain: how much CPU time the brain costs. Every brain action (request, choose,
 // re-check goal) adds its wall time on the world/bot-update threads to BrainMicros(); the
@@ -24,6 +27,23 @@ namespace silvermoon
     // the rest are the parts Silvermoon code can see.
     enum LedgerKind { LG_GAIN, LG_LOSS, LG_REPAIR, LG_TRAIN, LG_SELL, LG_GEAR, LG_DEATHS, LG_BUY, LG_COUNT };
     inline std::atomic<uint64_t>& Ledger(LedgerKind kind) { static std::atomic<uint64_t> v[LG_COUNT]{}; return v[kind]; }
+
+    // repair visits (S: no vendor-hopping): after a visit that left gear damaged (not enough
+    // money), no new repair trip for 30 minutes unless the bot has 5 silver more than it left with
+    struct RepairVisit { time_t at; uint32_t money; };
+    inline std::mutex& RepairVisitLock() { static std::mutex m; return m; }
+    inline std::unordered_map<uint32_t, RepairVisit>& RepairVisits() { static std::unordered_map<uint32_t, RepairVisit> v; return v; }
+    inline void NoteRepairVisit(uint32_t guid, uint32_t moneyAfter)
+    {
+        std::lock_guard<std::mutex> guard(RepairVisitLock());
+        RepairVisits()[guid] = { time(nullptr), moneyAfter };
+    }
+    inline bool RepairOnCooldown(uint32_t guid, uint32_t money)
+    {
+        std::lock_guard<std::mutex> guard(RepairVisitLock());
+        auto it = RepairVisits().find(guid);
+        return it != RepairVisits().end() && time(nullptr) - it->second.at < 30 * 60 && money < it->second.money + 500;
+    }
 
     class BrainTimer
     {

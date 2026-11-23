@@ -106,13 +106,20 @@ namespace silvermoon
             s.value = xpm * (bot.urgentRepair ? CHORE_URGENT_MINUTES : CHORE_NORMAL_MINUTES);
             s.minutes = travel + CHORE_MINUTES;
             s.reason = bot.urgentRepair ? "needs repair" : "repair";
+            // already tried with the money it has (Grashnak, 1 silver, walked between five
+            // repair vendors in 15 minutes)
+            if (bot.repairCooldown)
+            {
+                s.value = 0.0f;
+                s.reason = "repair: tried recently";
+            }
             break;
         case GoalKind::Gather:
             // mining or herbalism: worth a few minutes of XP normally, much more when broke
             // (sellable materials, no fighting)
-            s.value = xpm * (bot.broke ? 6.0f : 1.0f);
+            s.value = xpm * (bot.broke || bot.brokenGear ? 6.0f : 1.0f);
             s.minutes = travel + CHORE_MINUTES;
-            s.reason = bot.broke ? "broke: gather to sell" : "gather";
+            s.reason = bot.broke || bot.brokenGear ? "broke: gather to sell" : "gather";
             break;
         case GoalKind::Mail:
             // a gift or delivery from a real player is fetched soon; other mail is a small chore
@@ -140,17 +147,24 @@ namespace silvermoon
         // broke with damaged gear: earn money with easy fights until a full repair is affordable.
         // Mobs 1-6 levels below are worth double (safe kills, loot to sell), anything at or above
         // the bot's level much less; harder quest objectives wait.
-        if (bot.broke && c.mobLevel > 0)
+        // careful mode (S: once gear is broken, or after dying a lot, don't ram into a wall): broke,
+        // broken gear (weapon or 3+ items at 0 durability) or 3+ deaths in 30 minutes. Only green
+        // mobs - 3+ levels below and still giving XP - are worth fighting; anything closer to the
+        // bot's level waits, quest objectives included. 673 of 800 bots had 3+ broken items and
+        // 40% of deaths were to mobs 3+ levels below the bot.
+        bool careful = bot.broke || bot.brokenGear || bot.recentDeaths >= 3;
+        if (careful && c.mobLevel > 0 && (c.kind == GoalKind::Grind || c.kind == GoalKind::QuestObjective))
         {
             int32_t gap = int32_t(bot.level) - c.mobLevel;
-            // 1-4 below (was 1-6): broke level 20s farmed Elwynn
-            if (c.kind == GoalKind::Grind && gap >= 1 && gap <= 4)
+            bool green = gap >= 3 && c.mobLevel > bot.greyLevel;
+            if (green)
             {
-                s.value *= 2.0f;
-                s.reason = "broke: easy grind";
+                if (c.kind == GoalKind::Grind)
+                    s.value *= 2.5f;
+                s.reason = bot.recentDeaths >= 3 ? "dying: green mobs" : "broke: green mobs";
             }
-            else if ((c.kind == GoalKind::Grind && gap <= 0) || (c.kind == GoalKind::QuestObjective && gap < 0))
-                s.value *= 0.3f;
+            else if (gap < 3)
+                s.value *= 0.15f;
         }
 
         // crowding (Phase 2a): a camp or objective area shared with other bots is worth less

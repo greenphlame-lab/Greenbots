@@ -87,6 +87,19 @@ namespace
         s.urgentVendor = s.bagFill > 90;
         s.playerMail = SilvermoonHasPlayerMail(bot);
         s.broke = s.urgentRepair && !context->GetValue<bool>("can repair")->Get();
+        uint32 broken = 0;
+        for (uint8 slot = EQUIPMENT_SLOT_START; slot < EQUIPMENT_SLOT_END; ++slot)
+            if (Item* item = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
+                if (item->GetUInt32Value(ITEM_FIELD_MAXDURABILITY) && !item->GetUInt32Value(ITEM_FIELD_DURABILITY))
+                {
+                    ++broken;
+                    if (slot == EQUIPMENT_SLOT_MAINHAND)
+                        broken += 3;
+                }
+        s.brokenGear = broken >= 3;
+        s.recentDeaths = SilvermoonRecentDeaths(bot->GetGUIDLow(), 30 * MINUTE);
+        s.greyLevel = int32(MaNGOS::XP::GetGrayLevel(bot->GetLevel()));
+        s.repairCooldown = silvermoon::RepairOnCooldown(bot->GetGUIDLow(), bot->GetMoney());
         return s;
     }
 

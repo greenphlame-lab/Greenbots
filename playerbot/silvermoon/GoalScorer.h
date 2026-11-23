@@ -34,6 +34,10 @@ namespace silvermoon
         uint32_t bagFill = 0;          // bags used, percent
         bool playerMail = false;       // a real player sent it something by mail
         bool broke = false;            // gear needs repair and it can't pay: earn money first
+        bool brokenGear = false;       // weapon at 0 durability, or 3+ equipped items at 0
+        uint32_t recentDeaths = 0;     // deaths in the last 30 minutes
+        int32_t greyLevel = 0;         // mobs at or below this level give no XP
+        bool repairCooldown = false;   // a repair visit in the last 30 min left gear damaged
     };
 
     struct GoalCandidate

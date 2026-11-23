@@ -72,6 +72,8 @@ bool RepairAllAction::Execute(Event& event)
 
         if (totalCost > 0 && sRandomPlayerbotMgr.IsRandomBot(bot))
             silvermoon::Ledger(silvermoon::LG_REPAIR) += totalCost;   // Silvermoon money ledger
+        if (sRandomPlayerbotMgr.IsRandomBot(bot))
+            silvermoon::NoteRepairVisit(bot->GetGUIDLow(), bot->GetMoney());
 
         if (totalCost > 0)
         {

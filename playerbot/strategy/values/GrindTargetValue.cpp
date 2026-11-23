@@ -9,6 +9,7 @@
 #include "playerbot/strategy/actions/ChooseTargetActions.h"
 #include "playerbot/strategy/values/FreeMoveValues.h"
 #include "Tools/Formulas.h"
+#include "playerbot/TravelNode.h"
 
 using namespace ai;
 
@@ -95,6 +96,7 @@ Unit* GrindTargetValue::FindTargetForGrinding(int assistCount)
 
     std::unordered_map<uint32, bool> needForQuestCache;
 
+    int careful = -1;   // Silvermoon careful mode, worked out on first use
     for (std::list<ObjectGuid>::iterator tIter = targets.begin(); tIter != targets.end(); tIter++)
     {
         Unit* unit = ai->GetUnit(*tIter);
@@ -157,6 +159,15 @@ Unit* GrindTargetValue::FindTargetForGrinding(int assistCount)
         }
 #endif
 
+        if (careful < 0)
+        {
+            uint32 broken = 0;
+            for (uint8 slot = EQUIPMENT_SLOT_START; slot < EQUIPMENT_SLOT_END; ++slot)
+                if (Item* item = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
+                    if (item->GetUInt32Value(ITEM_FIELD_MAXDURABILITY) && !item->GetUInt32Value(ITEM_FIELD_DURABILITY))
+                        broken += slot == EQUIPMENT_SLOT_MAINHAND ? 4 : 1;
+            careful = (broken >= 3 || SilvermoonRecentDeaths(bot->GetGUIDLow(), 30 * MINUTE) >= 3) ? 1 : 0;
+        }
         // Silvermoon patch: a random bot on its own (no real player leading it) leaves alone
         // mobs 3 or more levels above it and elites it cannot handle alone.
         if (sRandomPlayerbotMgr.IsRandomBot(bot) && !ai->HasRealPlayerMaster() && (!bot->GetGroup() || bot->GetGroup()->GetMembersCount() < 2) &&
@@ -165,6 +176,10 @@ Unit* GrindTargetValue::FindTargetForGrinding(int assistCount)
             if (int32(unit->GetLevel()) >= int32(bot->GetLevel()) + 3)
                 continue;
             if (((Creature*)unit)->IsElite() && int32(unit->GetLevel()) >= int32(bot->GetLevel()) - 2)
+                continue;
+            // careful mode (S): with broken gear (weapon or 3+ items at 0 durability) or 3+ deaths
+            // in 30 minutes, only green mobs (3+ levels below) are picked as new targets
+            if (careful && int32(unit->GetLevel()) > int32(bot->GetLevel()) - 3)
                 continue;
             // single pulls: skip a mob with another idle hostile mob right next to it (two at once
             // is how most ordinary fights were lost)
