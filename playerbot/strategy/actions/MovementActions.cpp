@@ -716,7 +716,23 @@ TravelPath MovementAction::ResolveMovePath(const WorldPosition& startPosition, c
 
     TravelPath outMovePath;
 
-    if (needsLongPath && sTravelNodeMap.hasNodes() && !bot->InBattleGround())
+    // Silvermoon patch: a same-map trip of up to ~280 yards (a vendor in town, a nearby quest
+    // giver) walks the direct navmesh path when it reaches the goal, instead of hopping node to
+    // node through the travel network (which zig-zagged bots across town on the way to a vendor).
+    // Longer trips, other maps and paths the navmesh can't complete still use the node routes.
+    if (needsLongPath && startPosition.getMapId() == endPosition.getMapId() && totalDistance <= 280.0f && !bot->InBattleGround())
+    {
+        std::vector<WorldPosition> direct = startPosition.getPathTo(endPosition, bot);
+        if (!direct.empty() && direct.back().distance(endPosition) < 8.0f)
+        {
+            outMovePath.addPath(direct);
+            needsLongPath = false;
+        }
+    }
+
+    if (!outMovePath.empty())
+        ;
+    else if (needsLongPath && sTravelNodeMap.hasNodes() && !bot->InBattleGround())
     {
         outMovePath = sTravelNodeMap.getFullPath(startPosition, endPosition, bot); //Pathfind using nodes.
     }
