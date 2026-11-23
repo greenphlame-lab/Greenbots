@@ -189,6 +189,16 @@ Unit* GrindTargetValue::FindTargetForGrinding(int assistCount)
             // destitute bots pick grey mobs too (coin and vendor loot, no danger)
             if (careful && int32(unit->GetLevel()) > int32(bot->GetLevel()) - 3)
                 continue;
+            // careful mode, tightened (S asked whether careful bots still die to green mobs: they
+            // did - 57% of their deaths, some even to grey mobs - through elites at any level, camp
+            // packs and pulling again while hurt):
+            //  - no elites at all
+            //  - no new pull below 60% health or, for mana users, 40% mana: rest first
+            if (careful && ((Creature*)unit)->IsElite())
+                continue;
+            if (careful && (bot->GetHealthPercent() < 60.0f ||
+                (bot->GetPowerType() == POWER_MANA && bot->GetMaxPower(POWER_MANA) > 0 && bot->GetPower(POWER_MANA) * 100 < bot->GetMaxPower(POWER_MANA) * 40)))
+                continue;
             // single pulls: skip a mob with another idle hostile mob right next to it (two at once
             // is how most ordinary fights were lost)
             bool pack = false;
@@ -198,7 +208,7 @@ Unit* GrindTargetValue::FindTargetForGrinding(int assistCount)
                     continue;
                 Unit* near = ai->GetUnit(other);
                 if (near && near->IsAlive() && !near->IsInCombat() && near->GetTypeId() == TYPEID_UNIT && !((Creature*)near)->IsCritter() &&
-                    near->CanAttackOnSight(bot) && near->GetDistance(unit) < 8.0f)
+                    near->CanAttackOnSight(bot) && near->GetDistance(unit) < (careful ? 15.0f : 8.0f))
                 {
                     pack = true;
                     break;
