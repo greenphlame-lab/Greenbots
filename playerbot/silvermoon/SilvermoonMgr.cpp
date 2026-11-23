@@ -344,6 +344,21 @@ static void SilvermoonFixProfessions(Player* bot)
 static void SilvermoonLearnGathering(Player* bot)
 {
     enum { MIN = 186, HERB = 182, SKIN = 393, BS = 164, LW = 165, ALCH = 171, TAIL = 197, ENG = 202, ENCH = 333 };
+    // a gatherer without its tool gathers nothing: 155 of 215 online miners had no Mining Pick and
+    // 164 of 218 skinners no Skinning Knife (professions given by older code came without them)
+    for (auto const& need : { std::make_pair(uint32(MIN), 2901u), std::make_pair(uint32(SKIN), 7005u) })
+        if (bot->HasSkill(need.first) && !bot->HasItemCount(need.second, 1))
+            if (ItemPrototype const* proto = sObjectMgr.GetItemPrototype(need.second))
+                if (bot->GetMoney() >= proto->BuyPrice * 2)
+                {
+                    ItemPosCountVec dest;
+                    if (bot->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, need.second, 1) == EQUIP_ERR_OK)
+                    {
+                        bot->StoreNewItem(dest, need.second, true);
+                        bot->ModifyMoney(-int32(proto->BuyPrice));
+                        sLog.outBasic("Silvermoon: bot %s bought a %s for %u copper", bot->GetName(), proto->Name1, proto->BuyPrice);
+                    }
+                }
     if (bot->GetLevel() < 5)
         return;
     uint32 primaries = 0;
