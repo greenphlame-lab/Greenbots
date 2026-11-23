@@ -175,7 +175,7 @@ Unit* GrindTargetValue::FindTargetForGrinding(int assistCount)
                     continue;
                 Unit* near = ai->GetUnit(other);
                 if (near && near->IsAlive() && !near->IsInCombat() && near->GetTypeId() == TYPEID_UNIT && !((Creature*)near)->IsCritter() &&
-                    near->IsHostileTo(bot) && near->GetDistance(unit) < 8.0f)
+                    near->CanAttackOnSight(bot) && near->GetDistance(unit) < 8.0f)
                 {
                     pack = true;
                     break;
