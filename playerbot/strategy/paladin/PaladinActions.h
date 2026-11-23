@@ -13,7 +13,14 @@ namespace ai
 		CastSilvermoonSealAction(PlayerbotAI* ai, std::string spell) : CastBuffSpellAction(ai, spell) {}
 		virtual bool isUseful() override
 		{
-			if (AI_VALUE2(int, "manual int", "silvermoon last seal") > int(time(nullptr)) - 8)
+			// replacing a seal that is already up: at most once every 8 seconds (no seal up, e.g.
+			// right after a judgement used it: cast at once)
+			bool sealUp = false;
+			for (const char* seal : { "seal of justice", "seal of command", "seal of vengeance", "seal of righteousness",
+			                          "seal of the crusader", "seal of light", "seal of blood", "seal of wisdom" })
+				if (ai->HasAura(seal, bot))
+					sealUp = true;
+			if (sealUp && AI_VALUE2(int, "manual int", "silvermoon last seal") > int(time(nullptr)) - 8)
 				return false;
 			return CastBuffSpellAction::isUseful();
 		}
