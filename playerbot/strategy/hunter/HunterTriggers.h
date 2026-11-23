@@ -19,6 +19,11 @@ namespace ai
         {
             if (!bot->IsInCombat() && ai->HasAura("aspect of the cheetah", bot))
                 return false;
+            // ...and a Warsong Gulch flag carrier keeps Cheetah in combat too, unless something is
+            // attacking it (the battleground strategy's "remove aspect of the cheetah" takes it off then)
+            if (bot->InBattleGround() && ai->HasAura("aspect of the cheetah", bot) && AI_VALUE2(bool, "trigger active", "player has flag") &&
+                AI_VALUE(std::list<ObjectGuid>, "attackers").empty())
+                return false;
             return BuffTrigger::IsActive();
         }
     };
