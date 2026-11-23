@@ -4,14 +4,36 @@
 namespace ai
 {
 	// seals
-	BUFF_ACTION(CastSealOfRighteousnessAction, "seal of righteousness");
-	BUFF_ACTION(CastSealOfJusticeAction, "seal of justice");
-	BUFF_ACTION(CastSealOfLightAction, "seal of light");
-	BUFF_ACTION(CastSealOfWisdomAction, "seal of wisdom");
-	BUFF_ACTION(CastSealOfCommandAction, "seal of command");
-	BUFF_ACTION(CastSealOfVengeanceAction, "seal of vengeance");
-    BUFF_ACTION(CastSealOfTheCrusaderAction, "seal of the crusader");
-    BUFF_ACTION(CastSealOfBloodAction, "seal of blood");
+	// Silvermoon patch: a paladin bot casts at most one seal every 8 seconds. Several triggers each want
+	// "their" seal (low mana -> Wisdom, target without judgement -> Crusader, no seal -> Command or
+	// Vengeance), so bots flipped between seals that were already active, burning mana and GCDs.
+	class CastSilvermoonSealAction : public CastBuffSpellAction
+	{
+	public:
+		CastSilvermoonSealAction(PlayerbotAI* ai, std::string spell) : CastBuffSpellAction(ai, spell) {}
+		virtual bool isUseful() override
+		{
+			if (AI_VALUE2(int, "manual int", "silvermoon last seal") > int(time(nullptr)) - 8)
+				return false;
+			return CastBuffSpellAction::isUseful();
+		}
+		virtual bool Execute(Event& event) override
+		{
+			bool done = CastBuffSpellAction::Execute(event);
+			if (done)
+				SET_AI_VALUE2(int, "manual int", "silvermoon last seal", int(time(nullptr)));
+			return done;
+		}
+	};
+#define SEAL_ACTION(clazz, spell) class clazz : public CastSilvermoonSealAction { public: clazz(PlayerbotAI* ai) : CastSilvermoonSealAction(ai, spell) {} }
+	SEAL_ACTION(CastSealOfRighteousnessAction, "seal of righteousness");
+	SEAL_ACTION(CastSealOfJusticeAction, "seal of justice");
+	SEAL_ACTION(CastSealOfLightAction, "seal of light");
+	SEAL_ACTION(CastSealOfWisdomAction, "seal of wisdom");
+	SEAL_ACTION(CastSealOfCommandAction, "seal of command");
+	SEAL_ACTION(CastSealOfVengeanceAction, "seal of vengeance");
+	SEAL_ACTION(CastSealOfTheCrusaderAction, "seal of the crusader");
+	SEAL_ACTION(CastSealOfBloodAction, "seal of blood");
 
 	class CastJudgementAction : public CastMeleeDebuffSpellAction
 	{
