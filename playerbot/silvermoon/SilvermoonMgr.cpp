@@ -337,6 +337,83 @@ static void SilvermoonFixProfessions(Player* bot)
     sLog.outBasic("Silvermoon: bot %s dropped mismatched professions (%s) and learned %u + %u", bot->GetName(), dropped.c_str(), pick.first, pick.second);
 }
 
+// Silvermoon patch: gathering professions early. Bots reached level 10 with no profession at all
+// (Fizzlewick, Grashnak), missing the easiest earned money. A random bot of level 5+ resting in
+// town with a free profession slot learns a gathering one - Skinning first, then Mining or
+// Herbalism - paying the 10 silver fee and the vendor price of the tool it needs.
+static void SilvermoonLearnGathering(Player* bot)
+{
+    enum { MIN = 186, HERB = 182, SKIN = 393, BS = 164, LW = 165, ALCH = 171, TAIL = 197, ENG = 202, ENCH = 333 };
+    if (bot->GetLevel() < 5)
+        return;
+    uint32 primaries = 0;
+    for (uint32 skill : { MIN, HERB, SKIN, BS, LW, ALCH, TAIL, ENG, ENCH })
+        if (bot->HasSkill(skill))
+            ++primaries;
+    if (primaries >= 2)
+        return;
+    struct Gathering { uint32 skill, spell, tool; };
+    std::vector<Gathering> options;
+    if (!bot->HasSkill(SKIN))
+        options.push_back({ SKIN, 8613, 7005 });     // Skinning + Skinning Knife
+    if (!bot->HasSkill(MIN) && !bot->HasSkill(HERB))
+    {
+        if (urand(0, 1))
+            options.push_back({ MIN, 2575, 2901 });  // Mining + Mining Pick
+        else
+            options.push_back({ HERB, 2366, 0 });    // Herbalism
+    }
+    if (options.empty())
+        return;
+    Gathering const& g = options.front();
+    uint32 toolPrice = 0;
+    if (g.tool && !bot->HasItemCount(g.tool, 1))
+        if (ItemPrototype const* proto = sObjectMgr.GetItemPrototype(g.tool))
+            toolPrice = proto->BuyPrice;
+    uint32 cost = 1000 + toolPrice;
+    if (bot->GetMoney() < cost * 2)
+        return;                                  // keep something for repairs
+    if (toolPrice)
+    {
+        ItemPosCountVec dest;
+        if (bot->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, g.tool, 1) != EQUIP_ERR_OK)
+            return;
+        bot->StoreNewItem(dest, g.tool, true);
+    }
+    bot->learnSpell(g.spell, false);
+    bot->ModifyMoney(-int32(cost));
+    sLog.outBasic("Silvermoon: bot %s (level %u) learned gathering skill %u for %u copper (fee and tool)", bot->GetName(), bot->GetLevel(), g.skill, cost);
+}
+
+// Silvermoon patch: bags. Full bags leave loot on corpses and force extra vendor trips. A random
+// bot resting in town with an empty bag slot buys the biggest plain vendor bag it can afford with
+// at most a quarter of its money (6, 8 or 10 slots), paying the vendor price.
+static void SilvermoonBuyBag(Player* bot)
+{
+    uint8 freeSlot = 0;
+    for (uint8 slot = INVENTORY_SLOT_BAG_START; slot < INVENTORY_SLOT_BAG_END; ++slot)
+        if (!bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
+        {
+            freeSlot = slot;
+            break;
+        }
+    if (!freeSlot)
+        return;
+    for (uint32 entry : { 4497u, 4498u, 4496u })    // Heavy Brown Bag 10, Brown Leather Satchel 8, Small Brown Pouch 6
+    {
+        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(entry);
+        if (!proto || proto->BuyPrice * 4 > bot->GetMoney())
+            continue;
+        uint16 dest;
+        if (bot->CanEquipNewItem(freeSlot, dest, entry, false) != EQUIP_ERR_OK)
+            continue;
+        bot->EquipNewItem(dest, entry, true);
+        bot->ModifyMoney(-int32(proto->BuyPrice));
+        sLog.outBasic("Silvermoon: bot %s bought a %s for %u copper", bot->GetName(), proto->Name1, proto->BuyPrice);
+        return;
+    }
+}
+
 // Silvermoon patch: repairs. 42 online bots had gear at 0 durability (useless) although most
 // could afford a repair; the trip to a repair npc is where they got lost. A bot resting in a
 // town repairs at any friendly repair npc within 60 yards, paying the normal price (weapons
@@ -767,6 +844,19 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
     {
         static time_t lastFast = 0;
         time_t nowFast = time(nullptr);
+        static time_t ledgerStart = nowFast;
+        if (nowFast - ledgerStart >= HOUR)
+        {
+            uint64 v[silvermoon::LG_COUNT];
+            for (int i = 0; i < silvermoon::LG_COUNT; ++i)
+                v[i] = silvermoon::Ledger(silvermoon::LedgerKind(i)).exchange(0);
+            CharacterDatabase.PExecute("INSERT INTO silvermoon_ledger (ts, seconds, gain, loss, repair, train, sell, gear, deaths) VALUES (%u, %u, %llu, %llu, %llu, %llu, %llu, %llu, %llu)",
+                uint32(nowFast), uint32(nowFast - ledgerStart), (unsigned long long)v[0], (unsigned long long)v[1], (unsigned long long)v[2],
+                (unsigned long long)v[3], (unsigned long long)v[4], (unsigned long long)v[5], (unsigned long long)v[6]);
+            sLog.outBasic("Silvermoon: ledger last hour (copper): gained %llu, lost %llu, repairs %llu, training %llu, vendor sales %llu, bags and tools %llu, deaths %llu",
+                (unsigned long long)v[0], (unsigned long long)v[1], (unsigned long long)v[2], (unsigned long long)v[3], (unsigned long long)v[4], (unsigned long long)v[5], (unsigned long long)v[6]);
+            ledgerStart = nowFast;
+        }
         if (nowFast - lastFast >= 10)
         {
             lastFast = nowFast;
@@ -2233,8 +2323,17 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                     return;
                 SetEventValue(guid, "silvermoon_craft", 1, (SilvermoonIsCrafter(guid) ? 8 : 15) * MINUTE);
                 SilvermoonFixProfessions(p);
+                uint32 m0 = p->GetMoney();
                 SilvermoonRepairNearby(p);
+                uint32 m1 = p->GetMoney();
+                SilvermoonLearnGathering(p);
+                SilvermoonBuyBag(p);
+                uint32 m2 = p->GetMoney();
                 SilvermoonTrainNearby(p);
+                uint32 m3 = p->GetMoney();
+                if (m0 > m1) silvermoon::Ledger(silvermoon::LG_REPAIR) += m0 - m1;
+                if (m1 > m2) silvermoon::Ledger(silvermoon::LG_GEAR) += m1 - m2;
+                if (m2 > m3) silvermoon::Ledger(silvermoon::LG_TRAIN) += m2 - m3;
                 if (SilvermoonCraftPass(p, !GetEventValue(guid, "silvermoon_craft_buy")))
                     SetEventValue(guid, "silvermoon_craft_buy", 1, 2 * HOUR);
             });
@@ -2306,6 +2405,10 @@ void RandomPlayerbotMgr::SilvermoonFastProcessBot(Player* player, PlayerbotAI* a
             before = it != lastMoney.end() ? it->second : money;
             lastMoney[bot] = money;
         }
+        if (money > before)
+            silvermoon::Ledger(silvermoon::LG_GAIN) += money - before;
+        else if (money < before)
+            silvermoon::Ledger(silvermoon::LG_LOSS) += before - money;
         if (money >= before + 50000)
         {
             TravelTarget* target = ai->GetAiObjectContext()->GetValue<TravelTarget*>("travel target")->Get();
@@ -2328,6 +2431,7 @@ void RandomPlayerbotMgr::SilvermoonFastProcessBot(Player* player, PlayerbotAI* a
         }
         if (died)
         {
+            ++silvermoon::Ledger(silvermoon::LG_DEATHS);
             SilvermoonNoteDeath(bot, player->GetMapId(), player->GetPositionX(), player->GetPositionY());
             // second death here within the hour: drop the goal, the brain then avoids this spot
             if (SilvermoonDeathsNearPoint(bot, player->GetMapId(), player->GetPositionX(), player->GetPositionY(), 250.0f, HOUR) >= 2)

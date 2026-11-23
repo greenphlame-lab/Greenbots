@@ -19,6 +19,12 @@ namespace silvermoon
     enum TpKind { TP_LEVEL_ZONE, TP_TOO_DANGEROUS, TP_ENEMY_ZONE, TP_CITY, TP_GOLDSHIRE, TP_FALLBACK, TP_STUCK, TP_COUNT };
     inline std::atomic<uint32_t>& Tp(TpKind kind) { static std::atomic<uint32_t> v[TP_COUNT]{}; return v[kind]; }
 
+    // money ledger (random bots, copper): where bot money comes from and goes, written hourly to
+    // characters.silvermoon_ledger. GAIN/LOSS are every bot's money changes between 10 s checks;
+    // the rest are the parts Silvermoon code can see.
+    enum LedgerKind { LG_GAIN, LG_LOSS, LG_REPAIR, LG_TRAIN, LG_SELL, LG_GEAR, LG_DEATHS, LG_COUNT };
+    inline std::atomic<uint64_t>& Ledger(LedgerKind kind) { static std::atomic<uint64_t> v[LG_COUNT]{}; return v[kind]; }
+
     class BrainTimer
     {
     public:

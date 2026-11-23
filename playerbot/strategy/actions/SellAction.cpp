@@ -2,6 +2,7 @@
 #include "playerbot/playerbot.h"
 #include "SellAction.h"
 #include "playerbot/RandomPlayerbotMgr.h"
+#include "playerbot/silvermoon/BrainTimer.h"
 #include "playerbot/strategy/ItemVisitors.h"
 #include "playerbot/strategy/values/ItemUsageValue.h"
 
@@ -111,6 +112,7 @@ bool SellAction::Execute(Event& event)
     }
 
     uint32 soldItems = 0;
+    uint32 moneyBefore = bot->GetMoney();
     uint32 shouldSell = std::max(minAutoSellItems, uint32(items.size() * urand(minAutoSellPercentageOfBag, maxAutoSellPercentageOfBag) / 100));
     for (std::list<Item*>::iterator i = items.begin(); i != items.end(); ++i)
     {
@@ -121,6 +123,9 @@ bool SellAction::Execute(Event& event)
         if (event.getSource() == "rpg action" && soldItems >= shouldSell && !sRandomPlayerbotMgr.IsRandomBot(bot))
             break;
     }
+
+    if (sRandomPlayerbotMgr.IsRandomBot(bot) && bot->GetMoney() > moneyBefore)
+        silvermoon::Ledger(silvermoon::LG_SELL) += bot->GetMoney() - moneyBefore;
 
     return soldItems;
 }
