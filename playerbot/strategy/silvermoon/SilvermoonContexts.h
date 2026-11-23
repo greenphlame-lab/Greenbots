@@ -5,6 +5,7 @@
 #include "ChooseGoalAction.h"
 #include "RecheckGoalAction.h"
 #include "TakeQuestsAction.h"
+#include "SurviveStrategy.h"
 
 namespace ai
 {
@@ -16,6 +17,7 @@ namespace ai
         SilvermoonStrategyContext()
         {
             creators["silvermoon brain"] = [](PlayerbotAI* ai) { return new SilvermoonBrainStrategy(ai); };
+            creators["silvermoon survive"] = [](PlayerbotAI* ai) { return new SurviveStrategy(ai); };
         }
     };
 
@@ -28,6 +30,7 @@ namespace ai
             creators["choose goal"] = [](PlayerbotAI* ai) { return new ChooseGoalAction(ai); };
             creators["recheck goal"] = [](PlayerbotAI* ai) { return new RecheckGoalAction(ai); };
             creators["silvermoon take quests"] = [](PlayerbotAI* ai) { return new TakeQuestsAction(ai); };
+            creators["silvermoon flee outmatched"] = [](PlayerbotAI* ai) { return new FleeOutmatchedAction(ai); };
         }
     };
 }
