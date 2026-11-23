@@ -708,16 +708,24 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                         sLog.outError("Silvermoon: tracked character name %s is taken", name.c_str());
                         continue;
                     }
+                    // character counts per account, read once and kept in memory: saves are
+                    // asynchronous, so a COUNT right after creating one still missed it and both
+                    // tracked characters landed on an account that already had 9
+                    static std::map<uint32, uint32> accountChars;
+                    if (accountChars.empty())
+                        for (uint32 acc : sPlayerbotAIConfig.randomBotAccounts)
+                        {
+                            auto count = CharacterDatabase.PQuery("SELECT COUNT(*) FROM characters WHERE account = '%u'", acc);
+                            accountChars[acc] = count ? count->Fetch()[0].GetUInt32() : 10;
+                        }
                     uint32 accountId = 0;
                     for (uint32 acc : sPlayerbotAIConfig.randomBotAccounts)
-                    {
-                        auto count = CharacterDatabase.PQuery("SELECT COUNT(*) FROM characters WHERE account = '%u'", acc);
-                        if (count && count->Fetch()[0].GetUInt32() < 10)
+                        if (accountChars[acc] < 10)
                         {
                             accountId = acc;
+                            ++accountChars[acc];
                             break;
                         }
-                    }
                     if (!accountId)
                     {
                         sLog.outError("Silvermoon: no random bot account has room for %s", name.c_str());
