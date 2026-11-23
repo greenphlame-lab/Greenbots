@@ -152,6 +152,29 @@ namespace
     const float FOLLOW_UP_BOOST = 2.0f;
     // quests right next to the bot are picked up first (S: an orc that spawns in should take
     // "Cutting Teeth" from Gornek at once, not walk past him to a better quest farther out)
+    // quest colour (S): grey quests are ignored except class quests; class > yellow > green >
+    // orange > red
+    float QuestColourFactor(Player* bot, uint32 questId, std::string& tag)
+    {
+        Quest const* quest = sObjectMgr.GetQuestTemplate(questId);
+        if (!quest)
+            return 1.0f;
+        if (quest->GetRequiredClasses())
+        {
+            tag = "class quest: ";
+            return 2.0f;
+        }
+        int32 level = bot->GetLevel();
+        int32 questLevel = quest->GetQuestLevel() > 0 ? quest->GetQuestLevel() : level;
+        int32 diff = questLevel - level;
+        if (diff >= 5)  { tag = "red quest: ";    return 0.2f; }
+        if (diff >= 3)  { tag = "orange quest: "; return 0.6f; }
+        if (diff >= -2) { tag = "";               return 1.5f; }   // yellow
+        if (questLevel > int32(MaNGOS::XP::GetGrayLevel(uint32(level)))) { tag = ""; return 1.0f; }   // green
+        tag = "grey quest: ";
+        return 0.0f;
+    }
+
     const float NEARBY_GIVER_RANGE = 80.0f;
     const float NEARBY_GIVER_BOOST = 6.0f;
     std::map<uint32, std::map<uint32, time_t>> newQuests;   // bot -> quest -> taken at (guarded by goalLock)
@@ -268,6 +291,20 @@ static SilvermoonScoredGoal ScoreWith(Player* bot, BotSnapshot const& snapshot, 
 
     goal.kind = c.kind;
     goal.score = GoalScorer::Score(snapshot, c, frand(0.9f, 1.1f));
+    uint32 colourQuest = 0;
+    if (c.kind == GoalKind::QuestGiver)
+        if (QuestRelationTravelDestination* q = dynamic_cast<QuestRelationTravelDestination*>(destination))
+            colourQuest = q->GetQuestId();
+    if (c.kind == GoalKind::QuestObjective)
+        if (QuestObjectiveTravelDestination* o = dynamic_cast<QuestObjectiveTravelDestination*>(destination))
+            colourQuest = o->GetQuestId();
+    if (colourQuest)
+    {
+        std::string tag;
+        goal.score.score *= QuestColourFactor(bot, colourQuest, tag);
+        if (!tag.empty())
+            goal.score.reason = tag + goal.score.reason;
+    }
     if (c.kind == GoalKind::QuestGiver && distance < NEARBY_GIVER_RANGE && !c.avoid)
     {
         goal.score.score *= NEARBY_GIVER_BOOST;
