@@ -48,10 +48,10 @@ void SilvermoonBrainStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& tri
         "val::travel target active",
         NextAction::array(0, new NextAction("silvermoon take quests", 6.995f), NULL)));
 
-    // hunters run long trips in Aspect of the Cheetah
+    // long trips with the class's movement ability (Cheetah, Ghost Wolf, Travel Form, Sprint)
     triggers.push_back(new TriggerNode(
         "val::travel target active",
-        NextAction::array(0, new NextAction("silvermoon travel cheetah", 6.996f), NULL)));
+        NextAction::array(0, new NextAction("silvermoon travel speed", 6.996f), NULL)));
 
     // every 5 minutes with a goal: is something clearly better now? (switch at 1.25x, chores sooner)
     triggers.push_back(new TriggerNode(

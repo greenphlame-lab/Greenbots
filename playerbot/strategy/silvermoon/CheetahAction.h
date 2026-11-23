@@ -1,15 +1,20 @@
 #pragma once
-#include "playerbot/strategy/actions/GenericSpellActions.h"
+#include "playerbot/strategy/Action.h"
 
 namespace ai
 {
-    // "silvermoon travel cheetah": a solo hunter on a long walk to its goal (not mounted, not in
-    // combat, more than 120 yards to go) runs in Aspect of the Cheetah. In combat the hunter's normal
-    // aspect triggers (Hawk/Monkey) replace it, so the daze risk is only on the road.
-    class TravelCheetahAction : public CastBuffSpellAction
+    // "silvermoon travel speed": on a long solo trip (not mounted, not in combat, 120+ yards to go)
+    // a bot uses its class's movement ability (S): hunter Aspect of the Cheetah, shaman Ghost Wolf,
+    // druid Travel Form, rogue Sprint (when off cooldown). At most one try a minute, so it doesn't
+    // fight other out-of-combat buffs. Combat behaviour takes over as usual once a fight starts.
+    class TravelSpeedAction : public Action
     {
     public:
-        TravelCheetahAction(PlayerbotAI* ai) : CastBuffSpellAction(ai, "aspect of the cheetah") { name = "silvermoon travel cheetah"; }
+        TravelSpeedAction(PlayerbotAI* ai) : Action(ai, "silvermoon travel speed") {}
+        virtual bool Execute(Event& event) override;
         virtual bool isUseful() override;
+
+    private:
+        bool Pick(std::string& action, uint32& spell, std::string& aura);
     };
 }
