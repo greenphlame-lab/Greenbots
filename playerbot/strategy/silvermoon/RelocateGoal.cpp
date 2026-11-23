@@ -218,9 +218,11 @@ bool ai::SilvermoonBestRelocate(Player* bot, PlayerbotAI* ai, float bestLocalSco
             return false;
     }
     // top up before a trip (S): at least 80% health and mana, out of combat
-    if (bot->IsInCombat() || bot->GetHealthPercent() < 80.0f ||
-        (bot->GetPowerType() == POWER_MANA && bot->GetMaxPower(POWER_MANA) > 0 && bot->GetPower(POWER_MANA) * 100 < bot->GetMaxPower(POWER_MANA) * 80))
+    if (!want && bot->IsInCombat())
         return false;
+    if (!want && (bot->GetHealthPercent() < 80.0f ||
+        (bot->GetPowerType() == POWER_MANA && bot->GetMaxPower(POWER_MANA) > 0 && bot->GetPower(POWER_MANA) * 100 < bot->GetMaxPower(POWER_MANA) * 80)))
+        return false;   // a wanted trip (e.g. leaving a zone where players keep killing it) goes at once
     bool thin = want || outgrown || bestLocalScore < THIN_SHARE * typical;
     bool explore = !thin && urand(1, EXPLORE_ONE_IN) == 1;
     if (!thin && !explore)

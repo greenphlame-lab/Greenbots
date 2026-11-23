@@ -2603,6 +2603,24 @@ void RandomPlayerbotMgr::SilvermoonFastProcessBot(Player* player, PlayerbotAI* a
                             target->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
                     }
         }
+        // still standing in the zone it should avoid (graveyard and corpse runs keep it there; one bot
+        // died 14 times to players in Stonetalon after the rule fired): hearthstone out when ready,
+        // if home is somewhere else
+        if (alive && !player->IsInCombat() && !player->IsTaxiFlying())
+            if (uint32 avoided = SilvermoonAvoidedZone(bot))
+                if (player->GetZoneId() == avoided)
+                {
+                    float hx = 0.0f, hy = 0.0f, hz = 0.0f;
+                    uint32 hmap = 0, hzone = 0, harea = 0;
+                    player->GetHomebindLocation(hx, hy, hz, hmap);
+                    sTerrainMgr.GetZoneAndAreaId(hzone, harea, hmap, hx, hy, hz);
+                    if (hzone != avoided && ai->GetAiObjectContext()->GetValue<bool>("action useful", "hearthstone")->Get() &&
+                        ai->DoSpecificAction("hearthstone", Event("silvermoon pvp avoid"), true))
+                    {
+                        sLog.outBasic("Silvermoon: bot %s hearthed out of zone %u (players kept killing it there)", player->GetName(), avoided);
+                        return;   // casting / teleporting: nothing more this tick
+                    }
+                }
         if (died)
         {
             ++silvermoon::Ledger(silvermoon::LG_DEATHS);
