@@ -13,6 +13,14 @@ namespace ai
     {
     public:
         AspectOfTheHawkTrigger(PlayerbotAI* ai) : BuffTrigger(ai, "aspect of the hawk") {}
+        // Silvermoon patch: out of combat, a hunter running in Aspect of the Cheetah keeps it (the
+        // brain puts it on for long trips); in combat Hawk replaces it as before
+        virtual bool IsActive() override
+        {
+            if (!bot->IsInCombat() && ai->HasAura("aspect of the cheetah", bot))
+                return false;
+            return BuffTrigger::IsActive();
+        }
     };
 
     class AspectOfTheWildTrigger : public BuffTrigger
