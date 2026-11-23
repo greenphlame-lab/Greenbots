@@ -845,6 +845,25 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
         static time_t lastFast = 0;
         time_t nowFast = time(nullptr);
         static time_t ledgerStart = nowFast;
+        // always-online alts: every 5 minutes an ungrouped alt with travel but no brain gets it
+        // (Guile kept stock travel only although AiFactory should have given it the brain)
+        static time_t lastAltCheck = 0;
+        if (sPlayerbotAIConfig.silvermoonBrain && nowFast - lastAltCheck >= 5 * MINUTE)
+        {
+            lastAltCheck = nowFast;
+            for (auto const& alt : sPlayerbotAIConfig.freeAltBots)
+            {
+                Player* p = sObjectMgr.GetPlayer(ObjectGuid(HIGHGUID_PLAYER, alt.second));
+                if (!p || !p->IsInWorld() || p->GetGroup() || p->InBattleGround() || !p->GetPlayerbotAI())
+                    continue;
+                PlayerbotAI* pai = p->GetPlayerbotAI();
+                if (pai->HasStrategy("travel", BotState::BOT_STATE_NON_COMBAT) && !pai->HasStrategy("silvermoon brain", BotState::BOT_STATE_NON_COMBAT))
+                {
+                    pai->ChangeStrategy("+silvermoon brain", BotState::BOT_STATE_NON_COMBAT);
+                    sLog.outBasic("Silvermoon: always-online alt %s had no brain, added it", p->GetName());
+                }
+            }
+        }
         static time_t lastClusterCheck = nowFast;
         if (nowFast - lastClusterCheck >= 10 * MINUTE)
         {
