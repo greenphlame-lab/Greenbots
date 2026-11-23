@@ -1,6 +1,7 @@
 
 #include "playerbot/playerbot.h"
 #include "RpgTriggers.h"
+#include "playerbot/RandomPlayerbotMgr.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/strategy/actions/GuildCreateActions.h"
 #include "Social/SocialMgr.h"
@@ -483,6 +484,14 @@ bool RpgHomeBindTrigger::IsActive()
     //Do not update for realplayers/always online when at max level.
     if ((ai->IsRealPlayer() || sPlayerbotAIConfig.IsFreeAltBot(bot)) && bot->GetLevel() == DEFAULT_MAX_LEVEL)
         return false;
+
+    // Silvermoon patch: a random bot under level 10 keeps its hearthstone near where it started
+    // (Grashnak, level 1, bound it in Razor Hill on a trainer trip, so hearthing never brought him
+    // back to the Valley of Trials and he kept dying to level 5-6 mobs walking home)
+    if (bot->GetLevel() < 10 && sRandomPlayerbotMgr.IsRandomBot(bot))
+        if (PlayerInfo const* start = sObjectMgr.GetPlayerInfo(bot->getRace(), bot->getClass()))
+            if (guidP.getMapId() != start->mapId || guidP.distance(WorldPosition(start->mapId, start->positionX, start->positionY, start->positionZ)) > 500.0f)
+                return false;
 
     WorldPosition currentBind = AI_VALUE(WorldPosition, "home bind");
     WorldPosition newBind = (guidP.sqDistance2d(bot) > INTERACTION_DISTANCE * INTERACTION_DISTANCE) ? guidP : bot;

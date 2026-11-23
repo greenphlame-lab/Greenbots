@@ -2328,6 +2328,27 @@ void RandomPlayerbotMgr::SilvermoonFastProcessBot(Player* player, PlayerbotAI* a
         }
         if (died)
             SilvermoonNoteDeath(bot, player->GetMapId(), player->GetPositionX(), player->GetPositionY());
+
+        // starter rescue: a bot under level 6 that died twice in 30 minutes far from where it
+        // started (wandered into level 5-6 mobs) goes back to its starting spot, hearthstone included,
+        // once it is alive again
+        if (alive && player->GetLevel() < 6 && !player->GetGroup() && !ai->HasRealPlayerMaster() && !player->IsInCombat() &&
+            SilvermoonRecentDeaths(bot, 30 * MINUTE) >= 2)
+            if (PlayerInfo const* start = sObjectMgr.GetPlayerInfo(player->getRace(), player->getClass()))
+            {
+                WorldPosition startPos(start->mapId, start->positionX, start->positionY, start->positionZ);
+                if (player->GetMapId() != start->mapId || startPos.distance(WorldPosition(player)) > 400.0f)
+                {
+                    sLog.outBasic("Silvermoon: starter rescue: bot %s (level %u) died twice far from its starting area, sending it back",
+                        player->GetName(), player->GetLevel());
+                    WorldLocation startLoc(start->mapId, start->positionX, start->positionY, start->positionZ, start->orientation);
+                    player->SetHomebindToLocation(startLoc, start->areaId);
+                    if (TravelTarget* target = ai->GetAiObjectContext()->GetValue<TravelTarget*>("travel target")->Get())
+                        target->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
+                    player->TeleportTo(start->mapId, start->positionX, start->positionY, start->positionZ, start->orientation);
+                    SilvermoonClearDeaths(bot);
+                }
+            }
     }
     // Phase 2b: hubs within 150 yards count as visited (cheap: ~90 distance checks), and relocation
     // trips: arrival (home bind at the innkeeper) and failed trips

@@ -260,6 +260,22 @@ namespace
     }
 }
 
+void SilvermoonClearDeaths(uint32 guid)
+{
+    std::lock_guard<std::mutex> guard(silvermoonDeathLock);
+    silvermoonDeaths.erase(guid);
+}
+
+uint32 SilvermoonRecentDeaths(uint32 guid, uint32 seconds)
+{
+    std::lock_guard<std::mutex> guard(silvermoonDeathLock);
+    auto it = silvermoonDeaths.find(guid);
+    if (it == silvermoonDeaths.end())
+        return 0;
+    time_t since = time(nullptr) - seconds;
+    return uint32(std::count_if(it->second.begin(), it->second.end(), [since](SilvermoonDeath const& d) { return d.at >= since; }));
+}
+
 void SilvermoonNoteDeath(uint32 guid, uint32 map, float x, float y)
 {
     std::lock_guard<std::mutex> guard(silvermoonDeathLock);
