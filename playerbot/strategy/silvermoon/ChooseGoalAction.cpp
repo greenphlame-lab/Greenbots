@@ -561,6 +561,10 @@ bool ChooseGoalAction::Execute(Event& event)
     // clear its conditions: a finished quest objective's "need quest objective" condition stayed
     // on, so every later goal went straight to cooldown and the bot chose again within seconds.
     travelTarget->SetConditions({});
+    // ...and setNewTarget re-adds the stock "future travel condition" left by the bot's last stock
+    // travel request (e.g. "should travel named::reagent vendor"): false for a brain goal, so a
+    // relocation trip went straight to cooldown and was re-picked every ~5 seconds. Cleared.
+    SET_AI_VALUE2(std::string, "manual string", "future travel condition", "");
     setNewTarget(requester, &newTarget, travelTarget);
     if (best.kind == GoalKind::Relocate)
     {
