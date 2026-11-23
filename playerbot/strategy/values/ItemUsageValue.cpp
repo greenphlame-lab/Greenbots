@@ -514,7 +514,9 @@ if ((proto->Class == ITEM_CLASS_PROJECTILE ||
         // Now only a deposit the bot really can't pay sends the item to a vendor, below.)
         if (!ahMoney && AI_VALUE(uint8, "bag space") > 80)
             return sellUsage;
-        if (AI_VALUE(bool, "should repair") && !AI_VALUE(bool, "can repair"))
+        // ...except rare and better: those are worth far more on the AH (3 blues were listed in
+        // 3 days while bots vendored them), so they keep going there whenever the deposit is payable
+        if (AI_VALUE(bool, "should repair") && !AI_VALUE(bool, "can repair") && proto->Quality < ITEM_QUALITY_RARE)
             return sellUsage;
 
         if (!IsMoreProfitableToSellToAHThanToVendor(proto, bot))
