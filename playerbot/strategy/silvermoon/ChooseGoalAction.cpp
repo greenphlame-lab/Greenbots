@@ -413,6 +413,7 @@ bool ChooseGoalAction::Execute(Event& event)
 
     // remembered for the 5-minute re-check
     SET_AI_VALUE2(int, "manual int", "silvermoon goal score", int(best.score.score * 1000.0f));
+    SET_AI_VALUE2(int, "manual int", "silvermoon goal kind", int(best.kind) + 1);
     SET_AI_VALUE2(int, "manual int", "silvermoon goal check at", int(time(nullptr) + 5 * MINUTE));
     return true;
 }

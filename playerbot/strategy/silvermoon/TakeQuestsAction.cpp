@@ -55,5 +55,9 @@ bool TakeQuestsAction::Execute(Event& event)
     SET_AI_VALUE2(int, "manual int", "silvermoon take quests " + std::to_string(giver->GetEntry()), int(time(nullptr) + RETRY_SECONDS));
     bool done = ai->DoSpecificAction("talk to quest giver", Event("silvermoon take quests", giver->GetObjectGuid()), true);
     done |= ai->DoSpecificAction("accept all quests", Event("silvermoon take quests", giver->GetObjectGuid()), true);
+    // errand done: end the goal so the brain picks the next one now instead of the bot idling
+    // (and grinding) by the quest giver until the travel target times out
+    if (done)
+        AI_VALUE(TravelTarget*, "travel target")->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
     return done;
 }

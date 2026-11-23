@@ -83,6 +83,7 @@ bool RecheckGoalAction::Execute(Event& event)
     current->SetConditions({});
     setNewTarget(requester, &newTarget, current);
     SET_AI_VALUE2(int, "manual int", "silvermoon goal score", int(best.score.score * 1000.0f));
+    SET_AI_VALUE2(int, "manual int", "silvermoon goal kind", int(best.kind) + 1);
     return true;
 }
 

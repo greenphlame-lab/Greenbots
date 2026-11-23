@@ -3,6 +3,7 @@
 #include "MotionGenerators/MovementGenerator.h"
 #include "AI/BaseAI/CreatureAI.h"
 #include "playerbot/TravelMgr.h"
+#include "playerbot/silvermoon/GoalScorer.h"
 #include "playerbot/strategy/generic/PullStrategy.h"
 #include "playerbot/strategy/values/FreeMoveValues.h"
 
@@ -37,6 +38,25 @@ bool AttackAnythingAction::isUseful()
 
     if(!target->IsPlayer() && bot->isInFront(target,target->GetAttackDistance(bot)*1.5f, M_PI_F*0.5f) && target->CanAttackOnSight(bot) && target->GetLevel() < bot->GetLevel() + 3.0) //Attack before being attacked.
         return true;
+
+    // Silvermoon patch: a brain bot on an errand (quest giver, turn-in, vendor, repair, trainer,
+    // mail, relocation trip) doesn't stop to grind whatever is near (Grashnak spent his first
+    // level killing scorpids on the way to a quest giver). Mobs about to attack it are still
+    // fought (above), and grind/quest-objective/gather goals keep grinding.
+    if (ai->HasStrategy("silvermoon brain", BotState::BOT_STATE_NON_COMBAT) && AI_VALUE(TravelTarget*, "travel target")->IsActive())
+    {
+        int kind = AI_VALUE2(int, "manual int", "silvermoon goal kind") - 1;
+        switch (kind)
+        {
+            case int(silvermoon::GoalKind::QuestTurnIn): case int(silvermoon::GoalKind::QuestGiver):
+            case int(silvermoon::GoalKind::Vendor): case int(silvermoon::GoalKind::Repair):
+            case int(silvermoon::GoalKind::Trainer): case int(silvermoon::GoalKind::Mail):
+            case int(silvermoon::GoalKind::Relocate):
+                return false;
+            default:
+                break;
+        }
+    }
 
     if (AI_VALUE(bool, "travel target traveling") && CanFreeMoveValue::CanFreeMoveTo(ai, *AI_VALUE(TravelTarget*,"travel target")->GetPosition()) &&
         sServerFacade.IsDistanceGreaterThan(AI_VALUE2(float, "distance", "travel target"), sPlayerbotAIConfig.sightDistance)) 
