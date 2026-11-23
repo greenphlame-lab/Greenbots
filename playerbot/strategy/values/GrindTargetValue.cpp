@@ -10,6 +10,7 @@
 #include "playerbot/strategy/values/FreeMoveValues.h"
 #include "Tools/Formulas.h"
 #include "playerbot/TravelNode.h"
+#include "playerbot/strategy/silvermoon/RelocateGoal.h"
 
 using namespace ai;
 
@@ -169,6 +170,8 @@ Unit* GrindTargetValue::FindTargetForGrinding(int assistCount)
             careful = (broken >= 3 || SilvermoonRecentDeaths(bot->GetGUIDLow(), 30 * MINUTE) >= 3) ? 1 : 0;
             if (bot->HasAura(15007))
                 careful = 2;    // Resurrection Sickness: no new fights until it wears off
+            else if (SilvermoonOnRelocateTrip(bot->GetGUIDLow()))
+                careful = 2;    // on a relocation trip: keep moving, fight only what attacks
         }
         // Silvermoon patch: a random bot on its own (no real player leading it) leaves alone
         // mobs 3 or more levels above it and elites it cannot handle alone.

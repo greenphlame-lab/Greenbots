@@ -217,6 +217,10 @@ bool ai::SilvermoonBestRelocate(Player* bot, PlayerbotAI* ai, float bestLocalSco
         if (open >= 3)
             return false;
     }
+    // top up before a trip (S): at least 80% health and mana, out of combat
+    if (bot->IsInCombat() || bot->GetHealthPercent() < 80.0f ||
+        (bot->GetPowerType() == POWER_MANA && bot->GetMaxPower(POWER_MANA) > 0 && bot->GetPower(POWER_MANA) * 100 < bot->GetMaxPower(POWER_MANA) * 80))
+        return false;
     bool thin = want || outgrown || bestLocalScore < THIN_SHARE * typical;
     bool explore = !thin && urand(1, EXPLORE_ONE_IN) == 1;
     if (!thin && !explore)
@@ -234,6 +238,13 @@ bool ai::SilvermoonBestRelocate(Player* bot, PlayerbotAI* ai, float bestLocalSco
             continue;
         if (Skipped(guid, h.id))
             continue;                                   // failed to get there recently
+        if (uint32 avoided = SilvermoonAvoidedZone(guid))
+        {
+            uint32 zoneId = 0, areaId = 0;
+            sTerrainMgr.GetZoneAndAreaId(zoneId, areaId, h.map, h.x, h.y, h.z);
+            if (zoneId == avoided)
+                continue;                               // died to players there twice lately
+        }
         bool visited = Hubs::Visited(guid, h.id);
         if (explore && visited)
             continue;
@@ -337,6 +348,12 @@ void ai::SilvermoonRelocateStarted(uint32 guid, uint16 hubId, TravelDestination*
     trip.start = time(nullptr);
     trip.estimateMinutes = estimateMinutes;
     trips[guid] = trip;
+}
+
+bool ai::SilvermoonOnRelocateTrip(uint32 guid)
+{
+    std::lock_guard<std::mutex> guard(tripLock);
+    return trips.count(guid) > 0;
 }
 
 void ai::SilvermoonWantRelocate(uint32 guid)

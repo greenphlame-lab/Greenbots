@@ -2571,6 +2571,38 @@ void RandomPlayerbotMgr::SilvermoonFastProcessBot(Player* player, PlayerbotAI* a
             died = it != wasAlive.end() && it->second && !alive;
             wasAlive[bot] = alive;
         }
+        // world PvP option A (S): was it a player? The core writes the death row at the kill;
+        // read it on a later tick so the async insert has landed
+        {
+            static std::mutex pvpLock;
+            static std::unordered_map<uint32, std::pair<time_t, uint32>> pending;   // guid -> (death time, zone)
+            std::pair<time_t, uint32> check(0, 0);
+            {
+                std::lock_guard<std::mutex> guard(pvpLock);
+                if (died && IsRandomBot(player) && !ai->HasRealPlayerMaster() && !player->InBattleGround())
+                    pending[bot] = { time(nullptr), player->GetZoneId() };
+                else
+                {
+                    auto it = pending.find(bot);
+                    if (it != pending.end() && time(nullptr) - it->second.first >= 5)
+                    {
+                        check = it->second;
+                        pending.erase(it);
+                    }
+                }
+            }
+            if (check.first)
+                if (auto result = CharacterDatabase.PQuery("SELECT killer_is_player FROM silvermoon_deaths WHERE guid = %u AND ts >= %u ORDER BY id DESC LIMIT 1",
+                    bot, uint32(check.first) - 5))
+                    if (result->Fetch()[0].GetUInt32() && SilvermoonNotePvpDeath(bot, check.second))
+                    {
+                        sLog.outBasic("Silvermoon: bot %s died to players twice in zone %u within 30 minutes, avoiding it for an hour",
+                            player->GetName(), check.second);
+                        SilvermoonWantRelocate(bot);
+                        if (TravelTarget* target = ai->GetAiObjectContext()->GetValue<TravelTarget*>("travel target")->Get())
+                            target->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
+                    }
+        }
         if (died)
         {
             ++silvermoon::Ledger(silvermoon::LG_DEATHS);

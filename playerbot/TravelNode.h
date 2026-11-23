@@ -461,3 +461,7 @@ void SilvermoonNoteDeath(uint32 guid, uint32 map, float x, float y);
 uint32 SilvermoonRecentDeaths(uint32 guid, uint32 seconds);
 void SilvermoonClearDeaths(uint32 guid);
 uint32 SilvermoonDeathsNearPoint(uint32 guid, uint32 map, float x, float y, float radius, uint32 seconds);
+// Silvermoon (S, world PvP option A): two deaths to players in one zone within 30 minutes -> the
+// bot stays out of that zone for an hour. Returns true when this death started an avoidance.
+bool SilvermoonNotePvpDeath(uint32 guid, uint32 zone);
+uint32 SilvermoonAvoidedZone(uint32 guid);

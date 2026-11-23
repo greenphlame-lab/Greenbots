@@ -290,6 +290,37 @@ uint32 SilvermoonRecentDeaths(uint32 guid, uint32 seconds)
     return uint32(std::count_if(it->second.begin(), it->second.end(), [since](SilvermoonDeath const& d) { return d.at >= since; }));
 }
 
+namespace
+{
+    struct SilvermoonPvpState { std::vector<std::pair<uint32, time_t>> deaths; uint32 zone = 0; time_t until = 0; };
+    std::mutex silvermoonPvpLock;
+    std::unordered_map<uint32, SilvermoonPvpState> silvermoonPvp;
+}
+
+bool SilvermoonNotePvpDeath(uint32 guid, uint32 zone)
+{
+    std::lock_guard<std::mutex> guard(silvermoonPvpLock);
+    SilvermoonPvpState& st = silvermoonPvp[guid];
+    time_t now = time(nullptr);
+    st.deaths.erase(std::remove_if(st.deaths.begin(), st.deaths.end(), [now](std::pair<uint32, time_t> const& d) { return d.second < now - 30 * MINUTE; }), st.deaths.end());
+    st.deaths.push_back({ zone, now });
+    uint32 here = uint32(std::count_if(st.deaths.begin(), st.deaths.end(), [zone](std::pair<uint32, time_t> const& d) { return d.first == zone; }));
+    if (here >= 2 && !(st.zone == zone && st.until > now))
+    {
+        st.zone = zone;
+        st.until = now + HOUR;
+        return true;
+    }
+    return false;
+}
+
+uint32 SilvermoonAvoidedZone(uint32 guid)
+{
+    std::lock_guard<std::mutex> guard(silvermoonPvpLock);
+    auto it = silvermoonPvp.find(guid);
+    return it != silvermoonPvp.end() && it->second.until > time(nullptr) ? it->second.zone : 0;
+}
+
 void SilvermoonNoteDeath(uint32 guid, uint32 map, float x, float y)
 {
     std::lock_guard<std::mutex> guard(silvermoonDeathLock);
@@ -401,6 +432,10 @@ float TravelNodePath::getCost(Unit* unit, uint32 cGold)
             // Silvermoon step 4: mobs 2+ levels above the bot, +20% per level (stock: 10 levels below, +10%)
             if (sPlayerbotAIConfig.silvermoonTravel)
                 mobAnnoyance = int(maxLevelCreature[0]) - int(level) - 2;
+            // S: no walking past mobs 4+ levels above the bot (13% of deaths, half of them on
+            // relocation trips through Hillsbrad, Alterac Mountains and Arathi)
+            if (sPlayerbotAIConfig.silvermoonTravel && level < 60 && int(maxLevelCreature[0]) >= int(level) + 4)
+                return -1;
             if (mobAnnoyance > 0)
                 modifier += (sPlayerbotAIConfig.silvermoonTravel ? 0.2 : 0.1) * mobAnnoyance;     //For each level the whole path takes 10% longer.
             if (factionAnnoyance > 0)

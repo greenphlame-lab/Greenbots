@@ -465,6 +465,7 @@ std::vector<SilvermoonScoredGoal> ai::SilvermoonScoreGoals(Player* bot, Playerbo
         }
     }
 
+    uint32 avoidedZone = SilvermoonAvoidedZone(bot->GetGUIDLow());
     // partitions are ordered by distance, so this walks nearest first
     for (auto& [partition, points] : list)
     {
@@ -478,6 +479,14 @@ std::vector<SilvermoonScoredGoal> ai::SilvermoonScoreGoals(Player* bot, Playerbo
                 continue;
             if (position && EnemyGround(bot, *position))
                 continue;
+            // world PvP option A: no goals in a zone where the bot died to players twice lately
+            if (position && avoidedZone)
+            {
+                uint32 zoneId = 0, areaId = 0;
+                sTerrainMgr.GetZoneAndAreaId(zoneId, areaId, position->getMapId(), position->getX(), position->getY(), position->getZ());
+                if (zoneId == avoidedZone)
+                    continue;
+            }
             // death-loop guard: no goal within 250 yards of a spot where the bot died twice in
             // the last hour (10 bots died 61-95 times in one night, going back to the same place)
             if (position && SilvermoonDeathsNearPoint(bot->GetGUIDLow(), position->getMapId(), position->getX(), position->getY(), 250.0f, HOUR) >= 2)

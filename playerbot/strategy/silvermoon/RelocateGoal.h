@@ -20,6 +20,7 @@ namespace ai
     void SilvermoonRelocateStarted(uint32 guid, uint16 hubId, TravelDestination* destination, float estimateMinutes);
     // the level-zone check asks for a Relocate decision instead of teleporting
     void SilvermoonWantRelocate(uint32 guid);
+    bool SilvermoonOnRelocateTrip(uint32 guid);
     uint32 SilvermoonRelocateFailures(uint32 guid);
     void SilvermoonResetRelocateFailures(uint32 guid);
 
