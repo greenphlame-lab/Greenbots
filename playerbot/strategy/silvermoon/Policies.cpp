@@ -29,7 +29,7 @@ namespace
         out << "za=";
         bool first = true;
         for (uint32 z : p.allowedZones) { out << (first ? "" : ",") << z; first = false; }
-        out << ";et=" << uint32(p.eatTo) << ";dt=" << uint32(p.drinkTo) << ";tv=" << uint32(p.travel) << ";sb=";
+        out << ";et=" << uint32(p.eatTo) << ";dt=" << uint32(p.drinkTo) << ";tv=" << uint32(p.travel) << ";pt=" << uint32(p.potionAt) << ";sb=";
         bool firstSpell = true;
         for (uint32 sp : p.blockedSpells) { out << (firstSpell ? "" : ",") << sp; firstSpell = false; }
         out << ";it=";
@@ -57,6 +57,7 @@ namespace
             else if (key == "fh") p.fleeHealth = uint8(atoi(value.c_str()));
             else if (key == "et") p.eatTo = uint8(atoi(value.c_str()));
             else if (key == "tv") p.travel = uint8(atoi(value.c_str()));
+            else if (key == "pt") p.potionAt = uint8(atoi(value.c_str()));
             else if (key == "sb")
             {
                 std::stringstream vs(value);
@@ -316,9 +317,11 @@ bool ai::SilvermoonPolicyCommand(Player* bot, std::string const& param, std::str
         reply = k == "eat" ? "Eating until health " + std::to_string(pct) + "%." : "Drinking until mana " + std::to_string(pct) + "%.";
     }
     else if (k == "flee" && n == 3 && v1 == "mobs")
-        p.fleeMobs = uint8(std::min(9, std::max(0, atoi(v2.c_str())))), reply = "Flee rule updated.";
+        p.fleeMobs = uint8(std::min(9, std::max(1, atoi(v2.c_str())))), reply = "I'll flee from " + std::to_string(p.fleeMobs) + " or more mobs.";
     else if (k == "flee" && n == 3 && v1 == "health")
-        p.fleeHealth = uint8(std::min(90, std::max(0, atoi(v2.c_str())))), reply = "Flee rule updated.";
+        p.fleeHealth = uint8(std::min(90, std::max(5, atoi(v2.c_str())))), reply = "I'll flee below " + std::to_string(p.fleeHealth) + "% health.";
+    else if (k == "potion" && n == 2)
+        p.potionAt = uint8(std::min(90, std::max(5, atoi(v1.c_str())))), reply = "I'll drink a healing potion below " + std::to_string(p.potionAt) + "% health.";
     else if (k == "ah" && n == 2)
         p.ahGold = uint32(std::max(0, atoi(v1.c_str()))) * 10000, reply = "Auction house trip updated.";
     else if (k == "upgrade" && n == 2)

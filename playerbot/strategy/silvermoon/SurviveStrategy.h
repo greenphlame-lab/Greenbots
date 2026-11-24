@@ -14,6 +14,15 @@ namespace ai
         void InitCombatTriggers(std::list<TriggerNode*>& triggers) override;
     };
 
+    // policies (S): drink a healing potion below your set health (default 20%)
+    class PolicyPotionAction : public Action
+    {
+    public:
+        PolicyPotionAction(PlayerbotAI* ai) : Action(ai, "silvermoon policy potion") {}
+        virtual bool isUseful() override;
+        virtual bool Execute(Event& event) override;
+    };
+
     class FleeOutmatchedAction : public FleeAction
     {
     public:
