@@ -1082,6 +1082,56 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
         {
             lastAutoLoad = nowFast;
             SilvermoonLoadAuto();
+            // Disconnect protection (S: Mommy stopped playing when the client dropped). Self-bot mode
+            // lives on your session, so a disconnect logged the character out. A character you have
+            // on Auto is remembered; if it drops out of the world it comes straight back as a bot
+            // (with the brain) and keeps playing. When you log back in on it, Auto resumes once.
+            static std::unordered_map<uint32, uint32> autoChars;      // guid -> account, on Auto
+            static std::set<uint32> resumeOnLogin;                   // taken over by a bot after a drop
+            for (auto& i : sRandomPlayerbotMgr.GetPlayers())
+                if (Player* me = i.second)
+                    if (me->IsInWorld() && me->GetSession())
+                    {
+                        uint32 g = me->GetGUIDLow();
+                        if (me->GetPlayerbotAI())
+                        {
+                            if (!autoChars.count(g))
+                                SilvermoonSetAuto(g, true);
+                            autoChars[g] = me->GetSession()->GetAccountId();
+                            resumeOnLogin.erase(g);
+                        }
+                        else if (resumeOnLogin.count(g))
+                        {
+                            resumeOnLogin.erase(g);
+                            if (me->GetPlayerbotMgr())
+                            {
+                                me->GetPlayerbotMgr()->HandlePlayerbotCommand("self", me);
+                                sLog.outBasic("Silvermoon: %s logged back in, Auto resumed", me->GetName());
+                            }
+                        }
+                        else if (autoChars.erase(g))
+                            SilvermoonSetAuto(g, false);                 // you switched it to Manual
+                    }
+            for (auto it = autoChars.begin(); it != autoChars.end();)
+            {
+                ObjectGuid guid(HIGHGUID_PLAYER, it->first);
+                Player* online = sObjectMgr.GetPlayer(guid, false);
+                if (online && online->GetSession() && online->GetPlayerbotAI() && !online->GetPlayerbotAI()->IsRealPlayer())
+                {
+                    ++it;                                                // already back as a bot
+                    continue;
+                }
+                if (!online)
+                {
+                    if (!sPlayerbotAIConfig.IsFreeAltBot(it->first))
+                        sPlayerbotAIConfig.freeAltBots.push_back(std::make_pair(it->second, it->first));
+                    SilvermoonSetAuto(it->first, true);
+                    sRandomPlayerbotMgr.AddPlayerBot(it->first, it->second);
+                    resumeOnLogin.insert(it->first);
+                    sLog.outBasic("Silvermoon: character %u on Auto dropped out of the world, bringing it back as a bot", it->first);
+                }
+                ++it;
+            }
             // the in-game panel: every logged-in player gets its own character's state
             for (auto& i : sRandomPlayerbotMgr.GetPlayers())
                 if (Player* me = i.second)
