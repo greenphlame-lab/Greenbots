@@ -61,6 +61,9 @@ bool TakeQuestsAction::Execute(Event& event)
             before.insert(id);
     bool done = ai->DoSpecificAction("talk to quest giver", Event("silvermoon take quests", giver->GetObjectGuid()), true);
     done |= ai->DoSpecificAction("accept all quests", Event("silvermoon take quests", giver->GetObjectGuid()), true);
+    // a hand-in can unlock the next quest in the chain from the same NPC (S: Guile turned one in and
+    // walked off without the follow-up): ask once more now that the reward is through
+    done |= ai->DoSpecificAction("accept all quests", Event("silvermoon take quests", giver->GetObjectGuid()), true);
     // your character on Auto: the quest window the server opened on your screen is closed again
     // (it stayed up after the quests were taken)
     if (ai->IsRealPlayer() && bot->GetPlayerMenu())

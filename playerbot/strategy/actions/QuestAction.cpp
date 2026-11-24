@@ -191,6 +191,11 @@ bool QuestAction::ProcessQuests(WorldObject* questGiver)
         hasAccept |= ProcessQuest(GetMaster(), quest, questGiver);
     }
 
+    // Silvermoon (S): a hand-in that unlocks the next quest from the same NPC takes it right away -
+    // the stock hand-in (on the way past a quest giver) left the follow-up behind
+    if (hasAccept && getName() == "talk to quest giver" && !bot->IsInCombat())
+        ai->DoSpecificAction("accept all quests", Event("silvermoon follow-up", guid), true);
+
     // Silvermoon: on your own character (Auto) close the quest window the server put on screen
     if (ai->IsRealPlayer() && bot->GetPlayerMenu())
         bot->GetPlayerMenu()->CloseGossip();
