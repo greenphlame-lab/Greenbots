@@ -12,6 +12,7 @@
 #include "Mails/Mail.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include <deque>
+#include <set>
 #include <algorithm>
 #include <mutex>
 #include <unordered_map>
@@ -466,6 +467,26 @@ std::vector<SilvermoonScoredGoal> ai::SilvermoonScoreGoals(Player* bot, Playerbo
     }
 
     uint32 avoidedZone = SilvermoonAvoidedZone(bot->GetGUIDLow());
+    // starting area first (S: a level 4 in Northshire walked to Goldshire to hand in Rest and
+    // Relaxation with Kobold Camp Cleanup and Garrick Padfoot still open): while the bot stands in
+    // its starting valley and has quests for it in the log, goals outside the valley count 15%
+    // (the valley is "within 400 yards of the race's starting spot": the valleys' sub-areas have
+    // their own area ids, so area ids alone miss half of Northshire)
+    const float STARTER_RADIUS = 400.0f;
+    bool starterPull = false;
+    WorldPosition starterSpot;
+    {
+        static const std::set<int32> starterAreas = { 9, 132, 188, 363, 154, 220 };   // Northshire, Coldridge, Shadowglen, Valley of Trials, Deathknell, Camp Narache
+        if (PlayerInfo const* start = sObjectMgr.GetPlayerInfo(bot->getRace(), bot->getClass()))
+        {
+            starterSpot = WorldPosition(start->mapId, start->positionX, start->positionY, start->positionZ);
+            if (starterSpot.getMapId() == bot->GetMapId() && starterSpot.fDist(WorldPosition(bot)) < STARTER_RADIUS)
+                for (uint8 slot = 0; slot < MAX_QUEST_LOG_SIZE && !starterPull; ++slot)
+                    if (Quest const* q = sObjectMgr.GetQuestTemplate(bot->GetQuestSlotQuestId(slot)))
+                        if (starterAreas.count(q->GetZoneOrSort()) && bot->GetQuestStatus(q->GetQuestId()) == QUEST_STATUS_INCOMPLETE)
+                            starterPull = true;
+        }
+    }
     // partitions are ordered by distance, so this walks nearest first
     for (auto& [partition, points] : list)
     {
@@ -497,6 +518,14 @@ std::vector<SilvermoonScoredGoal> ai::SilvermoonScoreGoals(Player* bot, Playerbo
             if (position && SilvermoonDeathsNearPoint(bot->GetGUIDLow(), position->getMapId(), position->getX(), position->getY(), 250.0f, HOUR) >= 2)
                 continue;
             goals.push_back(ScoreWith(bot, snapshot, destination, position, distance));
+            if (starterPull && position)
+            {
+                if (position->getMapId() != starterSpot.getMapId() || starterSpot.fDist(*position) >= STARTER_RADIUS)
+                {
+                    goals.back().score.score *= 0.15f;
+                    goals.back().score.reason = "outside starting area: " + goals.back().score.reason;
+                }
+            }
         }
         if (goals.size() >= MAX_CANDIDATES)
             break;
