@@ -35,6 +35,7 @@ namespace
     std::mutex goalLock;
     std::map<uint32, std::pair<TravelDestination*, time_t>> lastGoal;   // bot -> last chosen, when
     std::map<uint32, WorldPosition> lastGoalAt;                          // bot -> where that goal was
+    std::map<uint32, bool> lastGoalGather;                               // bot -> that goal was a gathering spot
     std::map<uint32, std::map<TravelDestination*, time_t>> skipUntil;   // bot -> destination -> until
     // Gather orders: spawn spots a bot already stood on lately (herbs and ore respawn on their own
     // clock - an empty spot is not a success, the bot moves on to the next spot)
@@ -708,10 +709,9 @@ bool ChooseGoalAction::Execute(Event& event)
         // ...and not a gathering spot: an empty or picked-over spot ends the goal at once, which
         // put the whole herb type on the 30-minute list - Mommy gathered for a minute, then had no
         // herb spots for the next ten and went questing (the patrol's visited-spot list handles it)
-        bool gatherDest = last != lastGoal.end() && last->second.first &&
-            (last->second.first->GetPurpose() == TravelDestinationPurpose::GatherHerbalism ||
-             last->second.first->GetPurpose() == TravelDestinationPurpose::GatherMining ||
-             last->second.first->GetPurpose() == TravelDestinationPurpose::GatherFishing);
+        // (remembered when the goal was chosen: the stored destination may be gone by now - reading
+        // it here crashed the server twice on 2026-11-24)
+        bool gatherDest = lastGoalGather[bot->GetGUIDLow()];
         if (last != lastGoal.end() && last->second.first && now - last->second.second < ABANDONED_WITHIN && !reached && !gatherDest)
             skipUntil[bot->GetGUIDLow()][last->second.first] = now + SKIP_FOR;
     }
@@ -805,6 +805,7 @@ bool ChooseGoalAction::Execute(Event& event)
     {
         std::lock_guard<std::mutex> guard(goalLock);
         lastGoal[bot->GetGUIDLow()] = { best.destination, time(nullptr) };
+        lastGoalGather[bot->GetGUIDLow()] = best.kind == GoalKind::Gather;
         if (best.position)
             lastGoalAt[bot->GetGUIDLow()] = *best.position;
         else
