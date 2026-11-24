@@ -14,7 +14,7 @@ namespace ai
         void InitCombatTriggers(std::list<TriggerNode*>& triggers) override;
     };
 
-    // paladins below 20% health in a fight: Divine Protection / Blessing of Protection / Lay on Hands
+    // below 25% health in a fight: the class escape / survival buttons (see SurviveStrategy.cpp)
     class LifesaverAction : public Action
     {
     public:
