@@ -186,6 +186,10 @@ bool ai::SilvermoonBestRelocate(Player* bot, PlayerbotAI* ai, float bestLocalSco
             }
         }
     }
+    // stuck at this level (S: Cavol spent 47 hours at level 24 in a Barrens with 213 Horde bots -
+    // crowded quests, open quest log, broke): 3+ hours at one level overrides the open-quests hold
+    // and counts as thin, so the bot goes looking for a less crowded hub
+    bool stuckAtLevel = level >= 10 && bot->m_Played_time[PLAYED_TIME_LEVEL] >= 3 * HOUR;
     // a bot under level 6 stays in its starting area (Grashnak, level 1, set off for Red Cloud
     // Mesa - another race's starting valley - two minutes after logging in)
     if (level < 6 && !outgrown && !want)
@@ -202,7 +206,7 @@ bool ai::SilvermoonBestRelocate(Player* bot, PlayerbotAI* ai, float bestLocalSco
     // open quests here keep the bot here (Grashnak, level 11 with 13 Durotar quests open, was sent
     // to the Crossroads twice and walked straight back to the Southfury River each time, ~2 hours):
     // 3+ unfinished quests for this zone that aren't far below the bot block a trip
-    if (!want)
+    if (!want && !stuckAtLevel)
     {
         uint32 zoneId = bot->GetZoneId();
         uint32 open = 0;
@@ -224,7 +228,7 @@ bool ai::SilvermoonBestRelocate(Player* bot, PlayerbotAI* ai, float bestLocalSco
     if (!want && (bot->GetHealthPercent() < 80.0f ||
         (bot->GetPowerType() == POWER_MANA && bot->GetMaxPower(POWER_MANA) > 0 && bot->GetPower(POWER_MANA) * 100 < bot->GetMaxPower(POWER_MANA) * 80)))
         return false;   // a wanted trip (e.g. leaving a zone where players keep killing it) goes at once
-    bool thin = want || outgrown || bestLocalScore < THIN_SHARE * typical;
+    bool thin = want || outgrown || stuckAtLevel || bestLocalScore < THIN_SHARE * typical;
     bool explore = !thin && urand(1, EXPLORE_ONE_IN) == 1;
     if (!thin && !explore)
         return false;
@@ -254,6 +258,14 @@ bool ai::SilvermoonBestRelocate(Player* bot, PlayerbotAI* ai, float bestLocalSco
             sTerrainMgr.GetZoneAndAreaId(zoneId, areaId, h.map, h.x, h.y, h.z);
             if (zoneId == avoided)
                 continue;                               // died to players there twice lately
+        }
+        // stuck at its level: somewhere other than the zone it's stuck in
+        if (stuckAtLevel)
+        {
+            uint32 zoneId = 0, areaId = 0;
+            sTerrainMgr.GetZoneAndAreaId(zoneId, areaId, h.map, h.x, h.y, h.z);
+            if (zoneId == bot->GetZoneId())
+                continue;
         }
         bool visited = Hubs::Visited(guid, h.id);
         if (explore && visited)
