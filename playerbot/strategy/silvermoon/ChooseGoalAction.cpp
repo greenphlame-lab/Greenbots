@@ -676,6 +676,9 @@ bool ChooseGoalAction::Execute(Event& event)
         SilvermoonScoredGoal prof;
         if (SilvermoonProfessionGoal(bot, ai, prof))
             goals.insert(goals.begin(), prof);
+        SilvermoonScoredGoal go;
+        if (SilvermoonGoGoal(bot, go))
+            goals.insert(goals.begin(), go);
     }
 
     // Phase 2b: a quest hub elsewhere, when local options are thin (or now and then an unvisited one)

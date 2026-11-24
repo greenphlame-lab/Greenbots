@@ -61,6 +61,10 @@ namespace
                 questId = q->GetQuestId();
         Quest const* quest = questId ? sObjectMgr.GetQuestTemplate(questId) : nullptr;
         std::string what = Plain(row.target);
+        if (row.reason.rfind("profession: go to ", 0) == 0)
+            return "Heading to " + row.reason.substr(18);
+        if (row.reason.rfind("profession: learn ", 0) == 0)
+            return "Learning " + row.reason.substr(18);
         if (row.goal == "quest objective")
             return quest ? quest->GetTitle() + ": " + what : what;
         if (row.goal == "quest turn-in")

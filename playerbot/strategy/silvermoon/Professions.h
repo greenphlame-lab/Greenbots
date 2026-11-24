@@ -29,6 +29,12 @@ namespace ai
     // in a town for the vendor price when the character has the profession but not the tool
     void SilvermoonProfBuyTools(Player* bot);
 
+    // "Go to" (S): send your character to the nearest friendly inn(keeper), flight master, auction
+    // house, bank or vendor on its continent - ahead of everything else until it gets there.
+    // Command: ".bot go inn|flight|ah|bank|vendor|stop"
+    bool SilvermoonGoCommand(Player* bot, std::string const& param, std::string& reply);
+    bool SilvermoonGoGoal(Player* bot, SilvermoonScoredGoal& goal);
+
     // at the trainer the learn order points at: learn it (paying the trainer's fee)
     class ProfessionLearnAction : public Action
     {

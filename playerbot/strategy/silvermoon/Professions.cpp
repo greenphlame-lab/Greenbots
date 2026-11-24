@@ -279,6 +279,94 @@ void ai::SilvermoonProfBuyTools(Player* bot)
         BuyTool(bot, skill);
 }
 
+namespace
+{
+    struct GoSpot { uint32 flag; uint32 entry, map; float x, y, z; };
+    std::vector<GoSpot>& GoSpots()
+    {
+        static std::once_flag once;
+        static std::vector<GoSpot> spots;
+        std::call_once(once, []()
+        {
+            const uint32 wanted = UNIT_NPC_FLAG_INNKEEPER | UNIT_NPC_FLAG_FLIGHTMASTER | UNIT_NPC_FLAG_AUCTIONEER | UNIT_NPC_FLAG_BANKER | UNIT_NPC_FLAG_VENDOR;
+            if (auto r = WorldDatabase.PQuery("SELECT t.NpcFlags, c.id, c.map, c.position_x, c.position_y, c.position_z FROM creature c "
+                "JOIN creature_template t ON t.entry = c.id WHERE (t.NpcFlags & %u) <> 0 AND c.map IN (0, 1)", wanted))
+            {
+                do
+                {
+                    Field* f = r->Fetch();
+                    spots.push_back({ f[0].GetUInt32(), f[1].GetUInt32(), f[2].GetUInt32(), f[3].GetFloat(), f[4].GetFloat(), f[5].GetFloat() });
+                } while (r->NextRow());
+            }
+        });
+        return spots;
+    }
+    struct GoOrder { uint32 flag = 0; std::string what; };
+    std::unordered_map<uint32, GoOrder> goOrders;
+}
+
+bool ai::SilvermoonGoCommand(Player* bot, std::string const& param, std::string& reply)
+{
+    static const std::map<std::string, std::pair<uint32, std::string>> kinds = {
+        { "inn", { UNIT_NPC_FLAG_INNKEEPER, "the inn" } }, { "flight", { UNIT_NPC_FLAG_FLIGHTMASTER, "the flight master" } },
+        { "ah", { UNIT_NPC_FLAG_AUCTIONEER, "the auction house" } }, { "bank", { UNIT_NPC_FLAG_BANKER, "the bank" } },
+        { "vendor", { UNIT_NPC_FLAG_VENDOR, "a vendor" } } };
+    std::lock_guard<std::mutex> guard(orderLock);
+    if (param == "stop")
+    {
+        goOrders.erase(bot->GetGUIDLow());
+        reply = "Go-to cancelled.";
+        return true;
+    }
+    auto k = kinds.find(param);
+    if (k == kinds.end())
+        return false;
+    goOrders[bot->GetGUIDLow()] = { k->second.first, k->second.second };
+    reply = "Heading to " + k->second.second + ".";
+    return true;
+}
+
+bool ai::SilvermoonGoGoal(Player* bot, SilvermoonScoredGoal& goal)
+{
+    GoOrder order;
+    {
+        std::lock_guard<std::mutex> guard(orderLock);
+        auto it = goOrders.find(bot->GetGUIDLow());
+        if (it == goOrders.end())
+            return false;
+        order = it->second;
+    }
+    GoSpot const* best = nullptr;
+    float bestDist = 0.0f;
+    WorldPosition here(bot);
+    for (GoSpot const& s : GoSpots())
+    {
+        if (!(s.flag & order.flag) || s.map != bot->GetMapId() || !Friendly(bot, s.entry))
+            continue;
+        float d = here.fDist(WorldPosition(s.map, s.x, s.y, s.z));
+        if (!best || d < bestDist)
+        {
+            best = &s;
+            bestDist = d;
+        }
+    }
+    std::lock_guard<std::mutex> guard(orderLock);
+    if (!best || bestDist < 8.0f)
+    {
+        goOrders.erase(bot->GetGUIDLow());     // there (or none on this continent): order done
+        return false;
+    }
+    TemporaryTravelDestination* destination = new TemporaryTravelDestination(WorldPosition(best->map, best->x, best->y, best->z), int32(best->entry));
+    goal.destination = destination;
+    goal.position = destination->GetPosition();
+    goal.kind = silvermoon::GoalKind::Other;
+    goal.score.value = goal.score.score = 2000000.0f;
+    goal.score.minutes = 1.0f;
+    CreatureInfo const* info = ObjectMgr::GetCreatureTemplate(best->entry);
+    goal.score.reason = "profession: go to " + order.what + (info ? std::string(" (") + info->Name + ")" : "");
+    return true;
+}
+
 bool ProfessionLearnAction::isUseful()
 {
     std::lock_guard<std::mutex> guard(orderLock);

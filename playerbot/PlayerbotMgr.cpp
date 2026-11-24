@@ -728,10 +728,11 @@ std::list<std::string> PlayerbotHolder::HandlePlayerbotCommand(const std::string
     // Silvermoon: the in-game panel's Professions and Policies windows send ".bot prof ..." and
     // ".bot pol ..." for the character you're logged in as (a whisper to yourself never reached the
     // bot logic)
-    if (master && (command == "prof" || command == "pol"))
+    if (master && (command == "prof" || command == "pol" || command == "go"))
     {
         std::string reply;
-        bool ok = command == "prof" ? ai::SilvermoonProfCommand(master, param, reply) : ai::SilvermoonPolicyCommand(master, param, reply);
+        bool ok = command == "prof" ? ai::SilvermoonProfCommand(master, param, reply) :
+            command == "pol" ? ai::SilvermoonPolicyCommand(master, param, reply) : ai::SilvermoonGoCommand(master, param, reply);
         if (ok && master->GetPlayerbotAI())
             if (TravelTarget* target = master->GetPlayerbotAI()->GetAiObjectContext()->GetValue<TravelTarget*>("travel target")->Get())
                 if (target->IsActive())
