@@ -740,7 +740,13 @@ bool ChooseGoalAction::Execute(Event& event)
     if (SilvermoonGatherOrderFactor(bot->GetGUIDLow(), 186) > 1.0f || SilvermoonGatherOrderFactor(bot->GetGUIDLow(), 182) > 1.0f ||
         SilvermoonGatherOrderFactor(bot->GetGUIDLow(), 356) > 1.0f)
     {
-        goals.erase(std::remove_if(goals.begin(), goals.end(), [](SilvermoonScoredGoal const& g) { return g.kind != GoalKind::Gather; }), goals.end());
+        // ...except a vendor trip when the bags are completely full (S); the order carries on after
+        bool bagsFull = AI_VALUE(uint8, "bag space") >= 100;
+        goals.erase(std::remove_if(goals.begin(), goals.end(), [bagsFull](SilvermoonScoredGoal const& g)
+            { return g.kind != GoalKind::Gather && !(bagsFull && g.kind == GoalKind::Vendor); }), goals.end());
+        if (bagsFull)
+            std::stable_sort(goals.begin(), goals.end(), [](SilvermoonScoredGoal const& a, SilvermoonScoredGoal const& b)
+                { return a.kind == GoalKind::Vendor && b.kind != GoalKind::Vendor; });
         if (goals.empty())
         {
             {
