@@ -1087,6 +1087,36 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
             // logged out, disconnected, after a server restart - it is logged in as a bot with the brain
             // and keeps playing. Switching your character to Auto turns this on for it, Manual turns it
             // off. When you log back in on a character that is on Auto, Auto resumes.
+            // new characters on your own accounts (not the random-bot accounts) start always on (S,
+            // 2026-11-24, "for now"): checked once a minute for characters created since the start
+            {
+                static uint32 checkedUpTo = 0;
+                static time_t lastNewCharCheck = 0;
+                if (!checkedUpTo)
+                {
+                    if (auto r = CharacterDatabase.Query("SELECT MAX(guid) FROM characters"))
+                        checkedUpTo = r->Fetch()[0].GetUInt32();
+                    lastNewCharCheck = nowFast;
+                }
+                else if (nowFast - lastNewCharCheck >= 60)
+                {
+                    lastNewCharCheck = nowFast;
+                    std::set<uint32> botAccounts(sPlayerbotAIConfig.randomBotAccounts.begin(), sPlayerbotAIConfig.randomBotAccounts.end());
+                    if (auto r = CharacterDatabase.PQuery("SELECT guid, account, name FROM characters WHERE guid > %u ORDER BY guid", checkedUpTo))
+                    {
+                        do
+                        {
+                            Field* f = r->Fetch();
+                            uint32 g = f[0].GetUInt32();
+                            checkedUpTo = std::max(checkedUpTo, g);
+                            if (botAccounts.count(f[1].GetUInt32()))
+                                continue;
+                            SilvermoonSetAuto(g, true);
+                            sLog.outBasic("Silvermoon: new character %s on a player account starts always on (auto)", f[2].GetString());
+                        } while (r->NextRow());
+                    }
+                }
+            }
             static std::unordered_map<uint32, char> lastSeen;        // guid -> 'A' you, on Auto / 'M' you, Manual
             std::set<uint32> realNow;
             for (auto& i : sRandomPlayerbotMgr.GetPlayers())
