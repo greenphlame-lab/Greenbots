@@ -132,6 +132,14 @@ namespace ai
                 return false;
             }
 
+            // Silvermoon (S): loot first. A rogue that just killed something stealthed toward the next
+            // mob and walked away from the corpse; with loot in reach and nothing attacking, no stealth.
+            if (AI_VALUE(bool, "has available loot") && !AI_VALUE(bool, "has attackers") &&
+                sServerFacade.IsDistanceLessOrEqualThan(AI_VALUE2(float, "distance", "loot target"), 30.0f))
+            {
+                return false;
+            }
+
             Unit* target = ai->GetUnit(AI_VALUE(ObjectGuid, "enemy player target"));
             if (!target)
             {
