@@ -141,6 +141,10 @@ ItemUsage ItemUsageValue::Calculate()
             ItemUsage equip = QueryItemUsageForEquip(itemQualifier, bot);
             if (equip == ItemUsage::ITEM_USAGE_EQUIP)
                 return equip;
+            // policy (S): "disenchant green items" - greens it won't wear, with Enchanting
+            if (proto->Class != ITEM_CLASS_CONTAINER && proto->Quality == ITEM_QUALITY_UNCOMMON && proto->DisenchantID &&
+                ai->HasSkill(SKILL_ENCHANTING) && SilvermoonPolicyFor(bot->GetGUIDLow()).disenchant)
+                return ItemUsage::ITEM_USAGE_DISENCHANT;
             // grey and white gear it isn't going to wear (not an upgrade, or not for its class) is sold (S)
             if (proto->Quality <= ITEM_QUALITY_NORMAL && proto->Class != ITEM_CLASS_CONTAINER)
                 return ItemUsage::ITEM_USAGE_VENDOR;
@@ -383,8 +387,12 @@ ItemUsage ItemUsageValue::Calculate()
         return ItemUsage::ITEM_USAGE_KEEP;
 
     //DISENCHANT
+    // Silvermoon (S): your own characters disenchant only with the "disenchant green items" policy,
+    // and then only greens (blues and epics are kept)
+    bool ownDisenchant = !SilvermoonIsOwn(bot) ||
+        (SilvermoonPolicyFor(bot->GetGUIDLow()).disenchant && proto->Quality == ITEM_QUALITY_UNCOMMON);
     if ((proto->Class == ITEM_CLASS_ARMOR || proto->Class == ITEM_CLASS_WEAPON) && proto->Bonding != BIND_WHEN_PICKED_UP &&
-        ai->HasSkill(SKILL_ENCHANTING) && proto->Quality >= ITEM_QUALITY_UNCOMMON)
+        ai->HasSkill(SKILL_ENCHANTING) && proto->Quality >= ITEM_QUALITY_UNCOMMON && ownDisenchant)
     {
         if (proto->DisenchantID)
         {

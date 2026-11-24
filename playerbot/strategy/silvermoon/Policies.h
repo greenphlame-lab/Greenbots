@@ -38,6 +38,7 @@ namespace ai
         uint8 fleeMobs = 0;          // 0 = default (2 or more mobs)
         uint8 fleeHealth = 0;        // percent, 0 = default (below 30%)
         uint8 potionAt = 0;          // percent, 0 = default (below 20%, the stock rule)
+        bool disenchant = false;     // disenchant green weapons and armor it won't wear (needs Enchanting)
         uint32 ahGold = 0;           // copper, 0 = off
         uint8 upgradePct = 0;        // 0 = the bot's defaults
         std::map<uint32, uint8> weapons;   // skill -> 1 train, 2 avoid
@@ -45,7 +46,7 @@ namespace ai
         // item rules (S): item id -> (action, always). action 1 sell, 2 auction, 3 destroy, 4 keep;
         // "once" rules end when none of the item is left
         std::map<uint32, std::pair<uint8, bool>> items;
-        bool Any() const { return potionAt || !allowedZones.empty() || eatTo || drinkTo || travel || !blockedSpells.empty() || fleeMobs || fleeHealth || ahGold || upgradePct || !weapons.empty() || bags || !items.empty(); }
+        bool Any() const { return potionAt || disenchant || !allowedZones.empty() || eatTo || drinkTo || travel || !blockedSpells.empty() || fleeMobs || fleeHealth || ahGold || upgradePct || !weapons.empty() || bags || !items.empty(); }
     };
 
     // your own character playing on its own: Auto (self-bot) or an always-online alt with auto on

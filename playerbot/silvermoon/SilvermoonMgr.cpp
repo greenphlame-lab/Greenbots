@@ -1276,6 +1276,9 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                         {
                             SilvermoonFillEmptyWeapon(me);
                             SilvermoonInnBind(me);
+                            // policy (S): disenchant green gear it won't wear, one item per pass
+                            if (!me->IsInCombat() && me->HasSkill(333) && SilvermoonPolicyFor(me->GetGUIDLow()).disenchant)
+                                me->GetPlayerbotAI()->DoSpecificAction("disenchant random item", Event("silvermoon policy"), true);
                             SilvermoonApplyItemRules(me);
                             SilvermoonProfBuyTools(me);
                             SilvermoonWeaponTraining(me);
@@ -1303,6 +1306,8 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                     uint32 before = p->GetMoney();
                     SilvermoonDropStaleQuests(p);
                     SilvermoonInnBind(p);
+                    if (p->HasSkill(333) && SilvermoonPolicyFor(p->GetGUIDLow()).disenchant)
+                        p->GetPlayerbotAI()->DoSpecificAction("disenchant random item", Event("silvermoon policy"), true);
                     SilvermoonApplyItemRules(p);
                     SilvermoonProfBuyTools(p);
                     SilvermoonWeaponTraining(p);
