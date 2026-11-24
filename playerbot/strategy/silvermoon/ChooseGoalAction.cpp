@@ -384,8 +384,11 @@ static SilvermoonScoredGoal ScoreWith(Player* bot, BotSnapshot const& snapshot, 
     // is worth 3-20); the label says where it's going
     if (purpose == TravelDestinationPurpose::AH && bot->GetPlayerbotAI())
     {
-        uint32 stacks = (uint32)bot->GetPlayerbotAI()->GetAiObjectContext()->GetValue<std::list<Item*>>("inventory items", "usage " + std::to_string((uint8)ItemUsage::ITEM_USAGE_AH))->Get().size();
+        std::list<Item*> ahItems = bot->GetPlayerbotAI()->GetAiObjectContext()->GetValue<std::list<Item*>>("inventory items", "usage " + std::to_string((uint8)ItemUsage::ITEM_USAGE_AH))->Get();
+        uint32 stacks = (uint32)ahItems.size();
         float minutes = float(std::min<uint32>(25, stacks));
+        if (SilvermoonPolicyFor(bot->GetGUIDLow()).ahGold && SilvermoonAhTripDue(bot, ahItems))
+            minutes = 25.0f;      // your "AH trip when worth" is reached: worth the trip
         goal.score.value = GoalScorer::XpPerMinute(snapshot) * minutes;
         goal.score.score = goal.score.minutes > 0.0f ? goal.score.value / goal.score.minutes : 0.0f;
         goal.score.reason = "auction house";
@@ -519,7 +522,7 @@ std::vector<SilvermoonScoredGoal> ai::SilvermoonScoreGoals(Player* bot, Playerbo
     }
 
     uint32 avoidedZone = SilvermoonAvoidedZone(bot->GetGUIDLow());
-    bool policyZones = SilvermoonIsOwn(bot) && !SilvermoonPolicyFor(bot->GetGUIDLow()).blockedZones.empty();
+    bool policyZones = SilvermoonIsOwn(bot) && !SilvermoonPolicyFor(bot->GetGUIDLow()).allowedZones.empty();
     // starting area first (S: a level 4 in Northshire walked to Goldshire to hand in Rest and
     // Relaxation with Kobold Camp Cleanup and Garrick Padfoot still open): while the bot stands in
     // its starting valley and has quests for it in the log, goals outside the valley count 15%

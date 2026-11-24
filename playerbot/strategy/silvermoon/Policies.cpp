@@ -21,9 +21,10 @@ namespace
     std::string Encode(SilvermoonPolicy const& p)
     {
         std::ostringstream out;
-        out << "z=";
+        out << "za=";
         bool first = true;
-        for (uint32 z : p.blockedZones) { out << (first ? "" : ",") << z; first = false; }
+        for (uint32 z : p.allowedZones) { out << (first ? "" : ",") << z; first = false; }
+        out << ";et=" << uint32(p.eatTo) << ";dt=" << uint32(p.drinkTo);
         out << ";it=";
         first = true;
         for (auto const& [item, rule] : p.items) { out << (first ? "" : ",") << item << ":" << uint32(rule.first) << ":" << (rule.second ? 1 : 0); first = false; }
@@ -47,6 +48,8 @@ namespace
             if (key == "fm") p.fleeMobs = uint8(atoi(value.c_str()));
             else if (key == "bg") p.bags = uint8(atoi(value.c_str()));
             else if (key == "fh") p.fleeHealth = uint8(atoi(value.c_str()));
+            else if (key == "et") p.eatTo = uint8(atoi(value.c_str()));
+            else if (key == "dt") p.drinkTo = uint8(atoi(value.c_str()));
             else if (key == "ah") p.ahGold = uint32(strtoul(value.c_str(), nullptr, 10));
             else if (key == "up") p.upgradePct = uint8(atoi(value.c_str()));
             else if (key == "it")
@@ -60,7 +63,7 @@ namespace
                         p.items[a] = std::make_pair(uint8(b), c != 0);
                 }
             }
-            else if (key == "z" || key == "ws")
+            else if (key == "za" || key == "ws")
             {
                 std::stringstream vs(value);
                 std::string item;
@@ -68,8 +71,8 @@ namespace
                 {
                     if (item.empty())
                         continue;
-                    if (key == "z")
-                        p.blockedZones.insert(uint32(atoi(item.c_str())));
+                    if (key == "za")
+                        p.allowedZones.insert(uint32(atoi(item.c_str())));
                     else
                     {
                         size_t c = item.find(':');
@@ -124,7 +127,33 @@ SilvermoonPolicy ai::SilvermoonPolicyFor(uint32 guid)
 bool ai::SilvermoonZoneBlocked(uint32 guid, uint32 zoneId)
 {
     std::lock_guard<std::mutex> guard(policyLock);
-    return Get(guid).blockedZones.count(zoneId) > 0;
+    std::set<uint32> const& allowed = Get(guid).allowedZones;
+    return !allowed.empty() && !allowed.count(zoneId);
+}
+
+uint32 ai::SilvermoonAhCarried(std::list<Item*> const& items)
+{
+    uint32 total = 0;
+    for (Item* item : items)
+        if (item && item->GetProto())
+            total += std::max(item->GetProto()->BuyPrice, item->GetProto()->SellPrice * 4) * item->GetCount();
+    return total;
+}
+
+bool ai::SilvermoonAhTripDue(Player* bot, std::list<Item*> const& items)
+{
+    if (!SilvermoonIsOwn(bot) || items.empty())
+        return false;
+    uint32 gold = SilvermoonPolicyFor(bot->GetGUIDLow()).ahGold;
+    return gold ? SilvermoonAhCarried(items) >= gold : true;   // no setting: even one marked item
+}
+
+uint8 ai::SilvermoonRestTarget(Player* bot, bool mana)
+{
+    if (!SilvermoonIsOwn(bot))
+        return 0;
+    SilvermoonPolicy p = SilvermoonPolicyFor(bot->GetGUIDLow());
+    return mana ? p.drinkTo : p.eatTo;
 }
 
 uint32 ai::SilvermoonUpgradeBudget(Player* bot, uint32 defaultPct)
@@ -154,18 +183,26 @@ bool ai::SilvermoonPolicyCommand(Player* bot, std::string const& param, std::str
     std::string k = n >= 1 ? a : "", v1 = n >= 2 ? b : "", v2 = n >= 3 ? c : "";
     std::lock_guard<std::mutex> guard(policyLock);
     SilvermoonPolicy& p = Get(bot->GetGUIDLow());
-    if (k == "zone" && n == 3)
+    if (k == "zone" && n == 2 && v1 == "clear")
+        p.allowedZones.clear(), reply = "Zone list off: I pick zones myself.";
+    else if (k == "zone" && n == 3)
     {
         uint32 zone = uint32(atoi(v1.c_str()));
-        if (v2 == "off") p.blockedZones.insert(zone); else p.blockedZones.erase(zone);
-        reply = "Zones updated.";
+        if (v2 == "on") p.allowedZones.insert(zone); else p.allowedZones.erase(zone);
+        reply = p.allowedZones.empty() ? "Zone list off: I pick zones myself." : "Zones updated: I'll stay in ticked zones from my next move.";
+    }
+    else if ((k == "eat" || k == "drink") && n == 2)
+    {
+        uint8 pct = uint8(std::min(100, std::max(25, atoi(v1.c_str()))));
+        (k == "eat" ? p.eatTo : p.drinkTo) = pct;
+        reply = k == "eat" ? "Eating until health " + std::to_string(pct) + "%." : "Drinking until mana " + std::to_string(pct) + "%.";
     }
     else if (k == "flee" && n == 3 && v1 == "mobs")
         p.fleeMobs = uint8(std::min(9, std::max(0, atoi(v2.c_str())))), reply = "Flee rule updated.";
     else if (k == "flee" && n == 3 && v1 == "health")
         p.fleeHealth = uint8(std::min(90, std::max(0, atoi(v2.c_str())))), reply = "Flee rule updated.";
     else if (k == "ah" && n == 2)
-        p.ahGold = uint32(std::max(0, atoi(v1.c_str()))) * 10000, reply = "Auction house threshold updated.";
+        p.ahGold = uint32(std::max(0, atoi(v1.c_str()))) * 10000, reply = "Auction house trip updated.";
     else if (k == "upgrade" && n == 2)
         p.upgradePct = uint8(std::min(100, std::max(0, atoi(v1.c_str())))), reply = "Upgrade budget updated.";
     else if (k == "weapon" && n == 3)

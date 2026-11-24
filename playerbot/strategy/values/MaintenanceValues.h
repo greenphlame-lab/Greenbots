@@ -5,6 +5,12 @@
 
 namespace ai
 {
+    // Silvermoon policies (S): eat / drink until X% for your own characters, 0 = default (full)
+    uint8 SilvermoonRestTarget(Player* bot, bool mana);
+}
+
+namespace ai
+{
     class CanMoveAroundValue : public BoolCalculatedValue
     {
     public:
@@ -165,6 +171,9 @@ namespace ai
 
             if (AI_VALUE2(uint8, "mana", "self target") >= 85)
                 return false;
+            if (uint8 to = SilvermoonRestTarget(bot, true))
+                if (AI_VALUE2(uint8, "mana", "self target") >= to)
+                    return false;
 
             Player* master = ai->GetMaster();
             if (!master)
@@ -204,6 +213,9 @@ namespace ai
         {
             if (AI_VALUE2(uint8, "health", "self target") >= sPlayerbotAIConfig.lowHealth)
                 return false;
+            if (uint8 to = SilvermoonRestTarget(bot, false))
+                if (AI_VALUE2(uint8, "health", "self target") >= to)
+                    return false;
 
             Player* master = ai->GetMaster();
             if (!master)
@@ -244,6 +256,8 @@ namespace ai
             Player* master = ai->GetMaster();
 
             float mpMissingPct = 100.0f - bot->GetPowerPercent();
+            if (uint8 to = SilvermoonRestTarget(bot, true))
+                mpMissingPct = std::max(0.0f, float(to) - bot->GetPowerPercent());
             float multiplier = bot->InBattleGround() ? 20000.0f : 27000.0f;
             float drinkDuration = multiplier * (mpMissingPct / 100.0f);
 
@@ -289,6 +303,8 @@ namespace ai
             Player* master = ai->GetMaster();
 
             float hpMissingPct = 100.0f - bot->GetHealthPercent();
+            if (uint8 to = SilvermoonRestTarget(bot, false))
+                hpMissingPct = std::max(0.0f, float(to) - bot->GetHealthPercent());
             float multiplier = bot->InBattleGround() ? 20000.0f : 27000.0f;
             float eatDuration = multiplier * (hpMissingPct / 100.0f);
           
