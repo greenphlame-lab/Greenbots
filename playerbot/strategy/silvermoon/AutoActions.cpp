@@ -30,8 +30,29 @@ namespace
     // "loot [Tough Wolf Meat] from [Young Wolf] (objective 1)" -> "loot Tough Wolf Meat from Young Wolf"
     std::string Plain(std::string t)
     {
+        // chat markup first (S: the panel showed "cFFFFFF00 Hentry:..." for a trainer): colour
+        // codes |cAARRGGBB and |r, and links |H...|h[Name]|h, keeping only the name
+        std::string bare;
+        for (size_t i = 0; i < t.size(); ++i)
+        {
+            if (t[i] == '|' && i + 1 < t.size())
+            {
+                char k = t[i + 1];
+                if (k == 'c') { i += 9; continue; }
+                if (k == 'r' || k == 'h') { i += 1; continue; }
+                if (k == 'H')
+                {
+                    size_t end = t.find("|h", i + 2);
+                    if (end == std::string::npos)
+                        break;
+                    i = end + 1;
+                    continue;
+                }
+            }
+            bare += t[i];
+        }
         std::string out;
-        for (char c : t)
+        for (char c : bare)
             if (c != '[' && c != ']')
                 out += c;
         size_t p = out.find(" (objective");
@@ -121,7 +142,7 @@ void SilvermoonPushBrainPanel(Player* bot, Player* owner)
     snprintf(score, sizeof(score), "%.0f", have ? row.score : 0.0f);
     snprintf(ago, sizeof(ago), "%u", have && row.ts ? (uint32(time(nullptr)) - row.ts) / 60 : 0);
     std::string text = std::string("SMBRAIN\t") + Clean(bot->GetName()) + ";" + (on ? "1" : "0") + ";" + std::to_string(bot->GetLevel()) + ";" +
-        Clean(goal) + ";" + Clean(have ? row.target : "") + ";" + Clean(have ? row.reason : "") + ";" + score + ";" +
+        Clean(goal) + ";" + Clean(have ? Plain(row.target) : "") + ";" + Clean(have ? Plain(row.reason) : "") + ";" + score + ";" +
         Clean(have ? row.runnerUp1 : "") + ";" + ago + ";" + Clean(have ? PanelLine(ai, row) : goal);
     WorldPacket data;
     ChatHandler::BuildChatPacket(data, CHAT_MSG_PARTY, text.c_str(), LANG_ADDON, CHAT_TAG_NONE, bot->GetObjectGuid(), bot->GetName());
