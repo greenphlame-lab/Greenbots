@@ -3588,6 +3588,56 @@ void RandomPlayerbotMgr::SilvermoonProcessBot(Player* player, PlayerbotAI* ai, u
             }
         }
 
+        // Silvermoon (S: "way too many Alliance bots in Hillsbrad"): every one of the 52 Alliance
+        // bots there had its hearthstone in Southshore - bound by the old random rescue teleports,
+        // before 1.1 - so hearth trips kept bringing level 20s back to a 32-39 hub. Every 30 minutes
+        // a random bot whose hearthstone sits at a hub that doesn't fit its level (or the other
+        // faction's) moves it to the inn of the nearest hub that does.
+        if (ai && player->IsInWorld() && player->IsAlive() && !player->IsInCombat() && !player->GetGroup() &&
+            !sPlayerbotAIConfig.IsFreeAltBot(player) && !ai->IsRealPlayer() && !GetEventValue(bot, "silvermoon_bindcheck"))
+        {
+            SetEventValue(bot, "silvermoon_bindcheck", 1, 30 * MINUTE);
+            float hx = 0.0f, hy = 0.0f, hz = 0.0f;
+            uint32 hmap = 0;
+            player->GetHomebindLocation(hx, hy, hz, hmap);
+            WorldPosition bind(hmap, hx, hy, hz);
+            bool alliance = player->GetTeam() == ALLIANCE;
+            int32 level = int32(player->GetLevel());
+            silvermoon::Hub const* at = nullptr;
+            for (silvermoon::Hub const& h : silvermoon::Hubs::All())
+                if (h.map == hmap && bind.fDist(WorldPosition(h.map, h.innkeeper ? h.innX : h.x, h.innkeeper ? h.innY : h.y, h.innkeeper ? h.innZ : h.z)) < 150.0f)
+                    at = &h;
+            bool misfit = at && ((at->side != 3 && at->side != (alliance ? 1 : 2)) || level + 2 < int32(at->minLevel) || level > int32(at->maxLevel) + 5);
+            if (misfit)
+            {
+                WorldPosition here(player);
+                silvermoon::Hub const* best = nullptr;
+                float bestDist = 0.0f;
+                for (silvermoon::Hub const& h : silvermoon::Hubs::All())
+                {
+                    if (!h.innkeeper || !(h.side == 3 || h.side == (alliance ? 1 : 2)))
+                        continue;
+                    if (level < int32(h.minLevel) || level > int32(h.maxLevel))
+                        continue;
+                    float dist = h.map == here.getMapId() ? here.fDist(WorldPosition(h.map, h.innX, h.innY, h.innZ)) : 1000000.0f;
+                    if (!best || dist < bestDist)
+                    {
+                        best = &h;
+                        bestDist = dist;
+                    }
+                }
+                if (best)
+                {
+                    uint32 zoneId = 0, areaId = 0;
+                    sTerrainMgr.GetZoneAndAreaId(zoneId, areaId, best->map, best->innX, best->innY, best->innZ);
+                    WorldLocation home(best->map, best->innX, best->innY, best->innZ, 0.0f);
+                    player->SetHomebindToLocation(home, areaId ? areaId : zoneId);
+                    sLog.outBasic("Silvermoon: bot %s (level %u) hearthstone moved from %s to %s (didn't fit its level)",
+                        player->GetName(), player->GetLevel(), at->name, best->name);
+                }
+            }
+        }
+
         // Silvermoon patch: once a level-zone teleport has landed, make the new area the
         // bot's home. Before, the hearthstone stayed in the starter zone (the stock inn
         // rebind never worked), so bots hearthed back to Goldshire, Razor Hill or Kharanos
