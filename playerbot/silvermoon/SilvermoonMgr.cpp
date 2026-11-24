@@ -730,9 +730,11 @@ static bool SilvermoonCraftPass(Player* bot, bool allowBuying)
     // New recipes and profession ranks from the trainer, in a capital city: only for professions
     // the bot already has, only what its skill and level allow, and only when one costs less
     // than 5% of the money it has right now. At most 3 per visit; the bot pays the full price.
-    if (inCapital)
+    // Silvermoon (S): profession ranks (Journeyman, Expert, ...) are trained as soon as the skill
+    // reaches the rank's requirement, wherever the bot rests, for up to half its money - the craft
+    // pass then keeps skilling up. New recipes stay capital-only at the 5% rule below.
     {
-        struct TradeSpell { uint32 skill, skillValue, level, cost, spell; };
+        struct TradeSpell { uint32 skill, skillValue, level, cost, spell; bool rank; };
         static std::vector<TradeSpell> tradeSpells;
         static bool tradeSpellsLoaded = false;
         if (!tradeSpellsLoaded)
@@ -763,8 +765,13 @@ static bool SilvermoonCraftPass(Player* bot, bool allowBuying)
                     if (!learned)
                         continue;
                     auto found = bySpell.find(learned);
+                    bool rank = false;
+                    if (SpellEntry const* learnedInfo = sServerFacade.LookupSpellInfo(learned))
+                        for (int j = 0; j < 3; ++j)
+                            if (learnedInfo->Effect[j] == SPELL_EFFECT_SKILL_STEP)
+                                rank = true;
                     if (found == bySpell.end() || tSpell.spellCost < found->second.cost)
-                        bySpell[learned] = { tSpell.reqSkill, tSpell.reqSkillValue, tSpell.reqLevel, tSpell.spellCost, learned };
+                        bySpell[learned] = { tSpell.reqSkill, tSpell.reqSkillValue, tSpell.reqLevel, tSpell.spellCost, learned, rank };
                 }
             }
             for (auto const& entry : bySpell)
@@ -778,8 +785,8 @@ static bool SilvermoonCraftPass(Player* bot, bool allowBuying)
                 break;
             if (!bot->HasSkill(t.skill) || bot->GetSkillValuePure(t.skill) < t.skillValue || bot->GetLevel() < t.level || bot->HasSpell(t.spell))
                 continue;
-            if (uint64(t.cost) * 20 >= bot->GetMoney()) // must cost less than 5% of its money
-                continue;
+            if (t.rank ? uint64(t.cost) * 2 > bot->GetMoney() : (!inCapital || uint64(t.cost) * 20 >= bot->GetMoney()))
+                continue; // rank: at most half its money; recipe: in a capital, under 5% of its money
             bot->ModifyMoney(-int32(t.cost));
             bot->learnSpell(t.spell, false);
             ++learnedNow;
@@ -792,7 +799,7 @@ static bool SilvermoonCraftPass(Player* bot, bool allowBuying)
 
     for (uint32 spellId : spells)
     {
-        if (crafted >= 5)
+        if (crafted >= 20)
             break;
         SpellEntry const* spell = sServerFacade.LookupSpellInfo(spellId);
         if (!spell || spell->Effect[0] != SPELL_EFFECT_CREATE_ITEM || !spell->EffectItemType[0])
@@ -837,6 +844,24 @@ static bool SilvermoonCraftPass(Player* bot, bool allowBuying)
             bot->UpdateCraftSkill(spellId);
             ++crafted;
             sLog.outBasic("Silvermoon: bot %s crafted %s (%s)", bot->GetName(), proto->Name1, upgrade ? "gear for itself" : "skill-up");
+            // the same recipe again while it still gives skill-ups and the materials last (S: stacks
+            // of Linen Cloth become bandages until they stop skilling First Aid)
+            while (skillUp && crafted < 20 && ShouldCraftSpellValue::SpellGivesSkillUp(spellId, bot))
+            {
+                bool enough = true;
+                for (uint8 i = 0; i < MAX_SPELL_REAGENTS; ++i)
+                    if (spell->Reagent[i] > 0 && spell->ReagentCount[i] && bot->GetItemCount(uint32(spell->Reagent[i])) < spell->ReagentCount[i])
+                        enough = false;
+                ItemPosCountVec again;
+                if (!enough || bot->CanStoreNewItem(NULL_BAG, NULL_SLOT, again, itemId, count) != EQUIP_ERR_OK)
+                    break;
+                for (uint8 i = 0; i < MAX_SPELL_REAGENTS; ++i)
+                    if (spell->Reagent[i] > 0 && spell->ReagentCount[i])
+                        bot->DestroyItemCount(uint32(spell->Reagent[i]), spell->ReagentCount[i], true);
+                bot->StoreNewItem(again, itemId, true, Item::GenerateItemRandomPropertyId(itemId));
+                bot->UpdateCraftSkill(spellId);
+                ++crafted;
+            }
             continue;
         }
 

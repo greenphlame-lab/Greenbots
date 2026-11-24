@@ -252,7 +252,9 @@ ItemUsage ItemUsageValue::Calculate()
 
             if (stacks < 1)
                 return ItemUsage::ITEM_USAGE_SKILL; //Buy more.
-            else if (stacks == 1)
+            // Silvermoon (S): materials that still give profession skill-ups are held, not sold or
+            // auctioned - up to 4 stacks (was 1), e.g. 5-6 stacks of Linen Cloth with First Aid
+            else if (stacks <= 4)
                 return ItemUsage::ITEM_USAGE_KEEP; //Do not buy more.
         }
     }
