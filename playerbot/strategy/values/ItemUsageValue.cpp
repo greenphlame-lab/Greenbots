@@ -123,17 +123,19 @@ ItemUsage ItemUsageValue::Calculate()
     // normal equip rules; a policy such as "ask me before equipping BoE" can limit this later)
     if (ai->IsRealPlayer())
     {
-        if (proto->Quality == ITEM_QUALITY_POOR)
-            return ItemUsage::ITEM_USAGE_VENDOR;
+        // gear first, whatever its quality: a grey Flimsy Chain Vest for an empty chest slot is an
+        // upgrade, not junk (S: Mommy kept it in the bags and sold it as grey)
         if (proto->Class == ITEM_CLASS_WEAPON || proto->Class == ITEM_CLASS_ARMOR || proto->Class == ITEM_CLASS_CONTAINER)
         {
             ItemUsage equip = QueryItemUsageForEquip(itemQualifier, bot);
             if (equip == ItemUsage::ITEM_USAGE_EQUIP)
                 return equip;
-            // white gear it isn't going to wear (not an upgrade, or not for its class) is sold (S)
-            if (proto->Quality == ITEM_QUALITY_NORMAL && proto->Class != ITEM_CLASS_CONTAINER)
+            // grey and white gear it isn't going to wear (not an upgrade, or not for its class) is sold (S)
+            if (proto->Quality <= ITEM_QUALITY_NORMAL && proto->Class != ITEM_CLASS_CONTAINER)
                 return ItemUsage::ITEM_USAGE_VENDOR;
         }
+        if (proto->Quality == ITEM_QUALITY_POOR)
+            return ItemUsage::ITEM_USAGE_VENDOR;
         return ItemUsage::ITEM_USAGE_KEEP;
     }
 
