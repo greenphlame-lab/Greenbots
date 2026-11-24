@@ -1,5 +1,6 @@
 
 #include "playerbot/playerbot.h"
+#include "playerbot/TravelNode.h"
 #include "playerbot/RandomPlayerbotMgr.h"
 #include "ChooseRpgTargetAction.h"
 #include "playerbot/PlayerbotAIConfig.h"
@@ -406,6 +407,16 @@ bool ChooseRpgTargetAction::Execute(Event& event)
         }
     }
 
+    // Silvermoon (S): your own characters (Auto, and alts with auto on) don't role-play at all - the
+    // only NPC they stop at is the one their goal is about (vendor, trainer, quest giver...); full
+    // bots keep the role-play layer
+    bool ownGoalOnly = ai->IsRealPlayer() || (sPlayerbotAIConfig.IsFreeAltBot(bot) && SilvermoonAutoOn(bot->GetGUIDLow()));
+    int32 goalEntry = 0;
+    if (ownGoalOnly)
+        if (TravelTarget* goal = AI_VALUE(TravelTarget*, "travel target"))
+            if (goal->IsActive())
+                goalEntry = goal->GetEntry();
+
     // Silvermoon (S): idle role-play (emoting, chatting, "working" next to someone) is for an audience -
     // without another player character nearby a bot doesn't stop to chat with a wolf
     bool audience = false;
@@ -425,6 +436,8 @@ bool ChooseRpgTargetAction::Execute(Event& event)
         bool shouldErase = false;
         if (it->second <= 0) //Remove empty targets.
             shouldErase = true;
+        else if (ownGoalOnly && (!goalEntry || int32(it->first.GetEntry()) != goalEntry))
+            shouldErase = true;   // your own characters: only the NPC the goal is about
         else if (it->second <= 1.0 && !audience)
             shouldErase = true;
         else if (hasGoodRelevance && it->second <= 1.0)  //Remove useless targets if there's any good ones.
