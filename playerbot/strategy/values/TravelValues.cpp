@@ -3,6 +3,7 @@
 #include "playerbot/ServerFacade.h"
 #include "QuestValues.h"
 #include "SharedValueContext.h"
+#include "playerbot/TravelNode.h"
 #include "BudgetValues.h"
 #include "GuildValues.h"
 #include "Guilds/GuildMgr.h"
@@ -221,6 +222,8 @@ uint32 EntryTravelPurposeMapValue::SkillIdToGatherEntry(int32 entry)
     else
     {
         GameObjectInfo const* gInfo = ObjectMgr::GetGameObjectInfo(entry * -1);
+        if (!gInfo || SilvermoonQuestOnlyGoLoot(gInfo->GetLootId()))
+            return 0;   // Silvermoon: quest-only loot (Doom Weed) is not a gathering node
 
         if (uint32 lockId = gInfo->GetLockId())
         {

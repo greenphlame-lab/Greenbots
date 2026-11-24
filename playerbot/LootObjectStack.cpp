@@ -3,6 +3,38 @@
 #include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/ServerFacade.h"
 #include "playerbot/strategy/values/SharedValueContext.h"
+#include "playerbot/TravelNode.h"
+#include "playerbot/strategy/values/ItemUsageValue.h"
+#include <mutex>
+#include <unordered_map>
+
+std::vector<uint32> const* SilvermoonQuestOnlyGoLoot(uint32 lootId)
+{
+    static std::once_flag once;
+    static std::unordered_map<uint32, std::vector<uint32>> questOnly;
+    std::call_once(once, []()
+    {
+        std::unordered_map<uint32, std::vector<uint32>> items;
+        std::unordered_map<uint32, bool> onlyQuest;
+        if (auto result = WorldDatabase.Query("SELECT entry, item, ChanceOrQuestChance, mincountOrRef FROM gameobject_loot_template"))
+        {
+            do
+            {
+                Field* f = result->Fetch();
+                uint32 entry = f[0].GetUInt32();
+                bool quest = f[2].GetFloat() < 0.0f && f[3].GetInt32() > 0;
+                auto it = onlyQuest.find(entry);
+                onlyQuest[entry] = (it == onlyQuest.end() ? true : it->second) && quest;
+                items[entry].push_back(f[1].GetUInt32());
+            } while (result->NextRow());
+        }
+        for (auto const& [entry, only] : onlyQuest)
+            if (only)
+                questOnly[entry] = items[entry];
+    });
+    auto it = questOnly.find(lootId);
+    return it == questOnly.end() ? nullptr : &it->second;
+}
 
 using namespace ai;
 
@@ -127,6 +159,20 @@ void LootObject::Refresh(Player* bot, ObjectGuid guid, bool debug)
         }*/
 #endif
 
+#ifndef MANGOSBOT_TWO
+        // Silvermoon: quest-only nodes (Doom Weed: herbalism lock, loot only the quest item) gave
+        // herbalism skill-ups and nothing else to bots without the quest - only open them when needed
+        if (std::vector<uint32> const* questItems = SilvermoonQuestOnlyGoLoot(go->GetGOInfo()->GetLootId()))
+        {
+            for (uint32 itemId : *questItems)
+                if (ItemUsageValue::IsNeededForQuest(bot, itemId))
+                {
+                    this->guid = guid;
+                    return;
+                }
+            isQuestItemOnly = true;
+        }
+#endif
         if (isQuestItemOnly)
         {
             if (debug)

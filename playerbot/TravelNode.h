@@ -475,3 +475,6 @@ void SilvermoonLoadAuto();                      // world thread, every 30 s
 // sent to the owner. Called every 30 s for each always-online character, and on a switch.
 class Player;
 void SilvermoonPushBrainPanel(Player* bot, Player* owner);
+// Gameobject loot that is quest items only (Doom Weed, quest crates...): the item ids, or nullptr
+// when the loot has anything else. Read once from gameobject_loot_template.
+std::vector<uint32> const* SilvermoonQuestOnlyGoLoot(uint32 lootId);
