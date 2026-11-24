@@ -470,10 +470,15 @@ float TravelNodePath::getCost(Unit* unit, uint32 cGold)
             // Silvermoon step 4: mobs 2+ levels above the bot, +20% per level (stock: 10 levels below, +10%)
             if (sPlayerbotAIConfig.silvermoonTravel)
                 mobAnnoyance = int(maxLevelCreature[0]) - int(level) - 2;
-            // S: no walking past mobs 4+ levels above the bot (13% of deaths, half of them on
-            // relocation trips through Hillsbrad, Alterac Mountains and Arathi)
-            if (sPlayerbotAIConfig.silvermoonTravel && level < 60 && int(maxLevelCreature[0]) >= int(level) + 4)
+            // S: no walking past mobs well above the bot (13% of deaths, half of them on relocation
+            // trips through Hillsbrad, Alterac Mountains and Arathi). 1.1 closed every link with any
+            // mob 4+ above within 50 yards (one rare or elite was enough), and 423 of 500 long route
+            // searches then found no path. Softened in 1.2: links with mobs 8+ above stay closed;
+            // 4-7 above cost +60% per level, so they're used only when there is no other way.
+            if (sPlayerbotAIConfig.silvermoonTravel && level < 60 && int(maxLevelCreature[0]) >= int(level) + 8)
                 return -1;
+            if (sPlayerbotAIConfig.silvermoonTravel && level < 60 && int(maxLevelCreature[0]) >= int(level) + 4)
+                modifier += 0.4 * (int(maxLevelCreature[0]) - int(level) - 3);   // on top of the +20%/level
             if (mobAnnoyance > 0)
                 modifier += (sPlayerbotAIConfig.silvermoonTravel ? 0.2 : 0.1) * mobAnnoyance;     //For each level the whole path takes 10% longer.
             if (factionAnnoyance > 0)
