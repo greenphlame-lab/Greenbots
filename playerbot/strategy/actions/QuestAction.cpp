@@ -191,6 +191,10 @@ bool QuestAction::ProcessQuests(WorldObject* questGiver)
         hasAccept |= ProcessQuest(GetMaster(), quest, questGiver);
     }
 
+    // Silvermoon: on your own character (Auto) close the quest window the server put on screen
+    if (ai->IsRealPlayer() && bot->GetPlayerMenu())
+        bot->GetPlayerMenu()->CloseGossip();
+
     return hasAccept;
 }
 

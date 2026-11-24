@@ -61,6 +61,10 @@ bool TakeQuestsAction::Execute(Event& event)
             before.insert(id);
     bool done = ai->DoSpecificAction("talk to quest giver", Event("silvermoon take quests", giver->GetObjectGuid()), true);
     done |= ai->DoSpecificAction("accept all quests", Event("silvermoon take quests", giver->GetObjectGuid()), true);
+    // your character on Auto: the quest window the server opened on your screen is closed again
+    // (it stayed up after the quests were taken)
+    if (ai->IsRealPlayer() && bot->GetPlayerMenu())
+        bot->GetPlayerMenu()->CloseGossip();
     for (uint8 slot = 0; slot < MAX_QUEST_LOG_SIZE; ++slot)
         if (uint32 id = bot->GetQuestSlotQuestId(slot))
             if (!before.count(id))
