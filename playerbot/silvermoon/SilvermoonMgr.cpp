@@ -418,7 +418,8 @@ static void SilvermoonWeaponUpgrade(Player* bot)
         if (main)
         {
             ItemPosCountVec space;
-            if (bot->CanStoreItem(NULL_BAG, NULL_SLOT, space, main, false) != EQUIP_ERR_OK)
+            uint8 bagSlot = 0;
+            if (bot->CanStoreItem(NULL_BAG, NULL_SLOT, space, main, bagSlot, false) != EQUIP_ERR_OK)
                 return;                              // no room for the old weapon
             bot->RemoveItem(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND, true);
             bot->StoreItem(space, main, true);
