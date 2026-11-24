@@ -953,6 +953,16 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
         {
             lastAutoLoad = nowFast;
             SilvermoonLoadAuto();
+            for (auto const& alt : sPlayerbotAIConfig.freeAltBots)
+            {
+                Player* p = sObjectMgr.GetPlayer(ObjectGuid(HIGHGUID_PLAYER, alt.second));
+                if (!p || !p->IsInWorld() || !p->GetPlayerbotAI())
+                    continue;
+                Player* owner = p->GetPlayerbotAI()->GetMaster();
+                if (owner && owner->GetSession() && owner->GetSession()->GetAccountId() == p->GetSession()->GetAccountId() &&
+                    owner->isRealPlayer())
+                    SilvermoonPushBrainPanel(p, owner);
+            }
             // auto off: an alt that still runs the brain drops it (and its current goal)
             for (auto const& alt : sPlayerbotAIConfig.freeAltBots)
             {

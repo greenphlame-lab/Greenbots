@@ -4,10 +4,45 @@
 #include "playerbot/TravelMgr.h"
 #include "playerbot/TravelNode.h"
 #include "playerbot/silvermoon/DecisionLog.h"
+#include "Chat/Chat.h"
 #include <cstdio>
 #include <ctime>
 
 using namespace ai;
+
+namespace
+{
+    std::string Clean(std::string s)
+    {
+        for (char& c : s)
+            if (c == ';' || c == '|' || c == '\t' || c == '\n')
+                c = ' ';
+        if (s.size() > 90)
+            s = s.substr(0, 90);
+        return s;
+    }
+}
+
+void SilvermoonPushBrainPanel(Player* bot, Player* owner)
+{
+    if (!bot || !owner || !owner->GetSession() || !bot->GetPlayerbotAI())
+        return;
+    PlayerbotAI* ai = bot->GetPlayerbotAI();
+    bool on = SilvermoonAutoOn(bot->GetGUIDLow());
+    bool brain = ai->HasStrategy("silvermoon brain", BotState::BOT_STATE_NON_COMBAT);
+    silvermoon::DecisionRow row;
+    bool have = brain && silvermoon::DecisionLog::Last(bot->GetGUIDLow(), row);
+    std::string goal = have ? row.goal : (on ? (bot->GetGroup() ? "waiting (in your group)" : "starting up") : "auto off");
+    char score[16], ago[16];
+    snprintf(score, sizeof(score), "%.0f", have ? row.score : 0.0f);
+    snprintf(ago, sizeof(ago), "%u", have && row.ts ? (uint32(time(nullptr)) - row.ts) / 60 : 0);
+    std::string text = std::string("SMBRAIN\t") + Clean(bot->GetName()) + ";" + (on ? "1" : "0") + ";" + std::to_string(bot->GetLevel()) + ";" +
+        Clean(goal) + ";" + Clean(have ? row.target : "") + ";" + Clean(have ? row.reason : "") + ";" + score + ";" +
+        Clean(have ? row.runnerUp1 : "") + ";" + ago;
+    WorldPacket data;
+    ChatHandler::BuildChatPacket(data, CHAT_MSG_PARTY, text.c_str(), LANG_ADDON, CHAT_TAG_NONE, bot->GetObjectGuid(), bot->GetName());
+    owner->GetSession()->SendPacket(data);
+}
 
 bool SilvermoonAutoAction::Execute(Event& event)
 {
@@ -43,6 +78,7 @@ bool SilvermoonAutoAction::Execute(Event& event)
                 target->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
             ai->TellPlayerNoFacing(requester, "Auto is off. Back to normal.");
         }
+        SilvermoonPushBrainPanel(bot, requester);
         return true;
     }
     ai->TellPlayerNoFacing(requester, std::string("Auto is ") + (SilvermoonAutoOn(guid) ? "on" : "off") + ". Whisper \"auto on\" or \"auto off\" to change it.");

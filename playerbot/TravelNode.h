@@ -470,3 +470,8 @@ uint32 SilvermoonAvoidedZone(uint32 guid);
 bool SilvermoonAutoOn(uint32 guid);
 void SilvermoonSetAuto(uint32 guid, bool on);   // memory + database
 void SilvermoonLoadAuto();                      // world thread, every 30 s
+// The in-game "Silvermoon Brain" panel (client addon SilvermoonBrain): an addon message
+// "SMBRAIN\t<name>;<auto 0/1>;<level>;<goal>;<target>;<reason>;<score>;<runner-up>;<minutes ago>"
+// sent to the owner. Called every 30 s for each always-online character, and on a switch.
+class Player;
+void SilvermoonPushBrainPanel(Player* bot, Player* owner);
