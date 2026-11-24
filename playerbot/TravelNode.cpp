@@ -329,6 +329,16 @@ bool SilvermoonAutoOn(uint32 guid)
     return it != silvermoonAuto.end() && it->second;
 }
 
+std::vector<uint32> SilvermoonAutoGuids()
+{
+    std::vector<uint32> out;
+    std::lock_guard<std::mutex> guard(silvermoonAutoLock);
+    for (auto const& [guid, on] : silvermoonAuto)
+        if (on)
+            out.push_back(guid);
+    return out;
+}
+
 void SilvermoonSetAuto(uint32 guid, bool on)
 {
     {

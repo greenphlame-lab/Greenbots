@@ -468,6 +468,7 @@ uint32 SilvermoonAvoidedZone(uint32 guid);
 // Silvermoon auto mode (layer 1): which of S's own always-online characters play on the brain.
 // Rows in characters.silvermoon_auto; re-read every 30 s; "auto on/off" whispers write them.
 bool SilvermoonAutoOn(uint32 guid);
+std::vector<uint32> SilvermoonAutoGuids();      // every character with auto on
 void SilvermoonSetAuto(uint32 guid, bool on);   // memory + database
 void SilvermoonLoadAuto();                      // world thread, every 30 s
 // The in-game "Silvermoon Brain" panel (client addon SilvermoonBrain): an addon message
