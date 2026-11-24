@@ -9,6 +9,11 @@
 #include <sstream>
 #include <unordered_map>
 #include <vector>
+#include "playerbot/ServerFacade.h"
+#include "Spells/SpellMgr.h"
+#include <algorithm>
+#include <map>
+#include <tuple>
 
 using namespace ai;
 
@@ -24,7 +29,9 @@ namespace
         out << "za=";
         bool first = true;
         for (uint32 z : p.allowedZones) { out << (first ? "" : ",") << z; first = false; }
-        out << ";et=" << uint32(p.eatTo) << ";dt=" << uint32(p.drinkTo) << ";tv=" << uint32(p.travel);
+        out << ";et=" << uint32(p.eatTo) << ";dt=" << uint32(p.drinkTo) << ";tv=" << uint32(p.travel) << ";sb=";
+        bool firstSpell = true;
+        for (uint32 sp : p.blockedSpells) { out << (firstSpell ? "" : ",") << sp; firstSpell = false; }
         out << ";it=";
         first = true;
         for (auto const& [item, rule] : p.items) { out << (first ? "" : ",") << item << ":" << uint32(rule.first) << ":" << (rule.second ? 1 : 0); first = false; }
@@ -50,6 +57,14 @@ namespace
             else if (key == "fh") p.fleeHealth = uint8(atoi(value.c_str()));
             else if (key == "et") p.eatTo = uint8(atoi(value.c_str()));
             else if (key == "tv") p.travel = uint8(atoi(value.c_str()));
+            else if (key == "sb")
+            {
+                std::stringstream vs(value);
+                std::string item;
+                while (std::getline(vs, item, ','))
+                    if (!item.empty())
+                        p.blockedSpells.insert(uint32(atoi(item.c_str())));
+            }
             else if (key == "dt") p.drinkTo = uint8(atoi(value.c_str()));
             else if (key == "ah") p.ahGold = uint32(strtoul(value.c_str(), nullptr, 10));
             else if (key == "up") p.upgradePct = uint8(atoi(value.c_str()));
@@ -149,6 +164,80 @@ bool ai::SilvermoonAhTripDue(Player* bot, std::list<Item*> const& items)
     return gold ? SilvermoonAhCarried(items) >= gold : true;   // no setting: even one marked item
 }
 
+bool ai::SilvermoonSpellBlocked(Player* bot, uint32 learnedSpell)
+{
+    if (!learnedSpell || !SilvermoonIsOwn(bot))
+        return false;
+    uint32 first = sSpellMgr.GetFirstSpellInChain(learnedSpell);
+    std::lock_guard<std::mutex> guard(policyLock);
+    std::set<uint32> const& blocked = Get(bot->GetGUIDLow()).blockedSpells;
+    return blocked.count(first ? first : learnedSpell) > 0;
+}
+
+std::vector<std::string> ai::SilvermoonSpellListMessages(Player* bot)
+{
+    // every ability the class trainers teach this class and race: first rank id -> (lowest level, name)
+    std::map<uint32, std::pair<uint32, std::string>> abilities;
+    for (uint32 id = 0; id < sCreatureStorage.GetMaxEntry(); ++id)
+    {
+        CreatureInfo const* co = sCreatureStorage.LookupEntry<CreatureInfo>(id);
+        if (!co || co->TrainerType != TRAINER_TYPE_CLASS || co->TrainerClass != bot->getClass())
+            continue;
+        for (TrainerSpellData const* data : { sObjectMgr.GetNpcTrainerSpells(co->Entry), sObjectMgr.GetNpcTrainerTemplateSpells(co->TrainerTemplateId) })
+        {
+            if (!data)
+                continue;
+            for (auto const& entry : data->spellList)
+            {
+                uint32 learned = entry.second.spell;
+                if (SpellEntry const* teach = sServerFacade.LookupSpellInfo(entry.second.spell))
+                    for (int j = 0; j < 3; ++j)
+                        if (teach->Effect[j] == SPELL_EFFECT_LEARN_SPELL && teach->EffectTriggerSpell[j])
+                            learned = teach->EffectTriggerSpell[j];
+                if (!learned || !bot->IsSpellFitByClassAndRace(learned))
+                    continue;
+                SpellEntry const* spell = sServerFacade.LookupSpellInfo(learned);
+                if (!spell)
+                    continue;
+                uint32 first = sSpellMgr.GetFirstSpellInChain(learned);
+                if (!first)
+                    first = learned;
+                auto it = abilities.find(first);
+                if (it == abilities.end())
+                    abilities[first] = std::make_pair(entry.second.reqLevel, std::string(spell->SpellName[0]));
+                else if (entry.second.reqLevel < it->second.first)
+                    it->second.first = entry.second.reqLevel;
+            }
+        }
+    }
+    // sorted by level; "id:level:known:name" joined with '^', split into messages under 240 bytes
+    std::vector<std::tuple<uint32, std::string, uint32>> sorted;
+    for (auto const& [first, info] : abilities)
+        sorted.push_back({ info.first, info.second, first });
+    std::sort(sorted.begin(), sorted.end());
+    std::vector<std::string> out;
+    out.push_back("SMSPELL\tBEGIN");
+    std::string cur;
+    for (auto const& [level, name, first] : sorted)
+    {
+        std::string clean = name;
+        for (char& c : clean)
+            if (c == '^' || c == ';' || c == '|' || c == '\t')
+                c = ' ';
+        std::string item = std::to_string(first) + ":" + std::to_string(level) + ":" + (bot->HasSpell(first) ? "1" : "0") + ":" + clean;
+        if (cur.size() + item.size() + 1 > 230)
+        {
+            out.push_back("SMSPELL\t" + cur);
+            cur.clear();
+        }
+        cur += (cur.empty() ? "" : "^") + item;
+    }
+    if (!cur.empty())
+        out.push_back("SMSPELL\t" + cur);
+    out.push_back("SMSPELL\tEND");
+    return out;
+}
+
 uint8 ai::SilvermoonTravelRules(Player* bot)
 {
     if (!SilvermoonIsOwn(bot))
@@ -198,6 +287,16 @@ bool ai::SilvermoonPolicyCommand(Player* bot, std::string const& param, std::str
         uint32 zone = uint32(atoi(v1.c_str()));
         if (v2 == "on") p.allowedZones.insert(zone); else p.allowedZones.erase(zone);
         reply = p.allowedZones.empty() ? "Zone list off: I pick zones myself." : "Zones updated: I'll stay in ticked zones from my next move.";
+    }
+    else if (k == "spell" && n == 3)
+    {
+        // "spell <first rank id> on|off": off = never train this ability
+        uint32 first = uint32(atoi(v1.c_str()));
+        if (!first)
+            return false;
+        if (v2 == "off") p.blockedSpells.insert(first); else p.blockedSpells.erase(first);
+        SpellEntry const* sp = sServerFacade.LookupSpellInfo(first);
+        reply = std::string(sp ? sp->SpellName[0] : "That skill") + (v2 == "off" ? ": I won't train it." : ": I'll train it.");
     }
     else if (k == "travel" && n == 3 && (v1 == "avoid" || v1 == "grey"))
     {

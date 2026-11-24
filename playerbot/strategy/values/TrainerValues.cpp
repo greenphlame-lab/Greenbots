@@ -4,6 +4,8 @@
 #include "SharedValueContext.h"
 #include "playerbot/PlayerbotHelpMgr.h"
 
+namespace ai { bool SilvermoonSpellBlocked(Player* bot, uint32 learnedSpell); }
+
 using namespace ai;
 
 
@@ -136,6 +138,17 @@ std::vector<TrainerSpell const*> TrainableSpellsValue::Calculate()
                 TrainerSpellState state = bot->GetTrainerSpellState(trainerSpell, reqLevel);
                 if (state != TRAINER_SPELL_GREEN)
                     continue;
+                // policies (S): abilities you unticked don't count as trainable
+                if (trainerType == TRAINER_TYPE_CLASS)
+                {
+                    uint32 learned = trainerSpell->spell;
+                    if (SpellEntry const* teach = sServerFacade.LookupSpellInfo(trainerSpell->spell))
+                        for (int j = 0; j < 3; ++j)
+                            if (teach->Effect[j] == SPELL_EFFECT_LEARN_SPELL && teach->EffectTriggerSpell[j])
+                                learned = teach->EffectTriggerSpell[j];
+                    if (SilvermoonSpellBlocked(bot, learned))
+                        continue;
+                }
 
                 //Skip initial profession training.
 #ifdef MANGOSBOT_ZERO

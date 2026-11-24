@@ -6,6 +6,17 @@
 
 using namespace ai;
 
+namespace ai { bool SilvermoonSpellBlocked(Player* bot, uint32 learnedSpell); }
+// the spell a trainer entry teaches (the "teach" spell's learn effect, else the entry's own)
+static uint32 SilvermoonLearnedOf(TrainerSpell const* tSpell)
+{
+    if (SpellEntry const* teach = sServerFacade.LookupSpellInfo(tSpell->spell))
+        for (int j = 0; j < 3; ++j)
+            if (teach->Effect[j] == SPELL_EFFECT_LEARN_SPELL && teach->EffectTriggerSpell[j])
+                return teach->EffectTriggerSpell[j];
+    return tSpell->spell;
+}
+
 void TrainerAction::Learn(uint32 cost, ObjectGuid trainerGuid, uint32 spellId, TrainerSpell const* tSpell, std::ostringstream& msg)
 {
     if (sPlayerbotAIConfig.autoTrainSpells != "free" &&  !ai->HasCheat(BotCheatMask::gold))
@@ -125,6 +136,9 @@ bool TrainerAction::Iterate(Player* requester, Creature* creature, TrainerSpellA
         reqLevel = tSpell->isProvidedReqLevel ? tSpell->reqLevel : std::max(reqLevel, tSpell->reqLevel);
         TrainerSpellState state = bot->GetTrainerSpellState(tSpell, reqLevel);
         if (state != TRAINER_SPELL_GREEN)
+            continue;
+        // policies (S): abilities you unticked are never trained
+        if (SilvermoonSpellBlocked(bot, SilvermoonLearnedOf(tSpell)))
             continue;
 
         uint32 spellId = tSpell->spell;

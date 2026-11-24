@@ -5,6 +5,7 @@
 #include <set>
 #include <string>
 #include <list>
+#include <vector>
 
 // Silvermoon policies (S, 2026-11-24, 1.6): standing rules for your own characters playing on their
 // own (Auto, auto alts), set in the in-game Policies window. Policies OVERRIDE the bot's own rules
@@ -32,6 +33,8 @@ namespace ai
         // travel (S): bit 1 = avoid mobs while travelling (no new pulls on the way);
         // bit 2 = grey mobs allowed while travelling (default: ignored)
         uint8 travel = 0;
+        // class skills (S): unticked abilities (first rank's spell id) are never trained
+        std::set<uint32> blockedSpells;
         uint8 fleeMobs = 0;          // 0 = off
         uint8 fleeHealth = 0;        // percent, 0 = off
         uint32 ahGold = 0;           // copper, 0 = off
@@ -41,7 +44,7 @@ namespace ai
         // item rules (S): item id -> (action, always). action 1 sell, 2 auction, 3 destroy, 4 keep;
         // "once" rules end when none of the item is left
         std::map<uint32, std::pair<uint8, bool>> items;
-        bool Any() const { return !allowedZones.empty() || eatTo || drinkTo || travel || fleeMobs || fleeHealth || ahGold || upgradePct || !weapons.empty() || bags || !items.empty(); }
+        bool Any() const { return !allowedZones.empty() || eatTo || drinkTo || travel || !blockedSpells.empty() || fleeMobs || fleeHealth || ahGold || upgradePct || !weapons.empty() || bags || !items.empty(); }
     };
 
     // your own character playing on its own: Auto (self-bot) or an always-online alt with auto on
@@ -56,6 +59,10 @@ namespace ai
     uint8 SilvermoonRestTarget(Player* bot, bool mana);
     // travel rules for your own characters (bits as SilvermoonPolicy::travel), 0 for everyone else
     uint8 SilvermoonTravelRules(Player* bot);
+    // class skills: true when you unticked this ability (any rank) for your character
+    bool SilvermoonSpellBlocked(Player* bot, uint32 learnedSpell);
+    // the class skills list for the Policies window, as addon messages "SMSPELL"
+    std::vector<std::string> SilvermoonSpellListMessages(Player* bot);
     // most the character may spend on one upgrade (its default share when no policy is set)
     uint32 SilvermoonUpgradeBudget(Player* bot, uint32 defaultPct);
     bool SilvermoonWeaponAvoided(uint32 guid, uint32 skill);

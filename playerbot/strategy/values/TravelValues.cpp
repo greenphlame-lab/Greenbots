@@ -4,6 +4,8 @@
 #include "QuestValues.h"
 #include "SharedValueContext.h"
 #include "playerbot/TravelNode.h"
+
+namespace ai { bool SilvermoonSpellBlocked(Player* bot, uint32 learnedSpell); }
 #include "BudgetValues.h"
 #include "GuildValues.h"
 #include "Guilds/GuildMgr.h"
@@ -501,7 +503,7 @@ bool ShouldTravelNamedValue::Calculate()
             // or ranks missing their previous rank): the trainer's own check decides
             for (auto const& [level, cost, learned, tSpell] : list)
                 if (learned && level <= bot->GetLevel() && cost <= spare && !bot->HasSpell(learned) &&
-                    tSpell && bot->GetTrainerSpellState(tSpell, level) == TRAINER_SPELL_GREEN)
+                    tSpell && bot->GetTrainerSpellState(tSpell, level) == TRAINER_SPELL_GREEN && !SilvermoonSpellBlocked(bot, learned))
                     return true;
             return false;
         }
