@@ -760,6 +760,10 @@ std::list<std::string> PlayerbotHolder::HandlePlayerbotCommand(const std::string
                     target->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);   // re-choose with the new order
         // Silvermoon (S): the panel used to wait for the 30-second push to show a change (a
         // profession took up to half a minute to show as queued); send the new state right away
+        // a changed item rule or keep policy must count at the next vendor visit (S: Tigerseye set to
+        // "sell" wasn't sold - the bot still had its old verdict on the item cached)
+        if (ok && command == "pol" && master->GetPlayerbotAI())
+            master->GetPlayerbotAI()->GetAiObjectContext()->ClearValues("item usage");
         if (ok && master->GetSession())
         {
             SilvermoonPushBrainPanel(master, master);
