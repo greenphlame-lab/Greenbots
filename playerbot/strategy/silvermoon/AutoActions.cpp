@@ -25,14 +25,15 @@ namespace
 
 void SilvermoonPushBrainPanel(Player* bot, Player* owner)
 {
-    if (!bot || !owner || !owner->GetSession() || !bot->GetPlayerbotAI())
+    if (!bot || !owner || !owner->GetSession())
         return;
     PlayerbotAI* ai = bot->GetPlayerbotAI();
-    bool on = SilvermoonAutoOn(bot->GetGUIDLow());
-    bool brain = ai->HasStrategy("silvermoon brain", BotState::BOT_STATE_NON_COMBAT);
+    // your own character: auto = it has the player AI (self-bot); an always-online alt: its switch
+    bool on = bot == owner ? ai != nullptr : SilvermoonAutoOn(bot->GetGUIDLow());
+    bool brain = ai && ai->HasStrategy("silvermoon brain", BotState::BOT_STATE_NON_COMBAT);
     silvermoon::DecisionRow row;
     bool have = brain && silvermoon::DecisionLog::Last(bot->GetGUIDLow(), row);
-    std::string goal = have ? row.goal : (on ? (bot->GetGroup() ? "waiting (in your group)" : "starting up") : "auto off");
+    std::string goal = have ? row.goal : (on ? (bot->GetGroup() ? "waiting (in a group)" : "starting up") : "manual");
     char score[16], ago[16];
     snprintf(score, sizeof(score), "%.0f", have ? row.score : 0.0f);
     snprintf(ago, sizeof(ago), "%u", have && row.ts ? (uint32(time(nullptr)) - row.ts) / 60 : 0);

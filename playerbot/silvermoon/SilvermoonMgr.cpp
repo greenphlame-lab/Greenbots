@@ -953,6 +953,11 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
         {
             lastAutoLoad = nowFast;
             SilvermoonLoadAuto();
+            // the in-game panel: every logged-in player gets its own character's state
+            for (auto& i : sRandomPlayerbotMgr.GetPlayers())
+                if (Player* me = i.second)
+                    if (me->IsInWorld() && me->GetSession())
+                        SilvermoonPushBrainPanel(me, me);
             for (auto const& alt : sPlayerbotAIConfig.freeAltBots)
             {
                 Player* p = sObjectMgr.GetPlayer(ObjectGuid(HIGHGUID_PLAYER, alt.second));

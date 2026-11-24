@@ -106,6 +106,11 @@ ItemUsage ItemUsageValue::Calculate()
     if (!proto)
         return ItemUsage::ITEM_USAGE_NONE;
 
+    // Silvermoon auto mode: S's own character playing itself (self-bot) sells only grey junk and
+    // keeps everything else - nothing is auctioned, destroyed or swapped in or out of its gear
+    if (ai->IsRealPlayer())
+        return proto->Quality == ITEM_QUALITY_POOR ? ItemUsage::ITEM_USAGE_VENDOR : ItemUsage::ITEM_USAGE_KEEP;
+
     //FORCE
     ForceItemUsage forceUsage = AI_VALUE2_EXISTS(ForceItemUsage, "force item usage", proto->ItemId, ForceItemUsage::FORCE_USAGE_NONE);
 
