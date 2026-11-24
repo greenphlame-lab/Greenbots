@@ -204,25 +204,8 @@ bool ai::SilvermoonBestRelocate(Player* bot, PlayerbotAI* ai, float bestLocalSco
         if (it != arrivedAt.end() && time(nullptr) - it->second < STAY_AFTER_ARRIVAL)
             return false;
     }
-    // open quests here keep the bot here (Grashnak, level 11 with 13 Durotar quests open, was sent
-    // to the Crossroads twice and walked straight back to the Southfury River each time, ~2 hours):
-    // 3+ unfinished quests for this zone that aren't far below the bot block a trip
-    if (!want && !stuckAtLevel)
-    {
-        uint32 zoneId = bot->GetZoneId();
-        uint32 open = 0;
-        for (uint16 slot = 0; slot < MAX_QUEST_LOG_SIZE; ++slot)
-        {
-            uint32 questId = bot->GetQuestSlotQuestId(slot);
-            if (!questId || bot->GetQuestStatus(questId) != QUEST_STATUS_INCOMPLETE)
-                continue;
-            Quest const* quest = sObjectMgr.GetQuestTemplate(questId);
-            if (quest && quest->GetZoneOrSort() == int32(zoneId) && quest->GetQuestLevel() + 4 >= int32(level))
-                ++open;
-        }
-        if (open >= 3)
-            return false;
-    }
+    // (S, 2026-11-24: the "3+ open quests in this zone keep the bot here" hold is gone - it kept
+    // 213 Horde bots in the Barrens; a bot's open quests no longer block a trip)
     // top up before a trip (S): at least 80% health and mana, out of combat
     if (!want && bot->IsInCombat())
         return false;
