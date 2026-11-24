@@ -10,6 +10,7 @@
 #include "playerbot/silvermoon/Crowd.h"
 #include "RelocateGoal.h"
 #include "Professions.h"
+#include "Policies.h"
 #include "Mails/Mail.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include <deque>
@@ -507,6 +508,7 @@ std::vector<SilvermoonScoredGoal> ai::SilvermoonScoreGoals(Player* bot, Playerbo
     }
 
     uint32 avoidedZone = SilvermoonAvoidedZone(bot->GetGUIDLow());
+    bool policyZones = SilvermoonIsOwn(bot) && !SilvermoonPolicyFor(bot->GetGUIDLow()).blockedZones.empty();
     // starting area first (S: a level 4 in Northshire walked to Goldshire to hand in Rest and
     // Relaxation with Kobold Camp Cleanup and Garrick Padfoot still open): while the bot stands in
     // its starting valley and has quests for it in the log, goals outside the valley count 15%
@@ -545,6 +547,14 @@ std::vector<SilvermoonScoredGoal> ai::SilvermoonScoreGoals(Player* bot, Playerbo
             // Tirisfal, "doing" Kron's Amulet in Durotar)
             if (position && position->getMapId() != bot->GetMapId())
                 continue;
+            // policies (S): zones ticked off in the Policies window are never goals
+            if (position && policyZones)
+            {
+                uint32 zoneId = 0, areaId = 0;
+                sTerrainMgr.GetZoneAndAreaId(zoneId, areaId, position->getMapId(), position->getX(), position->getY(), position->getZ());
+                if (SilvermoonZoneBlocked(bot->GetGUIDLow(), zoneId))
+                    continue;
+            }
             // world PvP option A: no goals in a zone where the bot died to players twice lately
             if (position && avoidedZone)
             {

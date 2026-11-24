@@ -297,7 +297,8 @@ void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const fa
     combatEngine->addStrategies("mount", NULL);
     combatEngine->addStrategy("avoid mobs");
     // Silvermoon: solo random bots run from mobs 4+ levels above them
-    if (sPlayerbotAIConfig.silvermoonBrain && sRandomPlayerbotMgr.IsRandomBot(player) && !facade->HasRealPlayerMaster())
+    if (sPlayerbotAIConfig.silvermoonBrain && ((sRandomPlayerbotMgr.IsRandomBot(player) && !facade->HasRealPlayerMaster()) ||
+        facade->IsRealPlayer() || sPlayerbotAIConfig.IsFreeAltBot(player)))   // and your own characters (their flee policies)
         combatEngine->addStrategy("silvermoon survive");
     combatEngine->addStrategy("dungeon");
     combatEngine->addStrategy("avoid specific creatures");

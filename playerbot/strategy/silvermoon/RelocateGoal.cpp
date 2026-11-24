@@ -1,5 +1,6 @@
 #include "playerbot/playerbot.h"
 #include "RelocateGoal.h"
+#include "Policies.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/TravelMgr.h"
 #include "playerbot/TravelNode.h"
@@ -240,6 +241,13 @@ bool ai::SilvermoonBestRelocate(Player* bot, PlayerbotAI* ai, float bestLocalSco
             continue;
         if (Skipped(guid, h.id))
             continue;                                   // failed to get there recently
+        if (SilvermoonIsOwn(bot))
+        {
+            uint32 zoneId = 0, areaId = 0;
+            sTerrainMgr.GetZoneAndAreaId(zoneId, areaId, h.map, h.x, h.y, h.z);
+            if (SilvermoonZoneBlocked(guid, zoneId))
+                continue;                               // ticked off in the Policies window
+        }
         if (uint32 avoided = SilvermoonAvoidedZone(guid))
         {
             uint32 zoneId = 0, areaId = 0;

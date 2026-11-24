@@ -88,6 +88,8 @@ using namespace MaNGOS;
 #include "playerbot/silvermoon/DecisionLog.h"
 #include "playerbot/silvermoon/QuestIndex.h"
 #include "playerbot/silvermoon/Hubs.h"
+#include "Chat/Chat.h"
+#include "playerbot/strategy/silvermoon/Policies.h"
 #include "playerbot/silvermoon/Crowd.h"
 #include "playerbot/LootObjectStack.h"
 #include "playerbot/strategy/silvermoon/ChooseGoalAction.h"
@@ -408,10 +410,10 @@ static void SilvermoonWeaponUpgrade(Player* bot)
     uint32 level = bot->GetLevel();
     for (auto const& w : silvermoonVendorWeapons)
     {
-        if (w[2] > level || !bot->HasSkill(w[1]))
+        if (w[2] > level || !bot->HasSkill(w[1]) || (SilvermoonIsOwn(bot) && SilvermoonWeaponAvoided(bot->GetGUIDLow(), w[1])))
             continue;
         ItemPrototype const* proto = sObjectMgr.GetItemPrototype(w[0]);
-        if (!proto || proto->BuyPrice * 10 > bot->GetMoney() * 7)
+        if (!proto || proto->BuyPrice > SilvermoonUpgradeBudget(bot, 70))
             continue;
         if (SilvermoonWeaponDps(proto) < current * 1.5f)
             continue;
@@ -533,10 +535,10 @@ static void SilvermoonDualWield(Player* bot)
         return;
     for (auto const& w : silvermoonVendorWeapons)
     {
-        if (w[2] > level || !bot->HasSkill(w[1]))
+        if (w[2] > level || !bot->HasSkill(w[1]) || (SilvermoonIsOwn(bot) && SilvermoonWeaponAvoided(bot->GetGUIDLow(), w[1])))
             continue;
         ItemPrototype const* proto = sObjectMgr.GetItemPrototype(w[0]);
-        if (!proto || proto->BuyPrice * 2 > bot->GetMoney())
+        if (!proto || proto->BuyPrice > SilvermoonUpgradeBudget(bot, 50))
             continue;
         uint16 dest;
         if (bot->CanEquipNewItem(EQUIPMENT_SLOT_OFFHAND, dest, w[0], false) != EQUIP_ERR_OK)
@@ -632,7 +634,7 @@ static void SilvermoonBuyBag(Player* bot)
     {
         ItemPrototype const* proto = sObjectMgr.GetItemPrototype(entry);
         // S: bags are a priority - up to half the bot's money (was a quarter)
-        if (!proto || proto->BuyPrice * 2 > bot->GetMoney())
+        if (!proto || proto->BuyPrice > SilvermoonUpgradeBudget(bot, 50))
             continue;
         uint16 dest;
         if (bot->CanEquipNewItem(freeSlot, dest, entry, false) != EQUIP_ERR_OK)
@@ -1178,6 +1180,10 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                                 me->GetPlayerbotAI()->DoSpecificAction("equip upgrades", Event("silvermoon auto"), true);
                         }
                         SilvermoonPushBrainPanel(me, me);
+                        std::string pol = SilvermoonPolicyPanel(me);   // the Policies window
+                        WorldPacket polPacket;
+                        ChatHandler::BuildChatPacket(polPacket, CHAT_MSG_PARTY, pol.c_str(), LANG_ADDON, CHAT_TAG_NONE, me->GetObjectGuid(), me->GetName());
+                        me->GetSession()->SendPacket(polPacket);
                     }
             for (auto const& alt : sPlayerbotAIConfig.freeAltBots)
             {

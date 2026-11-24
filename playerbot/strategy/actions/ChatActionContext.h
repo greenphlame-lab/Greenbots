@@ -86,6 +86,7 @@
 #include "PullActions.h"
 #include "playerbot/strategy/silvermoon/AutoActions.h"
 #include "playerbot/strategy/silvermoon/Professions.h"
+#include "playerbot/strategy/silvermoon/Policies.h"
 
 namespace ai
 {
@@ -184,6 +185,7 @@ namespace ai
             creators["auto"] = [](PlayerbotAI* ai) { return new SilvermoonAutoAction(ai); };
             creators["why"] = [](PlayerbotAI* ai) { return new SilvermoonWhyAction(ai); };
             creators["prof"] = [](PlayerbotAI* ai) { return new SilvermoonProfAction(ai); };
+            creators["pol"] = [](PlayerbotAI* ai) { return new SilvermoonPolicyAction(ai); };
             creators["where"] = [](PlayerbotAI* ai) { return new GoAction(ai, "where"); };
             creators["save mana"] = [](PlayerbotAI* ai) { return new SaveManaAction(ai); };
             creators["max dps chat shortcut"] = [](PlayerbotAI* ai) { return new MaxDpsChatShortcutAction(ai); };

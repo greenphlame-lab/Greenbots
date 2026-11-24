@@ -1,5 +1,6 @@
 #include "playerbot/playerbot.h"
 #include "SurviveStrategy.h"
+#include "Policies.h"
 #include "playerbot/RandomPlayerbotMgr.h"
 
 using namespace ai;
@@ -13,12 +14,32 @@ void SurviveStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
 
 bool FleeOutmatchedAction::isUseful()
 {
-    if (!bot->IsAlive() || !bot->IsInCombat() || bot->InBattleGround() || ai->HasRealPlayerMaster())
+    if (!bot->IsAlive() || !bot->IsInCombat() || bot->InBattleGround())
         return false;
     if (bot->GetGroup() && bot->GetGroup()->GetMembersCount() > 1)
         return false;
-    if (!sRandomPlayerbotMgr.IsRandomBot(bot) || sRandomPlayerbotMgr.SilvermoonDungeonOf(bot->GetGUIDLow()))
+    bool own = SilvermoonIsOwn(bot);
+    if (!own && (ai->HasRealPlayerMaster() || !sRandomPlayerbotMgr.IsRandomBot(bot)))
         return false;
+    if (sRandomPlayerbotMgr.SilvermoonDungeonOf(bot->GetGUIDLow()))
+        return false;
+    // policies (S): your flee rules - N or more mobs on it, or health under X%
+    if (own)
+    {
+        SilvermoonPolicy p = SilvermoonPolicyFor(bot->GetGUIDLow());
+        if (p.fleeHealth && bot->GetHealthPercent() < float(p.fleeHealth))
+            return true;
+        if (p.fleeMobs)
+        {
+            uint32 n = 0;
+            for (ObjectGuid const& guid : AI_VALUE(std::list<ObjectGuid>, "attackers"))
+                if (Unit* u = ai->GetUnit(guid))
+                    if (u->IsAlive() && u->GetTypeId() == TYPEID_UNIT)
+                        ++n;
+            if (n >= p.fleeMobs)
+                return true;
+        }
+    }
     for (ObjectGuid const& guid : AI_VALUE(std::list<ObjectGuid>, "attackers"))
     {
         Unit* attacker = ai->GetUnit(guid);
