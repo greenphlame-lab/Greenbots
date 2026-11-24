@@ -148,6 +148,9 @@ namespace
     const float ELITE_CELL = 50.0f;
     std::once_flag silvermoonEliteOnce;
     std::unordered_map<uint64, std::pair<uint16, uint16>> silvermoonElites;
+    // highest level of mobs that attack players on sight, per 50-yard cell (S: routes took a wide
+    // berth around groups of passive yellow mobs - the stored link data counts neutral mobs too)
+    std::unordered_map<uint64, uint8> silvermoonAggroLevel;
 
     uint64 EliteCellKey(uint32 map, float x, float y)
     {
@@ -178,11 +181,24 @@ namespace
                 ++count;
             } while (result->NextRow());
         }
-        sLog.outBasic("Silvermoon: danger routes: %u hostile outdoor elites in %u cells, loaded in %u ms", count, uint32(silvermoonElites.size()), WorldTimer::getMSTimeDiff(started, WorldTimer::getMSTime()));
+        if (auto all = WorldDatabase.Query("SELECT c.map, c.position_x, c.position_y, t.Faction, t.MaxLevel FROM creature c JOIN creature_template t ON t.entry = c.id WHERE c.map IN (0, 1)"))
+        {
+            do
+            {
+                Field* f = all->Fetch();
+                FactionTemplateEntry const* faction = sFactionTemplateStore.LookupEntry(f[3].GetUInt32());
+                if (!faction || !faction->IsHostileToPlayers())
+                    continue;                                   // neutral (yellow) and friendly mobs don't count
+                uint8& top = silvermoonAggroLevel[EliteCellKey(f[0].GetUInt32(), f[1].GetFloat(), f[2].GetFloat())];
+                top = std::max<uint8>(top, uint8(std::min<uint32>(255, f[4].GetUInt32())));
+            } while (all->NextRow());
+        }
+        sLog.outBasic("Silvermoon: danger routes: %u hostile outdoor elites in %u cells, aggressive mobs in %u cells, loaded in %u ms", count,
+            uint32(silvermoonElites.size()), uint32(silvermoonAggroLevel.size()), WorldTimer::getMSTimeDiff(started, WorldTimer::getMSTime()));
     }
 
     // per walk link, worked out once: hostile elites along it and the enemy ground it crosses
-    struct SilvermoonLinkDanger { uint16 elitesA = 0, elitesH = 0; uint8 owner = 0; bool alwaysOff = false; };
+    struct SilvermoonLinkDanger { uint16 elitesA = 0, elitesH = 0; uint8 owner = 0; bool alwaysOff = false; uint8 aggroLevel = 0; };
     std::shared_mutex silvermoonLinkLock;
     std::unordered_map<TravelNodePath const*, SilvermoonLinkDanger> silvermoonLinks;
 
@@ -201,6 +217,9 @@ namespace
             cells.insert(EliteCellKey(p.getMapId(), p.getX(), p.getY()));
         for (uint64 key : cells)
         {
+            auto ag = silvermoonAggroLevel.find(key);
+            if (ag != silvermoonAggroLevel.end())
+                d.aggroLevel = std::max(d.aggroLevel, ag->second);
             auto it = silvermoonElites.find(key);
             if (it != silvermoonElites.end())
             {
@@ -468,17 +487,21 @@ float TravelNodePath::getCost(Unit* unit, uint32 cGold)
                 factionAnnoyance = (maxLevelCreature[1] - level) - 10;
 
             // Silvermoon step 4: mobs 2+ levels above the bot, +20% per level (stock: 10 levels below, +10%)
+            // Silvermoon: only mobs that attack on sight count (the link's own figure includes neutral ones)
+            int dangerLevel = int(maxLevelCreature[0]);
+            if (sPlayerbotAIConfig.silvermoonTravel && bot->GetMap() && bot->GetMap()->IsContinent())
+                dangerLevel = LinkDanger(this, path).aggroLevel;
             if (sPlayerbotAIConfig.silvermoonTravel)
-                mobAnnoyance = int(maxLevelCreature[0]) - int(level) - 2;
+                mobAnnoyance = dangerLevel - int(level) - 2;
             // S: no walking past mobs well above the bot (13% of deaths, half of them on relocation
             // trips through Hillsbrad, Alterac Mountains and Arathi). 1.1 closed every link with any
             // mob 4+ above within 50 yards (one rare or elite was enough), and 423 of 500 long route
             // searches then found no path. Softened in 1.2: links with mobs 8+ above stay closed;
             // 4-7 above cost +60% per level, so they're used only when there is no other way.
-            if (sPlayerbotAIConfig.silvermoonTravel && level < 60 && int(maxLevelCreature[0]) >= int(level) + 8)
+            if (sPlayerbotAIConfig.silvermoonTravel && level < 60 && dangerLevel >= int(level) + 8)
                 return -1;
-            if (sPlayerbotAIConfig.silvermoonTravel && level < 60 && int(maxLevelCreature[0]) >= int(level) + 4)
-                modifier += 0.4 * (int(maxLevelCreature[0]) - int(level) - 3);   // on top of the +20%/level
+            if (sPlayerbotAIConfig.silvermoonTravel && level < 60 && dangerLevel >= int(level) + 4)
+                modifier += 0.4 * (dangerLevel - int(level) - 3);   // on top of the +20%/level
             if (mobAnnoyance > 0)
                 modifier += (sPlayerbotAIConfig.silvermoonTravel ? 0.2 : 0.1) * mobAnnoyance;     //For each level the whole path takes 10% longer.
             if (factionAnnoyance > 0)
