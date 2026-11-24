@@ -356,6 +356,9 @@ static void SilvermoonFixProfessions(Player* bot)
 // continent first). Returns false when none fits, and the caller falls back to the stock teleport.
 static bool SilvermoonHubTeleport(Player* bot)
 {
+    // never your own characters (S: Mommy was teleported to Tirisfal and then Hillsbrad)
+    if (sPlayerbotAIConfig.IsFreeAltBot(bot) || (bot->GetPlayerbotAI() && bot->GetPlayerbotAI()->IsRealPlayer()))
+        return true;   // "handled": the caller doesn't fall back to a random teleport either
     bool alliance = bot->GetTeam() == ALLIANCE;
     int32 level = int32(bot->GetLevel());
     WorldPosition here(bot);

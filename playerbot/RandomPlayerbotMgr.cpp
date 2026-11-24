@@ -2531,6 +2531,11 @@ void RandomPlayerbotMgr::RandomTeleport(Player* bot, std::vector<WorldLocation>&
     if (bot->IsBeingTeleported())
         return;
 
+    // Silvermoon (S): your own characters (always-online alts, you on Auto) are never teleported
+    // at random - Mommy, level 10 Alliance, ended up in Tirisfal and then bound in Southshore
+    if (sPlayerbotAIConfig.IsFreeAltBot(bot) || (bot->GetPlayerbotAI() && bot->GetPlayerbotAI()->IsRealPlayer()))
+        return;
+
     if (bot->InBattleGround())
         return;
 
