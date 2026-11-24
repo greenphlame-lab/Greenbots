@@ -462,7 +462,7 @@ static void SilvermoonInnBind(Player* bot)
     for (ObjectGuid const& guid : ai->GetAiObjectContext()->GetValue<std::list<ObjectGuid>>("nearest npcs")->Get())
     {
         Creature* npc = bot->GetMap()->GetCreature(guid);
-        if (!npc || !npc->IsAlive() || !npc->HasFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_INNKEEPER) || npc->IsHostileTo(bot) ||
+        if (!npc || !npc->IsAlive() || !npc->HasFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_INNKEEPER) || npc->IsEnemy(bot) ||
             bot->GetDistance(npc) > 30.0f)
             continue;
         npc->CastSpell(bot, 3286, TRIGGERED_OLD_TRIGGERED);    // "Bind", what the innkeeper's gossip does

@@ -441,7 +441,7 @@ void ai::SilvermoonLevelPass(Player* bot)
                 Creature* seller = nullptr;
                 for (ObjectGuid const& g : context->GetValue<std::list<ObjectGuid>>("nearest npcs")->Get())
                     if (Creature* c = bot->GetMap()->GetCreature(g))
-                        if (sellers.count(c->GetEntry()) && !c->IsHostileTo(bot) && bot->GetDistance(c) < 30.0f)
+                        if (sellers.count(c->GetEntry()) && !c->IsEnemy(bot) && bot->GetDistance(c) < 30.0f)
                             seller = c;
                 if (!seller)
                 {
