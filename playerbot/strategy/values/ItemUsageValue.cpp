@@ -853,8 +853,7 @@ ItemUsage ItemUsageValue::QueryItemUsageForEquip(ItemQualifier& itemQualifier, P
     {
         float newDps = (itemProto->Damage[0].DamageMin + itemProto->Damage[0].DamageMax) / 2.0f / (itemProto->Delay / 1000.0f);
         float oldDps = (oldItemProto->Damage[0].DamageMin + oldItemProto->Damage[0].DamageMax) / 2.0f / (oldItemProto->Delay / 1000.0f);
-        uint32 skill = itemProto->GetSkill();
-        if (newDps >= oldDps * 1.15f && newDps > 0.0f && (!skill || bot->GetSkillValue(skill) > 0) && bot->CanUseItem(itemProto) == EQUIP_ERR_OK)
+        if (newDps >= oldDps * 1.15f && newDps > 0.0f && bot->CanUseItem(itemProto) == EQUIP_ERR_OK)
             return ItemUsage::ITEM_USAGE_EQUIP;
     }
 
