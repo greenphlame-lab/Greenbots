@@ -16,7 +16,7 @@ using namespace ai;
 // Silvermoon (S): grey mobs (no XP) are only worth it for a destitute bot - weapon at 0 durability -
 // which farms them for coin; everyone else leaves them alone unless a quest needs them. (Stock let 1
 // in 50 through and, on long trips, bots spent their time killing grey mobs.)
-namespace ai { uint8 SilvermoonTravelRules(Player* bot); bool SilvermoonIsOwn(Player* bot); }
+namespace ai { uint8 SilvermoonTravelRules(Player* bot); bool SilvermoonIsOwn(Player* bot); float SilvermoonGatherOrderFactor(uint32 guid, uint32 skill); }
 
 static bool SilvermoonGreyAllowed(Player* bot)
 {
@@ -183,6 +183,11 @@ Unit* GrindTargetValue::FindTargetForGrinding(int assistCount)
                 careful = 2;    // Resurrection Sickness: no new fights until it wears off
             else if (SilvermoonOnRelocateTrip(bot->GetGUIDLow()))
                 careful = 2;    // on a relocation trip: keep moving, fight only what attacks
+            // Gather order (S): node to node, no fights on the way unless something attacks
+            // (mining, herbalism, fishing - a skinning order is about killing beasts)
+            else if (SilvermoonGatherOrderFactor(bot->GetGUIDLow(), 186) > 1.0f || SilvermoonGatherOrderFactor(bot->GetGUIDLow(), 182) > 1.0f ||
+                     SilvermoonGatherOrderFactor(bot->GetGUIDLow(), 356) > 1.0f)
+                careful = 2;
             // policy (S): "avoid mobs while travelling" - no new pulls on the way anywhere
             else if ((SilvermoonTravelRules(bot) & 1) && AI_VALUE(bool, "travel target traveling"))
                 careful = 2;
