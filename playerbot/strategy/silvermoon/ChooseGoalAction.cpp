@@ -355,6 +355,14 @@ static SilvermoonScoredGoal ScoreWith(Player* bot, BotSnapshot const& snapshot, 
 
     goal.kind = c.kind;
     goal.score = GoalScorer::Score(snapshot, c, frand(0.9f, 1.1f));
+    // doable quests close by come before grinding (S: Mommy ground Kobold Workers with quest
+    // objectives 200-250 yards away): quest objectives within 250 yards that aren't elite or 3+
+    // levels up are worth half again
+    if (c.kind == GoalKind::QuestObjective && distance < 250.0f && !c.elite && (c.mobLevel <= 0 || c.mobLevel < int32(bot->GetLevel()) + 3))
+    {
+        goal.score.score *= 1.5f;
+        goal.score.reason = "nearby quest: " + goal.score.reason;
+    }
     // a grind spot on mobs an active quest needs is quest work (S: Mommy "grind fallback"-ed Kobold
     // Vermin for Kobold Camp Cleanup - grind 38 against the objective's 36): worth a third more and
     // labelled as such

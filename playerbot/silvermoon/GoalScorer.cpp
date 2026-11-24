@@ -69,6 +69,10 @@ namespace silvermoon
         {
         case GoalKind::QuestTurnIn:
             s.value = c.questXp + c.chainXp * CHAIN_XP_SHARE;
+            // a finished quest is worth handing in even when its XP is small (low or grey class
+            // quests like Consecrated Letter): rewards, follow-ups, a free log slot - at least 6
+            // minutes of the bot's XP rate (S: Mommy ground kobolds with a turn-in next door)
+            s.value = std::max(s.value, xpm * 6.0f);
             s.minutes = travel + TURN_IN_MINUTES;
             s.reason = "quest xp";
             break;
