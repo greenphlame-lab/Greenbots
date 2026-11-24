@@ -9,10 +9,14 @@ using namespace ai;
 
 bool LootAvailableTrigger::IsActive()
 {
+    // Silvermoon (S: Mommy killed mobs on her herb patrol and walked off without looting them):
+    // loot within 30 yards counts as long as nothing is attacking - "all targets" (any hostile in
+    // sight) was rarely empty in mob-dense zones, so a corpse a few steps away was never looted
     return AI_VALUE(bool, "has available loot") &&
             (
                     sServerFacade.IsDistanceLessOrEqualThan(AI_VALUE2(float, "distance", "loot target"), INTERACTION_DISTANCE) ||
-                    AI_VALUE(std::list<ObjectGuid>, "all targets").empty()
+                    AI_VALUE(std::list<ObjectGuid>, "all targets").empty() ||
+                    (!AI_VALUE(bool, "has attackers") && sServerFacade.IsDistanceLessOrEqualThan(AI_VALUE2(float, "distance", "loot target"), 30.0f))
             ) &&
             !AI_VALUE2(bool, "combat", "self target") &&
             !AI_VALUE2(bool, "mounted", "self target");
