@@ -622,6 +622,11 @@ static void SilvermoonLearnGathering(Player* bot)
 // at most a quarter of its money (6, 8 or 10 slots), paying the vendor price.
 static void SilvermoonBuyBag(Player* bot)
 {
+    // policies (S): your characters can be told not to buy bags, or to replace small bags with
+    // bigger ones
+    uint8 rules = SilvermoonIsOwn(bot) ? SilvermoonPolicyFor(bot->GetGUIDLow()).bags : 0;
+    if (rules & 1)
+        return;
     uint8 freeSlot = 0;
     for (uint8 slot = INVENTORY_SLOT_BAG_START; slot < INVENTORY_SLOT_BAG_END; ++slot)
         if (!bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
@@ -629,6 +634,40 @@ static void SilvermoonBuyBag(Player* bot)
             freeSlot = slot;
             break;
         }
+    if (!freeSlot && (rules & 2))
+    {
+        // the smallest equipped bag, if it is empty and a bigger vendor bag fits the budget: sold
+        // (vendor price) and replaced in its slot
+        Bag* smallest = nullptr;
+        uint8 smallSlot = 0;
+        for (uint8 slot = INVENTORY_SLOT_BAG_START; slot < INVENTORY_SLOT_BAG_END; ++slot)
+            if (Bag* bag = (Bag*)bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
+                if (bag->GetProto()->Class == ITEM_CLASS_CONTAINER && bag->GetProto()->SubClass == ITEM_SUBCLASS_CONTAINER &&
+                    (!smallest || bag->GetBagSize() < smallest->GetBagSize()))
+                {
+                    smallest = bag;
+                    smallSlot = slot;
+                }
+        if (!smallest || !smallest->IsEmpty())
+            return;
+        for (uint32 entry : { 4497u, 4498u })    // Heavy Brown Bag 10, Brown Leather Satchel 8
+        {
+            ItemPrototype const* proto = sObjectMgr.GetItemPrototype(entry);
+            if (!proto || proto->ContainerSlots <= smallest->GetBagSize() || proto->BuyPrice > SilvermoonUpgradeBudget(bot, 50))
+                continue;
+            uint32 refund = smallest->GetProto()->SellPrice;
+            std::string old = smallest->GetProto()->Name1;
+            bot->DestroyItem(INVENTORY_SLOT_BAG_0, smallSlot, true);
+            uint16 dest;
+            if (bot->CanEquipNewItem(smallSlot, dest, entry, false) != EQUIP_ERR_OK)
+                return;
+            bot->EquipNewItem(dest, entry, true);
+            bot->ModifyMoney(int32(refund) - int32(proto->BuyPrice));
+            sLog.outBasic("Silvermoon: %s replaced a %s with a %s (policy)", bot->GetName(), old.c_str(), proto->Name1);
+            return;
+        }
+        return;
+    }
     if (!freeSlot)
         return;
     for (uint32 entry : { 4497u, 4498u, 4496u })    // Heavy Brown Bag 10, Brown Leather Satchel 8, Small Brown Pouch 6
@@ -1211,6 +1250,8 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                             SilvermoonFillEmptyWeapon(me);
                             SilvermoonProfBuyTools(me);
                             SilvermoonWeaponTraining(me);
+                            if (me->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_RESTING) && !me->IsInCombat())
+                                SilvermoonBuyBag(me);
                             // upgrades already sitting in the bags (S): checked every 30 s out of combat
                             if (!me->IsInCombat())
                                 me->GetPlayerbotAI()->DoSpecificAction("equip upgrades", Event("silvermoon auto"), true);

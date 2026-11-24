@@ -28,7 +28,8 @@ namespace ai
         uint32 ahGold = 0;           // copper, 0 = off
         uint8 upgradePct = 0;        // 0 = the bot's defaults
         std::map<uint32, uint8> weapons;   // skill -> 1 train, 2 avoid
-        bool Any() const { return !blockedZones.empty() || fleeMobs || fleeHealth || ahGold || upgradePct || !weapons.empty(); }
+        uint8 bags = 0;              // bit 1: don't buy bags; bit 2: replace small bags with bigger ones
+        bool Any() const { return !blockedZones.empty() || fleeMobs || fleeHealth || ahGold || upgradePct || !weapons.empty() || bags; }
     };
 
     // your own character playing on its own: Auto (self-bot) or an always-online alt with auto on

@@ -23,7 +23,7 @@ namespace
         out << "z=";
         bool first = true;
         for (uint32 z : p.blockedZones) { out << (first ? "" : ",") << z; first = false; }
-        out << ";fm=" << uint32(p.fleeMobs) << ";fh=" << uint32(p.fleeHealth) << ";ah=" << p.ahGold << ";up=" << uint32(p.upgradePct) << ";ws=";
+        out << ";bg=" << uint32(p.bags) << ";fm=" << uint32(p.fleeMobs) << ";fh=" << uint32(p.fleeHealth) << ";ah=" << p.ahGold << ";up=" << uint32(p.upgradePct) << ";ws=";
         first = true;
         for (auto const& [skill, mode] : p.weapons) { out << (first ? "" : ",") << skill << ":" << uint32(mode); first = false; }
         return out.str();
@@ -41,6 +41,7 @@ namespace
                 continue;
             std::string key = part.substr(0, eq), value = part.substr(eq + 1);
             if (key == "fm") p.fleeMobs = uint8(atoi(value.c_str()));
+            else if (key == "bg") p.bags = uint8(atoi(value.c_str()));
             else if (key == "fh") p.fleeHealth = uint8(atoi(value.c_str()));
             else if (key == "ah") p.ahGold = uint32(strtoul(value.c_str(), nullptr, 10));
             else if (key == "up") p.upgradePct = uint8(atoi(value.c_str()));
@@ -159,6 +160,17 @@ bool ai::SilvermoonPolicyCommand(Player* bot, std::string const& param, std::str
         else if (v2 == "avoid") p.weapons[skill] = 2;
         else p.weapons.erase(skill);
         reply = "Weapon skills updated.";
+    }
+    else if (k == "bags" && n == 3)
+    {
+        uint8 bit = v1 == "buy" ? 1 : v1 == "bigger" ? 2 : 0;
+        if (!bit)
+            return false;
+        if (bit == 1)   // "bags buy on|off": the bit means "don't buy"
+            p.bags = v2 == "off" ? (p.bags | 1) : (p.bags & ~1);
+        else
+            p.bags = v2 == "on" ? (p.bags | 2) : (p.bags & ~2);
+        reply = "Bag rules updated.";
     }
     else if (k == "reset")
         p = SilvermoonPolicy(), reply = "Policies reset.";
