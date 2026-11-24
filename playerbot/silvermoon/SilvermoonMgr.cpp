@@ -509,6 +509,22 @@ static void SilvermoonFillEmptyWeapon(Player* bot)
     sLog.outBasic("Silvermoon: %s on Auto had no weapon, equipped %s from its bags", bot->GetName(), best->GetProto()->Name1);
 }
 
+// quests a bot gave up on (S: Guile picked up the grey "A Putrid Task", dropped it, and came back
+// for it again and again): never taken again while the server runs
+static std::mutex droppedLock;
+static std::unordered_map<uint32, std::set<uint32>> droppedQuests;
+void SilvermoonNoteDroppedQuest(uint32 guid, uint32 questId)
+{
+    std::lock_guard<std::mutex> guard(droppedLock);
+    droppedQuests[guid].insert(questId);
+}
+bool SilvermoonQuestDropped(uint32 guid, uint32 questId)
+{
+    std::lock_guard<std::mutex> guard(droppedLock);
+    auto it = droppedQuests.find(guid);
+    return it != droppedQuests.end() && it->second.count(questId) > 0;
+}
+
 static void SilvermoonDropStaleQuests(Player* bot)
 {
     static std::mutex lock;
@@ -536,6 +552,7 @@ static void SilvermoonDropStaleQuests(Player* bot)
         bot->SetQuestStatus(questId, QUEST_STATUS_NONE);
         bot->getQuestStatusMap()[questId].m_rewarded = false;
         seen.erase(it);
+        SilvermoonNoteDroppedQuest(bot->GetGUIDLow(), questId);
         sLog.outBasic("Silvermoon: bot %s (level %u) abandoned quest %u \"%s\" (level %d, unfinished for 5 levels)",
             bot->GetName(), level, questId, quest->GetTitle().c_str(), questLevel);
     }

@@ -200,6 +200,15 @@ namespace
         Quest const* quest = sObjectMgr.GetQuestTemplate(questId);
         if (!quest)
             return 1.0f;
+        // not for this class or race (S: Guile, a rogue, walked to Deathguard Dillinger again and
+        // again for the warrior quest "Ulag the Cleaver"), or dropped before: worth nothing
+        if ((quest->GetRequiredClasses() && !(quest->GetRequiredClasses() & bot->getClassMask())) ||
+            (quest->GetRequiredRaces() && !(quest->GetRequiredRaces() & bot->getRaceMask())) ||
+            SilvermoonQuestDropped(bot->GetGUIDLow(), questId))
+        {
+            tag = "not for me: ";
+            return 0.0f;
+        }
         if (quest->GetRequiredClasses())
         {
             tag = "class quest: ";

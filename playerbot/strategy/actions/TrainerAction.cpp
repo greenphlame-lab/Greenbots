@@ -21,7 +21,9 @@ void TrainerAction::Learn(uint32 cost, ObjectGuid trainerGuid, uint32 spellId, T
 {
     if (sPlayerbotAIConfig.autoTrainSpells != "free" &&  !ai->HasCheat(BotCheatMask::gold))
     {
-        if (AI_VALUE2(uint32, "free money for", (uint32)NeedMoneyFor::spells) < cost)
+        uint32 repairs = AI_VALUE(uint32, "max repair cost");
+        uint32 spare = bot->GetMoney() > repairs ? bot->GetMoney() - repairs : 0;
+        if (AI_VALUE2(uint32, "free money for", (uint32)NeedMoneyFor::spells) < cost && spare < cost)
         {
             msg << " - too expensive";
             return;

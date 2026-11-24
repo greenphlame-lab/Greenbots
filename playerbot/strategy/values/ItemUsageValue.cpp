@@ -169,6 +169,9 @@ ItemUsage ItemUsageValue::Calculate()
             ItemUsage equip = QueryItemUsageForEquip(itemQualifier, bot);
             if (equip == ItemUsage::ITEM_USAGE_EQUIP)
                 return equip;
+            // blues it won't wear go to the auction house (S), when they can be sold there
+            if (proto->Class != ITEM_CLASS_CONTAINER && proto->Quality == ITEM_QUALITY_RARE && proto->Bonding != BIND_WHEN_PICKED_UP)
+                return ItemUsage::ITEM_USAGE_AH;
             // policy (S): "disenchant green items" - greens it won't wear, with Enchanting
             if (proto->Class != ITEM_CLASS_CONTAINER && proto->Quality == ITEM_QUALITY_UNCOMMON && proto->DisenchantID &&
                 ai->HasSkill(SKILL_ENCHANTING) && SilvermoonPolicyFor(bot->GetGUIDLow()).disenchant)
@@ -415,6 +418,15 @@ ItemUsage ItemUsageValue::Calculate()
         return ItemUsage::ITEM_USAGE_KEEP;
 
     //DISENCHANT
+    // Silvermoon (S): blue weapons and armor that aren't an upgrade go to the auction house first
+    // (before disenchanting or selling), for every bot, when they can be sold there
+    if ((proto->Class == ITEM_CLASS_ARMOR || proto->Class == ITEM_CLASS_WEAPON) && proto->Quality == ITEM_QUALITY_RARE &&
+        proto->Bonding != BIND_WHEN_PICKED_UP)
+    {
+        ItemUsage equip = QueryItemUsageForEquip(itemQualifier, bot);
+        if (equip != ItemUsage::ITEM_USAGE_EQUIP && equip != ItemUsage::ITEM_USAGE_BAD_EQUIP && equip != ItemUsage::ITEM_USAGE_BROKEN_EQUIP)
+            return ItemUsage::ITEM_USAGE_AH;
+    }
     // Silvermoon (S): your own characters disenchant only with the "disenchant green items" policy,
     // and then only greens (blues and epics are kept)
     bool ownDisenchant = !SilvermoonIsOwn(bot) ||

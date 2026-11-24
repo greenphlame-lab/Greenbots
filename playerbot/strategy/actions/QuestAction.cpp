@@ -4,7 +4,11 @@
 #include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/ServerFacade.h"
 
+#include "Tools/Formulas.h"
+
 using namespace ai;
+
+bool SilvermoonQuestDropped(uint32 guid, uint32 questId);
 
 bool QuestAction::Execute(Event& event)
 {
@@ -212,6 +216,15 @@ bool QuestAction::AcceptQuest(Player* requester, Quest const* quest, uint64 ques
     std::map<std::string, std::string> args;
     args["%quest"] = chat->formatQuest(quest);
     
+    // Silvermoon (S): bots playing on their own don't take quests they dropped before, or grey
+    // quests (except class quests) - Guile kept re-taking "A Putrid Task" at level 13
+    if (!ai->HasActivePlayerMaster() && !ai->IsRealPlayer())
+    {
+        int32 questLevel = quest->GetQuestLevel() > 0 ? quest->GetQuestLevel() : int32(bot->GetLevel());
+        bool grey = !quest->GetRequiredClasses() && questLevel <= int32(MaNGOS::XP::GetGrayLevel(bot->GetLevel()));
+        if (grey || SilvermoonQuestDropped(bot->GetGUIDLow(), questId))
+            return false;
+    }
     if (bot->GetQuestStatus(questId) == QUEST_STATUS_COMPLETE)
     {
         outputMessage = BOT_TEXT2("quest_error_completed", args);
