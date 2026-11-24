@@ -554,7 +554,8 @@ static void SilvermoonBuyBag(Player* bot)
     for (uint32 entry : { 4497u, 4498u, 4496u })    // Heavy Brown Bag 10, Brown Leather Satchel 8, Small Brown Pouch 6
     {
         ItemPrototype const* proto = sObjectMgr.GetItemPrototype(entry);
-        if (!proto || proto->BuyPrice * 4 > bot->GetMoney())
+        // S: bags are a priority - up to half the bot's money (was a quarter)
+        if (!proto || proto->BuyPrice * 2 > bot->GetMoney())
             continue;
         uint16 dest;
         if (bot->CanEquipNewItem(freeSlot, dest, entry, false) != EQUIP_ERR_OK)
@@ -1020,6 +1021,7 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                     SetEventValue(alt.second, "silvermoon_alt_shop", 1, 10 * MINUTE);
                     uint32 before = p->GetMoney();
                     SilvermoonWeaponUpgrade(p);
+                    SilvermoonBuyBag(p);
                     SilvermoonDualWield(p);
                     if (before > p->GetMoney())
                         silvermoon::Ledger(silvermoon::LG_GEAR) += before - p->GetMoney();
@@ -2599,9 +2601,9 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                 SilvermoonRepairNearby(p);
                 uint32 m1 = p->GetMoney();
                 SilvermoonWeaponUpgrade(p);
+                SilvermoonBuyBag(p);            // S: bags before Dual Wield and professions
                 SilvermoonDualWield(p);
                 SilvermoonLearnGathering(p);
-                SilvermoonBuyBag(p);
                 uint32 m2 = p->GetMoney();
                 SilvermoonTrainNearby(p);
                 uint32 m3 = p->GetMoney();
