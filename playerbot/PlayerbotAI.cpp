@@ -9173,3 +9173,9 @@ bool PlayerbotAI::HandleSpellClick(ObjectGuid guid)
 #endif
     return false;
 }
+
+bool PlayerbotAI::SilvermoonSyncQuests() const
+{
+    return sPlayerbotAIConfig.syncQuestWithPlayer && master && master != bot && bot->GetGroup() &&
+        master->GetGroup() == bot->GetGroup();
+}

@@ -159,7 +159,7 @@ bool QuestAction::ProcessQuests(WorldObject* questGiver)
 {
     ObjectGuid guid = questGiver->GetObjectGuid();
 
-    if (sServerFacade.GetDistance2d(bot, questGiver) > INTERACTION_DISTANCE && !sPlayerbotAIConfig.syncQuestWithPlayer)
+    if (sServerFacade.GetDistance2d(bot, questGiver) > INTERACTION_DISTANCE && !ai->SilvermoonSyncQuests())
     {
         Player* master = ai->GetMaster();
         if (!ai->GetMaster() || sServerFacade.GetDistance2d(bot, ai->GetMaster()) < sPlayerbotAIConfig.reactDistance || ai->HasStrategy("debug", BotState::BOT_STATE_NON_COMBAT))
@@ -243,7 +243,7 @@ bool QuestAction::AcceptQuest(Player* requester, Quest const* quest, uint64 ques
         p.rpos(0);
         bot->GetSession()->HandleQuestgiverAcceptQuestOpcode(p);
 
-        if (bot->CanAddQuest(quest, false) && bot->GetQuestStatus(questId) == QUEST_STATUS_NONE && sPlayerbotAIConfig.syncQuestWithPlayer)
+        if (bot->CanAddQuest(quest, false) && bot->GetQuestStatus(questId) == QUEST_STATUS_NONE && ai->SilvermoonSyncQuests())
         {
             Object* pObject = bot->GetObjectByTypeMask((ObjectGuid)questGiver, TYPEMASK_CREATURE_GAMEOBJECT_PLAYER_OR_ITEM);
             if (quest->HasQuestFlag(QUEST_FLAGS_PARTY_ACCEPT))

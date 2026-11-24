@@ -378,7 +378,7 @@ ItemUsage ItemUsageValue::Calculate()
     }
 
     //QUEST
-    if (!ai->GetMaster() || !sPlayerbotAIConfig.syncQuestWithPlayer || !IsNeededForQuest(ai->GetMaster(), itemId))
+    if (!ai->GetMaster() || !ai->SilvermoonSyncQuests() || !IsNeededForQuest(ai->GetMaster(), itemId))
     {
         if (IsNeededForQuest(bot, itemId))
             return ItemUsage::ITEM_USAGE_QUEST;

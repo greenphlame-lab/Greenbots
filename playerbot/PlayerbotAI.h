@@ -645,7 +645,11 @@ public:
     bool IsRealPlayer(Unit* unit) { return unit->IsPlayer() && ((Player*)unit)->GetSession()->GetRemoteAddress() != "disconnected/bot"; }
     bool IsSelfMaster() { return master ? (master == bot) : false; }
     //Bot has a master that is a player.
-    bool HasRealPlayerMaster() { return master && (!master->GetPlayerbotAI() || master->GetPlayerbotAI()->IsRealPlayer()); } 
+    bool HasRealPlayerMaster() { return master && (!master->GetPlayerbotAI() || master->GetPlayerbotAI()->IsRealPlayer()); }
+    // Silvermoon: SyncQuestWithPlayer only for a bot grouped with its master (a party bot). Your own
+    // character on Auto (its master is itself) and ungrouped always-online alts quest on their own -
+    // with the sync on they never looted quest items (Mommy left Tough Wolf Meat on the wolves).
+    bool SilvermoonSyncQuests() const; 
     //Bot has a master that is actively playing.
     bool HasActivePlayerMaster() const { return master && !master->GetPlayerbotAI(); }
     //Checks if the bot is summoned as alt of a player

@@ -529,7 +529,7 @@ bool StoreLootAction::IsLootAllowed(ItemQualifier& itemQualifier, PlayerbotAI *a
 
     if (proto->StartQuest)
     {
-        if (sPlayerbotAIConfig.syncQuestWithPlayer)
+        if (ai->SilvermoonSyncQuests())
             return false; //Quest is autocomplete for the bot so no item needed.
         else
             return true;
@@ -546,7 +546,7 @@ bool StoreLootAction::IsLootAllowed(ItemQualifier& itemQualifier, PlayerbotAI *a
         {
             if (quest->ReqItemId[i] == itemQualifier.GetId())
             {
-                if (ai->GetMaster() && sPlayerbotAIConfig.syncQuestWithPlayer)
+                if (ai->SilvermoonSyncQuests())
                     return false; //Quest is autocomplete for the bot so no item needed.
 
                 if (AI_VALUE2(uint32, "item count", proto->Name1) >= quest->ReqItemCount[i])

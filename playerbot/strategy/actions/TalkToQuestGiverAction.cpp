@@ -29,7 +29,7 @@ bool TalkToQuestGiverAction::ProcessQuest(Player* requester, Quest const* quest,
         }
     }
 
-    if (sPlayerbotAIConfig.syncQuestWithPlayer)
+    if (ai->SilvermoonSyncQuests())
     {        
         if (requester && requester->GetQuestStatus(quest->GetQuestId()) == QUEST_STATUS_COMPLETE && (status == QUEST_STATUS_INCOMPLETE || status == QUEST_STATUS_FAILED))
         {
