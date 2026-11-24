@@ -7,6 +7,8 @@
 #include "playerbot/ServerFacade.h"
 using namespace ai;
 
+namespace ai { bool SilvermoonIsOwn(Player* bot); }
+
 std::map<std::string, uint32> EmoteActionBase::emotes;
 std::map<std::string, uint32> EmoteActionBase::textEmotes;
 char *strstri(const char *haystack, const char *needle);
@@ -825,6 +827,10 @@ bool EmoteAction::Execute(Event& event)
 bool EmoteAction::isUseful()
 {
     if (!ai->AllowActivity())
+        return false;
+    // Silvermoon (S): your own characters don't emote on their own (Mommy danced while gathering
+    // herbs - other bots' emotes and the random emote step)
+    if (SilvermoonIsOwn(bot))
         return false;
 
     time_t lastEmote = AI_VALUE2(time_t, "last emote", qualifier);

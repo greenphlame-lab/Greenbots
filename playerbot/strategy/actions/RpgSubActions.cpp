@@ -3,6 +3,8 @@
 #include "RpgSubActions.h"
 #include "ChooseRpgTargetAction.h"
 #include "playerbot/PlayerbotAIConfig.h"
+
+namespace ai { bool SilvermoonIsOwn(Player* bot); }
 #include "playerbot/strategy/values/PossibleRpgTargetsValue.h"
 #include "playerbot/strategy/values/Formations.h"
 #include "playerbot/strategy/values/SharedValueContext.h"
@@ -140,7 +142,8 @@ bool RpgEmoteAction::Execute(Event& event)
         bot->GetSession()->HandleGossipHelloOpcode(p1);
     }
 
-    bot->HandleEmoteCommand(type);
+    if (!SilvermoonIsOwn(bot))           // Silvermoon (S): no role-play emotes for your characters
+        bot->HandleEmoteCommand(type);
 
     if (type != TEXTEMOTE_CHICKEN)
         rpg->AfterExecute();
