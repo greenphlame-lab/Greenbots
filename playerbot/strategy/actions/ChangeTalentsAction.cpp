@@ -407,6 +407,11 @@ bool AutoSetTalentsAction::Execute(Event& event)
         return false;
     }
 
+    // Silvermoon (S): your own characters (always-online alts, you on Auto) keep their talent points
+    // for you to spend
+    if (sPlayerbotAIConfig.IsFreeAltBot(bot) || ai->IsRealPlayer())
+        return false;
+
     if (bot->CalculateTalentsPoints() <= 0)
     {
         return false;

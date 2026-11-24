@@ -479,6 +479,8 @@ void SilvermoonPushBrainPanel(Player* bot, Player* owner);
 // quests a bot dropped (stale or grey): never taken again (SilvermoonMgr.cpp)
 void SilvermoonNoteDroppedQuest(uint32 guid, uint32 questId);
 bool SilvermoonQuestDropped(uint32 guid, uint32 questId);
+// "while you were away" log for the panel (SilvermoonMgr.cpp)
+std::vector<std::string> SilvermoonAwayLogMessages(Player* bot);
 // Gameobject loot that is quest items only (Doom Weed, quest crates...): the item ids, or nullptr
 // when the loot has anything else. Read once from gameobject_loot_template.
 std::vector<uint32> const* SilvermoonQuestOnlyGoLoot(uint32 lootId);

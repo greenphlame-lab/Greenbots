@@ -529,6 +529,163 @@ static void SilvermoonFixMisfitBind(Player* player)
         }
 }
 
+// "While you were away" log (S): what your characters did while playing on their own - level-ups,
+// quests handed in, gear equipped or broken, profession skill steps, an hourly money line (deaths
+// come from silvermoon_deaths). Stored in characters.silvermoon_awaylog; the panel's log window
+// asks for it with ".bot pol log" and gets addon messages "SMLOG".
+namespace
+{
+    struct AwayState
+    {
+        bool init = false;
+        uint32 level = 0, money = 0, moneyLogged = 0;
+        time_t moneyAt = 0;
+        std::set<uint32> rewarded;
+        uint32 equip[EQUIPMENT_SLOT_END] = {};
+        bool broken[EQUIPMENT_SLOT_END] = {};
+        std::map<uint32, uint32> skills;
+    };
+    std::mutex awayLock;
+    std::unordered_map<uint32, AwayState> awayStates;
+
+    void AwayWrite(Player* bot, std::string text)
+    {
+        static std::once_flag table;
+        std::call_once(table, []()
+        {
+            CharacterDatabase.Execute("CREATE TABLE IF NOT EXISTS silvermoon_awaylog (id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, "
+                "guid INT UNSIGNED NOT NULL, ts INT UNSIGNED NOT NULL, text VARCHAR(200) NOT NULL, KEY guid_ts (guid, ts))");
+        });
+        if (text.size() > 190)
+            text = text.substr(0, 190);
+        CharacterDatabase.escape_string(text);
+        CharacterDatabase.PExecute("INSERT INTO silvermoon_awaylog (guid, ts, text) VALUES (%u, %u, '%s')", bot->GetGUIDLow(), uint32(time(nullptr)), text.c_str());
+    }
+}
+
+static void SilvermoonAwayTick(Player* bot)
+{
+    static const uint32 profSkills[] = { 129, 164, 165, 171, 182, 185, 186, 197, 202, 333, 356, 393 };
+    std::vector<std::string> lines;
+    {
+        std::lock_guard<std::mutex> guard(awayLock);
+        AwayState& st = awayStates[bot->GetGUIDLow()];
+        bool first = !st.init;
+        st.init = true;
+        time_t now = time(nullptr);
+        // level
+        if (!first && bot->GetLevel() > st.level)
+            lines.push_back("Reached level " + std::to_string(bot->GetLevel()));
+        st.level = bot->GetLevel();
+        // quests handed in
+        for (auto const& [questId, status] : bot->getQuestStatusMap())
+        {
+            if (!status.m_rewarded || st.rewarded.count(questId))
+                continue;
+            st.rewarded.insert(questId);
+            if (!first)
+                if (Quest const* quest = sObjectMgr.GetQuestTemplate(questId))
+                    lines.push_back("Completed quest: " + quest->GetTitle());
+        }
+        // gear
+        for (uint8 slot = EQUIPMENT_SLOT_START; slot < EQUIPMENT_SLOT_END; ++slot)
+        {
+            Item* item = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
+            uint32 entry = item ? item->GetEntry() : 0;
+            if (!first && entry && entry != st.equip[slot])
+            {
+                ItemPrototype const* now_ = item->GetProto();
+                ItemPrototype const* old = st.equip[slot] ? sObjectMgr.GetItemPrototype(st.equip[slot]) : nullptr;
+                lines.push_back(std::string("Equipped ") + now_->Name1 + (old ? std::string(" (was ") + old->Name1 + ")" : ""));
+            }
+            st.equip[slot] = entry;
+            bool isBroken = item && item->GetUInt32Value(ITEM_FIELD_MAXDURABILITY) && !item->GetUInt32Value(ITEM_FIELD_DURABILITY);
+            if (!first && isBroken && !st.broken[slot])
+                lines.push_back(std::string(item->GetProto()->Name1) + " broke");
+            st.broken[slot] = isBroken;
+        }
+        // profession skill, every 5 points
+        for (uint32 skill : profSkills)
+        {
+            if (!bot->HasSkill(skill))
+                continue;
+            uint32 value = bot->GetSkillValue(skill);
+            auto it = st.skills.find(skill);
+            if (it == st.skills.end() || first)
+            {
+                st.skills[skill] = value;
+                continue;
+            }
+            if (value >= it->second + 5 || (value > it->second && value == bot->GetSkillMax(skill)))
+            {
+                SkillLineEntry const* line = sSkillLineStore.LookupEntry(skill);
+                lines.push_back(std::string(line ? line->name[0] : "Skill") + " " + std::to_string(it->second) + " -> " + std::to_string(value));
+                it->second = value;
+            }
+        }
+        // money, hourly
+        if (first || !st.moneyAt)
+        {
+            st.moneyAt = now;
+            st.moneyLogged = bot->GetMoney();
+        }
+        else if (now - st.moneyAt >= HOUR)
+        {
+            int64 delta = int64(bot->GetMoney()) - int64(st.moneyLogged);
+            if (delta)
+            {
+                uint32 m = bot->GetMoney();
+                std::ostringstream out;
+                out << "Money: " << m / 10000 << "g " << (m / 100) % 100 << "s " << m % 100 << "c (" << (delta > 0 ? "+" : "-");
+                uint64 d = uint64(delta > 0 ? delta : -delta);
+                out << d / 10000 << "g " << (d / 100) % 100 << "s " << d % 100 << "c in the last hour)";
+                lines.push_back(out.str());
+            }
+            st.moneyAt = now;
+            st.moneyLogged = bot->GetMoney();
+        }
+    }
+    for (std::string const& line : lines)
+        AwayWrite(bot, line);
+}
+
+// the log window's contents: the newest 40 lines and deaths of the last day, newest first
+std::vector<std::string> SilvermoonAwayLogMessages(Player* bot)
+{
+    std::vector<std::pair<uint32, std::string>> rows;
+    if (auto r = CharacterDatabase.PQuery("SELECT ts, text FROM silvermoon_awaylog WHERE guid = %u ORDER BY ts DESC LIMIT 40", bot->GetGUIDLow()))
+    {
+        do { Field* f = r->Fetch(); rows.push_back({ f[0].GetUInt32(), f[1].GetCppString() }); } while (r->NextRow());
+    }
+    if (auto r = CharacterDatabase.PQuery("SELECT ts, zone, killer_entry, killer_is_player FROM silvermoon_deaths WHERE guid = %u AND ts > UNIX_TIMESTAMP() - 86400 ORDER BY ts DESC LIMIT 20", bot->GetGUIDLow()))
+    {
+        do
+        {
+            Field* f = r->Fetch();
+            AreaTableEntry const* zone = GetAreaEntryByAreaID(f[1].GetUInt32());
+            CreatureInfo const* killer = f[2].GetUInt32() ? ObjectMgr::GetCreatureTemplate(f[2].GetUInt32()) : nullptr;
+            std::string text = std::string("Died") + (zone ? std::string(" in ") + zone->area_name[0] : "") +
+                (killer ? std::string(" to ") + killer->Name : (f[3].GetUInt32() ? " to a player" : ""));
+            rows.push_back({ f[0].GetUInt32(), text });
+        } while (r->NextRow());
+    }
+    std::sort(rows.begin(), rows.end(), [](auto const& a, auto const& b) { return a.first > b.first; });
+    if (rows.size() > 40)
+        rows.resize(40);
+    std::vector<std::string> out;
+    out.push_back("SMLOG\tBEGIN");
+    for (auto const& [ts, text] : rows)
+    {
+        std::string clean = text;
+        for (char& c : clean)
+            if (c == '^' || c == '|' || c == '\t' || c == '\n')
+                c = ' ';
+        out.push_back("SMLOG\t" + std::to_string(ts) + "^" + clean);
+    }
+    out.push_back("SMLOG\tEND");
+    return out;
+}
+
 static void SilvermoonFillEmptyWeapon(Player* bot)
 {
     if (bot->IsInCombat() || bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND))
@@ -1351,6 +1508,7 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                         {
                             SilvermoonFillEmptyWeapon(me);
                             SilvermoonFixMisfitBind(me);
+                            SilvermoonAwayTick(me);
                             SilvermoonInnBind(me);
                             SilvermoonLevelPass(me);   // "Level it" orders (Professions window)
                             // a Gather order needs the gathering step (it finds and loots the nodes)
@@ -1388,6 +1546,7 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                     uint32 before = p->GetMoney();
                     SilvermoonDropStaleQuests(p);
                     SilvermoonFixMisfitBind(p);
+                    SilvermoonAwayTick(p);
                     SilvermoonInnBind(p);
                     if (p->HasSkill(333) && SilvermoonPolicyFor(p->GetGUIDLow()).disenchant)
                         p->GetPlayerbotAI()->DoSpecificAction("disenchant random item", Event("silvermoon policy"), true);
