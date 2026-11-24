@@ -10,10 +10,33 @@ void SurviveStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
     triggers.push_back(new TriggerNode(
         "very often",
         NextAction::array(0, new NextAction("silvermoon flee outmatched", ACTION_EMERGENCY + 5), NULL)));
+    // paladin lifesavers (S: Mommy died to a level 6 Kobold Miner with Divine Protection, Blessing
+    // of Protection and Lay on Hands all ready)
+    triggers.push_back(new TriggerNode(
+        "very often",
+        NextAction::array(0, new NextAction("silvermoon lifesaver", ACTION_EMERGENCY + 6), NULL)));
     // policies (S): your "use a potion below X% health"
     triggers.push_back(new TriggerNode(
         "very often",
         NextAction::array(0, new NextAction("silvermoon policy potion", ACTION_EMERGENCY + 4), NULL)));
+}
+
+bool LifesaverAction::isUseful()
+{
+    return bot->IsAlive() && bot->IsInCombat() && bot->getClass() == CLASS_PALADIN && bot->GetHealthPercent() < 20.0f;
+}
+
+bool LifesaverAction::Execute(Event& event)
+{
+    // a bubble first (Divine Protection, then Blessing of Protection - Forbearance stops the second
+    // after the first), else Lay on Hands
+    for (char const* name : { "divine protection", "blessing of protection", "lay on hands" })
+        if (ai->CanCastSpell(name, bot, 0) && ai->CastSpell(name, bot))
+        {
+            sLog.outBasic("Silvermoon: %s used %s at %.0f%% health", bot->GetName(), name, bot->GetHealthPercent());
+            return true;
+        }
+    return false;
 }
 
 bool PolicyPotionAction::isUseful()

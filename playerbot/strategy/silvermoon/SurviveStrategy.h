@@ -14,6 +14,15 @@ namespace ai
         void InitCombatTriggers(std::list<TriggerNode*>& triggers) override;
     };
 
+    // paladins below 20% health in a fight: Divine Protection / Blessing of Protection / Lay on Hands
+    class LifesaverAction : public Action
+    {
+    public:
+        LifesaverAction(PlayerbotAI* ai) : Action(ai, "silvermoon lifesaver") {}
+        virtual bool isUseful() override;
+        virtual bool Execute(Event& event) override;
+    };
+
     // policies (S): drink a healing potion below your set health (default 20%)
     class PolicyPotionAction : public Action
     {
