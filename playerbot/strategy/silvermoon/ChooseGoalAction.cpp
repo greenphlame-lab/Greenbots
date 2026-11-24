@@ -598,7 +598,7 @@ std::vector<SilvermoonScoredGoal> ai::SilvermoonScoreGoals(Player* bot, Playerbo
                 for (WorldPosition const& v : recentSpots)
                     if (v.getMapId() == position->getMapId() && v.fDist(*position) < 40.0f)
                         recent = true;
-                if (recent || gatherStops >= 12 || skip.count(destination))
+                if (recent || gatherStops >= 12)
                     continue;
                 ++gatherStops;
             }
@@ -705,7 +705,14 @@ bool ChooseGoalAction::Execute(Event& event)
         // out for 30 minutes while she ground Kobold Workers next door)
         auto at = lastGoalAt.find(bot->GetGUIDLow());
         bool reached = at != lastGoalAt.end() && at->second.getMapId() == bot->GetMapId() && at->second.fDist(WorldPosition(bot)) < 120.0f;
-        if (last != lastGoal.end() && last->second.first && now - last->second.second < ABANDONED_WITHIN && !reached)
+        // ...and not a gathering spot: an empty or picked-over spot ends the goal at once, which
+        // put the whole herb type on the 30-minute list - Mommy gathered for a minute, then had no
+        // herb spots for the next ten and went questing (the patrol's visited-spot list handles it)
+        bool gatherDest = last != lastGoal.end() && last->second.first &&
+            (last->second.first->GetPurpose() == TravelDestinationPurpose::GatherHerbalism ||
+             last->second.first->GetPurpose() == TravelDestinationPurpose::GatherMining ||
+             last->second.first->GetPurpose() == TravelDestinationPurpose::GatherFishing);
+        if (last != lastGoal.end() && last->second.first && now - last->second.second < ABANDONED_WITHIN && !reached && !gatherDest)
             skipUntil[bot->GetGUIDLow()][last->second.first] = now + SKIP_FOR;
     }
 
