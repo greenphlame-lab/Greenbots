@@ -84,6 +84,11 @@ bool ErrandDoneAction::isUseful()
     TravelTarget* target = AI_VALUE(TravelTarget*, "travel target");
     if (!target || !target->IsActive() || !target->GetDestination())
         return false;
+    // a class trainer trip ends as soon as there is nothing it can learn there now, wherever the
+    // bot is (S: Mommy walked to her class trainer with nothing to learn - the trip was picked
+    // earlier, and nothing re-checked it on the way)
+    if (target->GetDestination()->GetPurpose() == TravelDestinationPurpose::Trainer)
+        return !AI_VALUE2(bool, "should travel named", "trainer class");
     // only once it got there (a vendor goal picked with fairly empty bags would otherwise end at once)
     WorldPosition* at = target->GetPosition();
     if (!at || at->getMapId() != bot->GetMapId() || at->distance(WorldPosition(bot)) > 60.0f)
