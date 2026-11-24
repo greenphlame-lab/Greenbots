@@ -10,6 +10,17 @@ namespace ai
     // "silvermoon hearth shortcut" (S: Mommy walked from Goldshire back to Northshire with her
     // hearthstone ready and bound there): when the goal is near the bot's hearthstone inn and the bot
     // is far from both (450+ yards, or another map), it hearths instead of walking.
+    // "silvermoon errand done" (S: Mommy kept "sell items to Godric" after selling and wandered around
+    // the vendor until the goal timed out): a vendor goal ends once the bags are under 40% full, a
+    // repair goal once the gear is above 90% durability - the brain then picks the next goal at once
+    class ErrandDoneAction : public Action
+    {
+    public:
+        ErrandDoneAction(PlayerbotAI* ai) : Action(ai, "silvermoon errand done") {}
+        virtual bool Execute(Event& event) override;
+        virtual bool isUseful() override;
+    };
+
     class HearthShortcutAction : public Action
     {
     public:

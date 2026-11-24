@@ -58,6 +58,11 @@ void SilvermoonBrainStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& tri
         "val::travel target active",
         NextAction::array(0, new NextAction("silvermoon hearth shortcut", 6.997f), NULL)));
 
+    // vendor / repair errand done: end the goal now instead of wandering by the NPC until it times out
+    triggers.push_back(new TriggerNode(
+        "val::travel target active",
+        NextAction::array(0, new NextAction("silvermoon errand done", 6.998f), NULL)));
+
     // every 5 minutes with a goal: is something clearly better now? (switch at 1.25x, chores sooner)
     triggers.push_back(new TriggerNode(
         "val::travel target active",

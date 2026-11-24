@@ -77,3 +77,27 @@ bool HearthShortcutAction::Execute(Event& event)
 {
     return ai->DoSpecificAction("hearthstone", Event("silvermoon hearth shortcut"), true);
 }
+
+bool ErrandDoneAction::isUseful()
+{
+    TravelTarget* target = AI_VALUE(TravelTarget*, "travel target");
+    if (!target || !target->IsActive() || !target->GetDestination())
+        return false;
+    // only once it got there (a vendor goal picked with fairly empty bags would otherwise end at once)
+    WorldPosition* at = target->GetPosition();
+    if (!at || at->getMapId() != bot->GetMapId() || at->distance(WorldPosition(bot)) > 60.0f)
+        return false;
+    TravelDestinationPurpose purpose = target->GetDestination()->GetPurpose();
+    if (purpose == TravelDestinationPurpose::Vendor)
+        return AI_VALUE(uint8, "bag space") < 40;
+    if (purpose == TravelDestinationPurpose::Repair)
+        return AI_VALUE(uint8, "durability") > 90;
+    return false;
+}
+
+bool ErrandDoneAction::Execute(Event& event)
+{
+    if (TravelTarget* target = AI_VALUE(TravelTarget*, "travel target"))
+        target->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
+    return true;
+}

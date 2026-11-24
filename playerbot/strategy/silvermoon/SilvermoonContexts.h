@@ -34,6 +34,7 @@ namespace ai
             creators["silvermoon flee outmatched"] = [](PlayerbotAI* ai) { return new FleeOutmatchedAction(ai); };
             creators["silvermoon travel speed"] = [](PlayerbotAI* ai) { return new TravelSpeedAction(ai); };
             creators["silvermoon hearth shortcut"] = [](PlayerbotAI* ai) { return new HearthShortcutAction(ai); };
+            creators["silvermoon errand done"] = [](PlayerbotAI* ai) { return new ErrandDoneAction(ai); };
         }
     };
 }
