@@ -439,6 +439,46 @@ static void SilvermoonWeaponUpgrade(Player* bot)
 // log and pull the bot back to low zones. Unfinished (not ready to hand in), not class quests. The
 // level a quest was first seen in the log is remembered; without a record (after a restart) the
 // quest's own level stands in for it.
+// Silvermoon (S): your character on Auto never swaps gear, but an EMPTY main hand is filled from the
+// bags with the best weapon it can use (it switched to Auto unarmed and fought with its fists)
+static void SilvermoonFillEmptyWeapon(Player* bot)
+{
+    if (bot->IsInCombat() || bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND))
+        return;
+    Item* best = nullptr;
+    float bestDps = 0.0f;
+    auto consider = [&](Item* item)
+    {
+        if (!item)
+            return;
+        ItemPrototype const* proto = item->GetProto();
+        if (proto->Class != ITEM_CLASS_WEAPON || (proto->InventoryType != INVTYPE_WEAPON && proto->InventoryType != INVTYPE_WEAPONMAINHAND &&
+            proto->InventoryType != INVTYPE_2HWEAPON) || bot->CanUseItem(proto) != EQUIP_ERR_OK)
+            return;
+        if (item->GetUInt32Value(ITEM_FIELD_MAXDURABILITY) && !item->GetUInt32Value(ITEM_FIELD_DURABILITY))
+            return;
+        float dps = SilvermoonWeaponDps(proto);
+        if (!best || dps > bestDps)
+        {
+            best = item;
+            bestDps = dps;
+        }
+    };
+    for (uint8 slot = INVENTORY_SLOT_ITEM_START; slot < INVENTORY_SLOT_ITEM_END; ++slot)
+        consider(bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot));
+    for (uint8 bagSlot = INVENTORY_SLOT_BAG_START; bagSlot < INVENTORY_SLOT_BAG_END; ++bagSlot)
+        if (Bag* bag = (Bag*)bot->GetItemByPos(INVENTORY_SLOT_BAG_0, bagSlot))
+            for (uint32 j = 0; j < bag->GetBagSize(); ++j)
+                consider(bag->GetItemByPos(j));
+    if (!best)
+        return;
+    uint16 dest;
+    if (bot->CanEquipItem(EQUIPMENT_SLOT_MAINHAND, dest, best, true) != EQUIP_ERR_OK)
+        return;
+    bot->SwapItem(uint16((best->GetBagSlot() << 8) | best->GetSlot()), uint16((INVENTORY_SLOT_BAG_0 << 8) | EQUIPMENT_SLOT_MAINHAND));
+    sLog.outBasic("Silvermoon: %s on Auto had no weapon, equipped %s from its bags", bot->GetName(), best->GetProto()->Name1);
+}
+
 static void SilvermoonDropStaleQuests(Player* bot)
 {
     static std::mutex lock;
@@ -1046,7 +1086,11 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
             for (auto& i : sRandomPlayerbotMgr.GetPlayers())
                 if (Player* me = i.second)
                     if (me->IsInWorld() && me->GetSession())
+                    {
+                        if (me->GetPlayerbotAI() && me->IsAlive())
+                            SilvermoonFillEmptyWeapon(me);
                         SilvermoonPushBrainPanel(me, me);
+                    }
             for (auto const& alt : sPlayerbotAIConfig.freeAltBots)
             {
                 Player* p = sObjectMgr.GetPlayer(ObjectGuid(HIGHGUID_PLAYER, alt.second));
