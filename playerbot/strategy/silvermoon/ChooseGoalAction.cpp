@@ -554,13 +554,22 @@ std::vector<SilvermoonScoredGoal> ai::SilvermoonScoreGoals(Player* bot, Playerbo
                             starterPull = true;
         }
     }
+    // Gather order (S: Mommy left her herb order for a quest hand-in): the candidate list is cut at
+    // 40 nearest-first, and quests nearby filled it before any herb spot made the list. With an
+    // order on, gathering spots are always considered (the cap still applies to everything else).
+    bool gatherOrder = SilvermoonGatherOrderFactor(bot->GetGUIDLow(), 186) > 1.0f || SilvermoonGatherOrderFactor(bot->GetGUIDLow(), 182) > 1.0f ||
+        SilvermoonGatherOrderFactor(bot->GetGUIDLow(), 356) > 1.0f;
     // partitions are ordered by distance, so this walks nearest first
     for (auto& [partition, points] : list)
     {
         for (auto& [destination, position, distance] : points)
         {
-            if (goals.size() >= MAX_CANDIDATES)
+            if (goals.size() >= MAX_CANDIDATES && !gatherOrder)
                 break;
+            if (goals.size() >= MAX_CANDIDATES && (!destination ||
+                (destination->GetPurpose() != TravelDestinationPurpose::GatherHerbalism && destination->GetPurpose() != TravelDestinationPurpose::GatherMining &&
+                 destination->GetPurpose() != TravelDestinationPurpose::GatherFishing)))
+                continue;
             if (!destination || !seen.insert(destination).second || skip.count(destination))
                 continue;
             if (!destination->IsActive(bot, info))
@@ -602,7 +611,7 @@ std::vector<SilvermoonScoredGoal> ai::SilvermoonScoreGoals(Player* bot, Playerbo
                 }
             }
         }
-        if (goals.size() >= MAX_CANDIDATES)
+        if (goals.size() >= MAX_CANDIDATES && !gatherOrder)
             break;
     }
     std::sort(goals.begin(), goals.end(), [](SilvermoonScoredGoal const& a, SilvermoonScoredGoal const& b) { return a.score.score > b.score.score; });
