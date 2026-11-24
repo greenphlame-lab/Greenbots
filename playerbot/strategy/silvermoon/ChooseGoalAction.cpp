@@ -733,6 +733,25 @@ bool ChooseGoalAction::Execute(Event& event)
         }
     }
 
+    // Gather order = one continuous task (S: "cease everything and path point to point to herbs,
+    // only stopping to fight if in danger"): nothing but gathering spots is left in the list. When
+    // every spot nearby was visited in the last 15 minutes, the visited list starts over (spawns
+    // have had time to come back) and the bot tries again in a moment rather than going questing.
+    if (SilvermoonGatherOrderFactor(bot->GetGUIDLow(), 186) > 1.0f || SilvermoonGatherOrderFactor(bot->GetGUIDLow(), 182) > 1.0f ||
+        SilvermoonGatherOrderFactor(bot->GetGUIDLow(), 356) > 1.0f)
+    {
+        goals.erase(std::remove_if(goals.begin(), goals.end(), [](SilvermoonScoredGoal const& g) { return g.kind != GoalKind::Gather; }), goals.end());
+        if (goals.empty())
+        {
+            {
+                std::lock_guard<std::mutex> guard(goalLock);
+                gatherVisited[bot->GetGUIDLow()].clear();
+            }
+            SET_AI_VALUE2(int, "manual int", "silvermoon goal retry at", int(time(nullptr) + 10));
+            return false;
+        }
+    }
+
     // Professions tab: a learn order goes ahead of everything
     {
         SilvermoonScoredGoal prof;
