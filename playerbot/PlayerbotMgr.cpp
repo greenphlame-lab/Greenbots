@@ -8,6 +8,7 @@
 #include "playerbot/RandomPlayerbotMgr.h"
 #include "playerbot/ServerFacade.h"
 #include "playerbot/TravelMgr.h"
+#include "playerbot/TravelNode.h"
 #include "playerbot/WorldPosition.h"
 #include "Chat/ChannelMgr.h"
 #include "Social/SocialMgr.h"
@@ -737,6 +738,16 @@ std::list<std::string> PlayerbotHolder::HandlePlayerbotCommand(const std::string
             if (TravelTarget* target = master->GetPlayerbotAI()->GetAiObjectContext()->GetValue<TravelTarget*>("travel target")->Get())
                 if (target->IsActive())
                     target->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);   // re-choose with the new order
+        // Silvermoon (S): the panel used to wait for the 30-second push to show a change (a
+        // profession took up to half a minute to show as queued); send the new state right away
+        if (ok && master->GetSession())
+        {
+            SilvermoonPushBrainPanel(master, master);
+            std::string pol = ai::SilvermoonPolicyPanel(master);
+            WorldPacket polPacket;
+            ChatHandler::BuildChatPacket(polPacket, CHAT_MSG_PARTY, pol.c_str(), LANG_ADDON, CHAT_TAG_NONE, master->GetObjectGuid(), master->GetName());
+            master->GetSession()->SendPacket(polPacket);
+        }
         messages.push_back(ok ? reply : std::string("Usage: .bot ") + command + " ...");
         return messages;
     }
