@@ -32,6 +32,7 @@ namespace
     // minute for 12 minutes without moving.
     std::mutex goalLock;
     std::map<uint32, std::pair<TravelDestination*, time_t>> lastGoal;   // bot -> last chosen, when
+    std::map<uint32, WorldPosition> lastGoalAt;                          // bot -> where that goal was
     std::map<uint32, std::map<TravelDestination*, time_t>> skipUntil;   // bot -> destination -> until
 
     // Chores that keep coming back without effect (a broke bot's repairs, a trainer it can't reach,
@@ -623,7 +624,12 @@ bool ChooseGoalAction::Execute(Event& event)
         std::lock_guard<std::mutex> guard(goalLock);
         time_t now = time(nullptr);
         auto last = lastGoal.find(bot->GetGUIDLow());
-        if (last != lastGoal.end() && last->second.first && now - last->second.second < ABANDONED_WITHIN)
+        // ...unless the bot got there: a goal that ended at its spot (S: Mommy walked to the Echo
+        // Ridge laborers for Skirmish at Echo Ridge, the goal ended there, and the quest was then left
+        // out for 30 minutes while she ground Kobold Workers next door)
+        auto at = lastGoalAt.find(bot->GetGUIDLow());
+        bool reached = at != lastGoalAt.end() && at->second.getMapId() == bot->GetMapId() && at->second.fDist(WorldPosition(bot)) < 120.0f;
+        if (last != lastGoal.end() && last->second.first && now - last->second.second < ABANDONED_WITHIN && !reached)
             skipUntil[bot->GetGUIDLow()][last->second.first] = now + SKIP_FOR;
     }
 
@@ -688,6 +694,10 @@ bool ChooseGoalAction::Execute(Event& event)
     {
         std::lock_guard<std::mutex> guard(goalLock);
         lastGoal[bot->GetGUIDLow()] = { best.destination, time(nullptr) };
+        if (best.position)
+            lastGoalAt[bot->GetGUIDLow()] = *best.position;
+        else
+            lastGoalAt.erase(bot->GetGUIDLow());
     }
     TravelTarget newTarget = TravelTarget(ai);
     newTarget.SetRelevance(AI_VALUE2(int, "manual int", "future travel relevance"));
