@@ -130,6 +130,9 @@ ItemUsage ItemUsageValue::Calculate()
             ItemUsage equip = QueryItemUsageForEquip(itemQualifier, bot);
             if (equip == ItemUsage::ITEM_USAGE_EQUIP)
                 return equip;
+            // white gear it isn't going to wear (not an upgrade, or not for its class) is sold (S)
+            if (proto->Quality == ITEM_QUALITY_NORMAL && proto->Class != ITEM_CLASS_CONTAINER)
+                return ItemUsage::ITEM_USAGE_VENDOR;
         }
         return ItemUsage::ITEM_USAGE_KEEP;
     }
