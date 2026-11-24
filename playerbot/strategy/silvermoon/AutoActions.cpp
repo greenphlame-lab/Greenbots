@@ -80,6 +80,32 @@ namespace
     }
 }
 
+// what the character is doing right now, for the panel when the brain has no decision on record
+// yet (S: the panel sat on "starting up" and showed nothing while the character played)
+static std::string SilvermoonLiveActivity(Player* bot, PlayerbotAI* ai)
+{
+    if (!bot->IsAlive())
+        return "Dead, heading back";
+    if (bot->IsInCombat())
+    {
+        Unit* victim = bot->GetVictim();
+        return victim ? std::string("Fighting ") + victim->GetName() : std::string("In combat");
+    }
+    if (bot->IsTaxiFlying())
+        return "Flying";
+    if (bot->getStandState() == UNIT_STAND_STATE_SIT)
+        return "Resting";
+    if (ai)
+    {
+        if (Unit* target = ai->GetUnit(ai->GetAiObjectContext()->GetValue<ObjectGuid>("grind target")->Get()))
+            return std::string("Grinding ") + target->GetName();
+        if (TravelTarget* travel = ai->GetAiObjectContext()->GetValue<TravelTarget*>("travel target")->Get())
+            if (travel->IsActive() && travel->GetDestination())
+                return "Travelling to " + Plain(travel->GetDestination()->GetTitle());
+    }
+    return "Choosing what to do next";
+}
+
 void SilvermoonPushBrainPanel(Player* bot, Player* owner)
 {
     if (!bot || !owner || !owner->GetSession())
@@ -90,7 +116,7 @@ void SilvermoonPushBrainPanel(Player* bot, Player* owner)
     bool brain = ai && ai->HasStrategy("silvermoon brain", BotState::BOT_STATE_NON_COMBAT);
     silvermoon::DecisionRow row;
     bool have = brain && silvermoon::DecisionLog::Last(bot->GetGUIDLow(), row);
-    std::string goal = have ? row.goal : (on ? (bot->GetGroup() ? "waiting (in a group)" : "starting up") : "manual");
+    std::string goal = have ? row.goal : (on ? (bot->GetGroup() ? "waiting (in a group)" : SilvermoonLiveActivity(bot, ai)) : "manual");
     char score[16], ago[16];
     snprintf(score, sizeof(score), "%.0f", have ? row.score : 0.0f);
     snprintf(ago, sizeof(ago), "%u", have && row.ts ? (uint32(time(nullptr)) - row.ts) / 60 : 0);
