@@ -119,8 +119,20 @@ ItemUsage ItemUsageValue::Calculate()
 
     // Silvermoon auto mode: S's own character playing itself (self-bot) sells only grey junk and
     // keeps everything else - nothing is auctioned, destroyed or swapped in or out of its gear
+    // (S, 2026-11-24: it does equip upgrades - weapons, armor and bags it can use are judged by the
+    // normal equip rules; a policy such as "ask me before equipping BoE" can limit this later)
     if (ai->IsRealPlayer())
-        return proto->Quality == ITEM_QUALITY_POOR ? ItemUsage::ITEM_USAGE_VENDOR : ItemUsage::ITEM_USAGE_KEEP;
+    {
+        if (proto->Quality == ITEM_QUALITY_POOR)
+            return ItemUsage::ITEM_USAGE_VENDOR;
+        if (proto->Class == ITEM_CLASS_WEAPON || proto->Class == ITEM_CLASS_ARMOR || proto->Class == ITEM_CLASS_CONTAINER)
+        {
+            ItemUsage equip = QueryItemUsageForEquip(itemQualifier, bot);
+            if (equip == ItemUsage::ITEM_USAGE_EQUIP)
+                return equip;
+        }
+        return ItemUsage::ITEM_USAGE_KEEP;
+    }
 
     //FORCE
     ForceItemUsage forceUsage = AI_VALUE2_EXISTS(ForceItemUsage, "force item usage", proto->ItemId, ForceItemUsage::FORCE_USAGE_NONE);

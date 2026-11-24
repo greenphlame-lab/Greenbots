@@ -1088,7 +1088,12 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                     if (me->IsInWorld() && me->GetSession())
                     {
                         if (me->GetPlayerbotAI() && me->IsAlive())
+                        {
                             SilvermoonFillEmptyWeapon(me);
+                            // upgrades already sitting in the bags (S): checked every 30 s out of combat
+                            if (!me->IsInCombat())
+                                me->GetPlayerbotAI()->DoSpecificAction("equip upgrades", Event("silvermoon auto"), true);
+                        }
                         SilvermoonPushBrainPanel(me, me);
                     }
             for (auto const& alt : sPlayerbotAIConfig.freeAltBots)

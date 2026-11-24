@@ -338,11 +338,10 @@ void EquipAction::EquipItem(PlayerbotAI* ai, Player* requester, Item* item, bool
 
 bool EquipUpgradesAction::Execute(Event& event)
 {
-    // Silvermoon: your own character on Auto (self-bot) never swaps gear. This action takes the
-    // weapons off first and re-equips the best "equip" items; on Auto everything is "keep", so Guile
-    // ended up fighting unarmed after a vendor visit (and "my bags are full" when the backpack was full)
-    if (ai->IsRealPlayer())
-        return false;
+    // Silvermoon: your own character on Auto (self-bot) does equip upgrades (S, 2026-11-24). It no
+    // longer takes the weapons off first, though: with everything else "keep" that left Guile unarmed
+    // after a vendor visit (and said "my bags are full" when the backpack was full)
+    bool selfBot = ai->IsRealPlayer();
     if (!sPlayerbotAIConfig.autoEquipUpgradeLoot && !sRandomPlayerbotMgr.IsRandomBot(bot))
         return false;
 
@@ -422,9 +421,9 @@ bool EquipUpgradesAction::Execute(Event& event)
     Item* oldMainhand = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND);
     Item* oldOffhand = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND);
         
-    if (oldMainhand)
+    if (oldMainhand && !selfBot)
         UnequipAction::UnequipItem(ai, bot, oldMainhand, true);
-    if (oldOffhand)
+    if (oldOffhand && !selfBot)
         UnequipAction::UnequipItem(ai, bot, oldOffhand, true);
 
     context->ClearExpiredValues("item usage", 10); //Clear old item usage.
