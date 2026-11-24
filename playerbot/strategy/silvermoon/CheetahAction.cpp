@@ -49,3 +49,31 @@ bool TravelSpeedAction::Execute(Event& event)
     SET_AI_VALUE2(int, "manual int", "silvermoon travel speed at", int(time(nullptr)));
     return ai->DoSpecificAction(action, Event("silvermoon travel speed"), true);
 }
+
+bool HearthShortcutAction::isUseful()
+{
+    if (bot->IsInCombat() || bot->IsTaxiFlying() || !bot->IsAlive() || bot->InBattleGround() || bot->IsBeingTeleported())
+        return false;
+    if (bot->GetGroup() && bot->GetGroup()->GetMembersCount() > 1)
+        return false;
+    if (!bot->HasItemCount(6948, 1) || !AI_VALUE2(bool, "action useful", "hearthstone"))
+        return false;
+    TravelTarget* target = AI_VALUE(TravelTarget*, "travel target");
+    if (!target || !target->IsActive() || !target->GetPosition())
+        return false;
+    float hx = 0.0f, hy = 0.0f, hz = 0.0f;
+    uint32 hmap = 0;
+    bot->GetHomebindLocation(hx, hy, hz, hmap);
+    WorldPosition home(hmap, hx, hy, hz), here(bot);
+    WorldPosition* to = target->GetPosition();
+    if (to->getMapId() != hmap || to->fDist(home) > 150.0f)
+        return false;                                    // the goal isn't by the inn
+    bool farFromGoal = to->getMapId() != here.getMapId() || to->fDist(here) > 450.0f;
+    bool farFromHome = hmap != here.getMapId() || home.fDist(here) > 450.0f;
+    return farFromGoal && farFromHome;
+}
+
+bool HearthShortcutAction::Execute(Event& event)
+{
+    return ai->DoSpecificAction("hearthstone", Event("silvermoon hearth shortcut"), true);
+}

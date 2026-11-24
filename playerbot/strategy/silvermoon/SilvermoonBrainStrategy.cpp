@@ -53,6 +53,11 @@ void SilvermoonBrainStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& tri
         "val::travel target active",
         NextAction::array(0, new NextAction("silvermoon travel speed", 6.996f), NULL)));
 
+    // goal by the hearthstone inn and far away: hearth instead of walking (before the speed buff)
+    triggers.push_back(new TriggerNode(
+        "val::travel target active",
+        NextAction::array(0, new NextAction("silvermoon hearth shortcut", 6.997f), NULL)));
+
     // every 5 minutes with a goal: is something clearly better now? (switch at 1.25x, chores sooner)
     triggers.push_back(new TriggerNode(
         "val::travel target active",
