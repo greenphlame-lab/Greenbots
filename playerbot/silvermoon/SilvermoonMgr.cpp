@@ -444,6 +444,33 @@ static void SilvermoonWeaponUpgrade(Player* bot)
 // quest's own level stands in for it.
 // Silvermoon (S): your character on Auto never swaps gear, but an EMPTY main hand is filled from the
 // bags with the best weapon it can use (it switched to Auto unarmed and fought with its fists)
+// hearthstone (S: Mommy questing around Goldshire never moved her hearthstone off Northshire, not
+// in Goldshire nor in Stormwind): your characters don't stop at innkeepers on their own (their
+// role-play only visits goal NPCs), so the stock "bind when the bind is far" step never ran. Now,
+// out of combat, within 30 yards of a friendly innkeeper while the hearthstone is bound
+// 500+ yards away (or on another map) binds it there, like pressing "Make this inn your home".
+static void SilvermoonInnBind(Player* bot)
+{
+    PlayerbotAI* ai = bot->GetPlayerbotAI();
+    if (!ai || bot->IsInCombat() || !bot->IsAlive() || bot->IsTaxiFlying() || bot->GetLevel() >= DEFAULT_MAX_LEVEL)
+        return;
+    float hx = 0.0f, hy = 0.0f, hz = 0.0f;
+    uint32 hmap = 0;
+    bot->GetHomebindLocation(hx, hy, hz, hmap);
+    if (hmap == bot->GetMapId() && bot->GetDistance(hx, hy, hz) < 500.0f)
+        return;
+    for (ObjectGuid const& guid : ai->GetAiObjectContext()->GetValue<std::list<ObjectGuid>>("nearest npcs")->Get())
+    {
+        Creature* npc = bot->GetMap()->GetCreature(guid);
+        if (!npc || !npc->IsAlive() || !npc->HasFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_INNKEEPER) || npc->IsHostileTo(bot) ||
+            bot->GetDistance(npc) > 30.0f)
+            continue;
+        npc->CastSpell(bot, 3286, TRIGGERED_OLD_TRIGGERED);    // "Bind", what the innkeeper's gossip does
+        sLog.outBasic("Silvermoon: %s set its hearthstone at %s", bot->GetName(), npc->GetName());
+        return;
+    }
+}
+
 static void SilvermoonFillEmptyWeapon(Player* bot)
 {
     if (bot->IsInCombat() || bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND))
@@ -1248,6 +1275,7 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                         if (me->GetPlayerbotAI() && me->IsAlive())
                         {
                             SilvermoonFillEmptyWeapon(me);
+                            SilvermoonInnBind(me);
                             SilvermoonApplyItemRules(me);
                             SilvermoonProfBuyTools(me);
                             SilvermoonWeaponTraining(me);
@@ -1274,6 +1302,7 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                     SetEventValue(alt.second, "silvermoon_alt_shop", 1, 10 * MINUTE);
                     uint32 before = p->GetMoney();
                     SilvermoonDropStaleQuests(p);
+                    SilvermoonInnBind(p);
                     SilvermoonApplyItemRules(p);
                     SilvermoonProfBuyTools(p);
                     SilvermoonWeaponTraining(p);
