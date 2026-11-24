@@ -4,7 +4,7 @@
 #include "playerbot/TravelMgr.h"
 #include "playerbot/TravelNode.h"
 #include "playerbot/ServerFacade.h"
-#include "silvermoon/GoalScorer.h"
+#include "playerbot/silvermoon/GoalScorer.h"
 #include <algorithm>
 #include <cstdio>
 #include <deque>

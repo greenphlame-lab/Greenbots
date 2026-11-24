@@ -18,8 +18,6 @@ class Player;
 
 namespace ai
 {
-    class PlayerbotAI;
-
     bool SilvermoonProfCommand(Player* bot, std::string const& param, std::string& reply);
     // a profession goal ahead of everything else (learn order at the head of the list), or false
     bool SilvermoonProfessionGoal(Player* bot, PlayerbotAI* ai, SilvermoonScoredGoal& goal);
