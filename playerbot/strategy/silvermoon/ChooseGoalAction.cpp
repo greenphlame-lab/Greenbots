@@ -479,6 +479,11 @@ std::vector<SilvermoonScoredGoal> ai::SilvermoonScoreGoals(Player* bot, Playerbo
                 continue;
             if (position && EnemyGround(bot, *position))
                 continue;
+            // another map (continent): only relocation crosses an ocean - a quest objective on the other
+            // continent scored like a local one and the bot wandered, killing grey mobs (Guile, in
+            // Tirisfal, "doing" Kron's Amulet in Durotar)
+            if (position && position->getMapId() != bot->GetMapId())
+                continue;
             // world PvP option A: no goals in a zone where the bot died to players twice lately
             if (position && avoidedZone)
             {

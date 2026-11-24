@@ -13,6 +13,15 @@
 #include "playerbot/strategy/silvermoon/RelocateGoal.h"
 
 using namespace ai;
+// Silvermoon (S): grey mobs (no XP) are only worth it for a destitute bot - weapon at 0 durability -
+// which farms them for coin; everyone else leaves them alone unless a quest needs them. (Stock let 1
+// in 50 through and, on long trips, bots spent their time killing grey mobs.)
+static bool SilvermoonGreyAllowed(Player* bot)
+{
+    Item* weapon = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND);
+    return weapon && weapon->GetUInt32Value(ITEM_FIELD_MAXDURABILITY) && !weapon->GetUInt32Value(ITEM_FIELD_DURABILITY);
+}
+
 
 ObjectGuid GrindTargetValue::Calculate()
 {
@@ -306,7 +315,7 @@ Unit* GrindTargetValue::FindTargetForGrinding(int assistCount)
 
                 continue;
             }
-            else if (creature && !MaNGOS::XP::Gain(bot, creature) && urand(0, 50))
+            else if (creature && !MaNGOS::XP::Gain(bot, creature) && (urand(0, 50) || !SilvermoonGreyAllowed(bot)))
             {
                 if (ai->HasStrategy("debug grind", BotState::BOT_STATE_NON_COMBAT))
                     if ((AI_VALUE(bool, "travel target traveling") && typeid(AI_VALUE(TravelTarget*, "travel target")->GetDestination()) != typeid(GrindTravelDestination)))
