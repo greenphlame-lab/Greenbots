@@ -63,6 +63,11 @@ void SilvermoonBrainStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& tri
         "val::travel target active",
         NextAction::array(0, new NextAction("silvermoon errand done", 6.998f), NULL)));
 
+    // Professions tab: at the trainer a learn order points at, learn it
+    triggers.push_back(new TriggerNode(
+        "val::travel target active",
+        NextAction::array(0, new NextAction("silvermoon profession learn", 6.999f), NULL)));
+
     // every 5 minutes with a goal: is something clearly better now? (switch at 1.25x, chores sooner)
     triggers.push_back(new TriggerNode(
         "val::travel target active",

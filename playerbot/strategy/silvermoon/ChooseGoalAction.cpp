@@ -9,6 +9,7 @@
 #include "playerbot/silvermoon/QuestIndex.h"
 #include "playerbot/silvermoon/Crowd.h"
 #include "RelocateGoal.h"
+#include "Professions.h"
 #include "Mails/Mail.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include <deque>
@@ -338,7 +339,8 @@ static SilvermoonScoredGoal ScoreWith(Player* bot, BotSnapshot const& snapshot, 
         c.kind = GoalKind::Trainer;
     else if (purpose == TravelDestinationPurpose::Mail)
         c.kind = GoalKind::Mail;
-    else if (purpose == TravelDestinationPurpose::GatherMining || purpose == TravelDestinationPurpose::GatherHerbalism)
+    else if (purpose == TravelDestinationPurpose::GatherMining || purpose == TravelDestinationPurpose::GatherHerbalism ||
+             (purpose == TravelDestinationPurpose::GatherFishing && SilvermoonGatherOrderFactor(bot->GetGUIDLow(), 356) > 1.0f))
         c.kind = GoalKind::Gather;
 
     // crowding (Phase 2a): bots already heading for or working in this 100-yard cell. Capacity is
@@ -355,6 +357,26 @@ static SilvermoonScoredGoal ScoreWith(Player* bot, BotSnapshot const& snapshot, 
 
     goal.kind = c.kind;
     goal.score = GoalScorer::Score(snapshot, c, frand(0.9f, 1.1f));
+    // Professions tab: a "gather" order makes that kind of gathering the top priority (skinning: the
+    // skinnable beasts' grind spots)
+    if (c.kind == GoalKind::Gather)
+    {
+        uint32 skill = purpose == TravelDestinationPurpose::GatherMining ? 186 : purpose == TravelDestinationPurpose::GatherHerbalism ? 182 :
+            purpose == TravelDestinationPurpose::GatherFishing ? 356 : 0;
+        float f = skill ? SilvermoonGatherOrderFactor(bot->GetGUIDLow(), skill) : 1.0f;
+        if (f > 1.0f)
+        {
+            goal.score.score *= f;
+            goal.score.reason = "gather order";
+        }
+    }
+    if (c.kind == GoalKind::Grind && destination->GetEntry() > 0 && SilvermoonGatherOrderFactor(bot->GetGUIDLow(), 393) > 1.0f)
+        if (CreatureInfo const* info = ObjectMgr::GetCreatureTemplate(destination->GetEntry()))
+            if (info->SkinningLootId)
+            {
+                goal.score.score *= 5.0f;
+                goal.score.reason = "gather order: skinning";
+            }
     // doable quests close by come before grinding (S: Mommy ground Kobold Workers with quest
     // objectives 200-250 yards away): quest objectives within 250 yards that aren't elite or 3+
     // levels up are worth half again
@@ -622,6 +644,13 @@ bool ChooseGoalAction::Execute(Event& event)
         }
     }
 
+    // Professions tab: a learn order goes ahead of everything
+    {
+        SilvermoonScoredGoal prof;
+        if (SilvermoonProfessionGoal(bot, ai, prof))
+            goals.insert(goals.begin(), prof);
+    }
+
     // Phase 2b: a quest hub elsewhere, when local options are thin (or now and then an unvisited one)
     uint16 relocateHub = 0;
     {
@@ -680,6 +709,11 @@ bool ChooseGoalAction::Execute(Event& event)
         // take longer, so give it twice the route estimate plus 5 minutes (the abandon rule's limit)
         travelTarget->SetExpireIn(uint32((2.0f * best.score.minutes + 5.0f) * MINUTE * IN_MILLISECONDS));
         travelTarget->SetForced(true);   // forced targets don't drop into cooldown on the way
+    }
+    if (best.score.reason.rfind("profession:", 0) == 0)
+    {
+        travelTarget->SetExpireIn(uint32(30 * MINUTE * IN_MILLISECONDS));
+        travelTarget->SetForced(true);
     }
 
     SilvermoonLogDecision(bot, best, goals.size() > 1 ? &goals[1] : nullptr, goals.size() > 2 ? &goals[2] : nullptr);

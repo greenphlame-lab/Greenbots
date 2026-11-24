@@ -1,5 +1,6 @@
 #include "playerbot/playerbot.h"
 #include "AutoActions.h"
+#include "Professions.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/TravelMgr.h"
 #include "playerbot/TravelNode.h"
@@ -95,6 +96,13 @@ void SilvermoonPushBrainPanel(Player* bot, Player* owner)
     WorldPacket data;
     ChatHandler::BuildChatPacket(data, CHAT_MSG_PARTY, text.c_str(), LANG_ADDON, CHAT_TAG_NONE, bot->GetObjectGuid(), bot->GetName());
     owner->GetSession()->SendPacket(data);
+    if (bot == owner)
+    {
+        std::string prof = SilvermoonProfPanel(bot);   // the Professions tab
+        WorldPacket p;
+        ChatHandler::BuildChatPacket(p, CHAT_MSG_PARTY, prof.c_str(), LANG_ADDON, CHAT_TAG_NONE, bot->GetObjectGuid(), bot->GetName());
+        owner->GetSession()->SendPacket(p);
+    }
 }
 
 bool SilvermoonAutoAction::Execute(Event& event)

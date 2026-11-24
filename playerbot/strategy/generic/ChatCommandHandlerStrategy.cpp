@@ -81,6 +81,7 @@ ChatCommandHandlerStrategy::ChatCommandHandlerStrategy(PlayerbotAI* ai) : PassTr
     supported.push_back("who");
     supported.push_back("auto");
     supported.push_back("why");
+    supported.push_back("prof");
     supported.push_back("where");
     supported.push_back("save mana");
     supported.push_back("formation");

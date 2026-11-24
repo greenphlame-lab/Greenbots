@@ -7,6 +7,7 @@
 #include "TakeQuestsAction.h"
 #include "SurviveStrategy.h"
 #include "CheetahAction.h"
+#include "Professions.h"
 
 namespace ai
 {
@@ -35,6 +36,7 @@ namespace ai
             creators["silvermoon travel speed"] = [](PlayerbotAI* ai) { return new TravelSpeedAction(ai); };
             creators["silvermoon hearth shortcut"] = [](PlayerbotAI* ai) { return new HearthShortcutAction(ai); };
             creators["silvermoon errand done"] = [](PlayerbotAI* ai) { return new ErrandDoneAction(ai); };
+            creators["silvermoon profession learn"] = [](PlayerbotAI* ai) { return new ProfessionLearnAction(ai); };
         }
     };
 }

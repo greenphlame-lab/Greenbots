@@ -1,0 +1,46 @@
+#pragma once
+#include "playerbot/strategy/Action.h"
+#include "playerbot/strategy/actions/GenericActions.h"
+#include "ChooseGoalAction.h"
+#include <string>
+
+// Silvermoon Professions tab (S, 2026-11-24): your own characters (Auto, auto alts) get profession
+// orders from the in-game panel.
+//  - Learn: from level 5, put learning a profession at the top of the character's priorities. It
+//    walks to the nearest friendly trainer for it and learns it if it can pay; if it can't, the order
+//    is dropped. Several can be picked; they're trained one after another.
+//  - Gather: once a gathering profession is known (Mining, Herbalism, Skinning, Fishing), make
+//    gathering it the top priority until switched off.
+// Orders arrive as the chat command "prof" (the panel whispers it to the character itself):
+//   prof learn <skill id>   prof gather <skill id>   prof stop <skill id>   prof stop
+// The panel gets the state as addon message "SMPROF".
+class Player;
+
+namespace ai
+{
+    class PlayerbotAI;
+
+    bool SilvermoonProfCommand(Player* bot, std::string const& param, std::string& reply);
+    // a profession goal ahead of everything else (learn order at the head of the list), or false
+    bool SilvermoonProfessionGoal(Player* bot, PlayerbotAI* ai, SilvermoonScoredGoal& goal);
+    // gather order for this purpose's skill: the gather goal is worth this factor (1 = none)
+    float SilvermoonGatherOrderFactor(uint32 guid, uint32 skill);
+    // "SMPROF\t<skill>:<value>:<max>:<state>;..." for the panel; state L = learn queued, G = gathering
+    std::string SilvermoonProfPanel(Player* bot);
+
+    // at the trainer the learn order points at: learn it (paying the trainer's fee)
+    class ProfessionLearnAction : public Action
+    {
+    public:
+        ProfessionLearnAction(PlayerbotAI* ai) : Action(ai, "silvermoon profession learn") {}
+        virtual bool Execute(Event& event) override;
+        virtual bool isUseful() override;
+    };
+
+    class SilvermoonProfAction : public ChatCommandAction
+    {
+    public:
+        SilvermoonProfAction(PlayerbotAI* ai) : ChatCommandAction(ai, "prof") {}
+        virtual bool Execute(Event& event) override;
+    };
+}
