@@ -386,6 +386,19 @@ ItemUsage ItemUsageValue::Calculate()
             return ItemUsage::ITEM_USAGE_KEEP;
     }
 
+    // Silvermoon (S): throwing weapons - one on the paper doll is plenty. Never bought as ammo; a
+    // copy in the bags is equipped only when the ranged slot is empty, otherwise it's sold.
+    if (proto->Class == ITEM_CLASS_WEAPON && proto->SubClass == ITEM_SUBCLASS_WEAPON_THROWN &&
+        (bot->getClass() == CLASS_ROGUE || bot->getClass() == CLASS_WARRIOR))
+    {
+        Item* ranged = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_RANGED);
+        if (!ranged && bot->CanUseItem(proto) == EQUIP_ERR_OK)
+            return ItemUsage::ITEM_USAGE_EQUIP;
+        if (ranged && ranged->GetEntry() == proto->ItemId && !ai->HasItemInInventory(proto->ItemId))
+            return ItemUsage::ITEM_USAGE_KEEP;   // the one on the paper doll
+        return ItemUsage::ITEM_USAGE_VENDOR;
+    }
+
     // AMMO
 if ((proto->Class == ITEM_CLASS_PROJECTILE || 
      (proto->Class == ITEM_CLASS_WEAPON && proto->SubClass == ITEM_SUBCLASS_WEAPON_THROWN)) &&
