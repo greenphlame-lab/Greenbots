@@ -40,6 +40,10 @@ namespace ai
     bool SilvermoonWeaponAvoided(uint32 guid, uint32 skill);
     bool SilvermoonPolicyCommand(Player* bot, std::string const& param, std::string& reply);
     std::string SilvermoonPolicyPanel(Player* bot);
+    // weapon master training (S): in a capital, a weapon skill that is ticked (not "avoid"), that
+    // the class can use and doesn't know yet, is learned for the weapon masters' 10 silver when it
+    // fits the character's upgrade budget. One per call.
+    void SilvermoonWeaponTraining(Player* bot);
 
     class SilvermoonPolicyAction : public ChatCommandAction
     {

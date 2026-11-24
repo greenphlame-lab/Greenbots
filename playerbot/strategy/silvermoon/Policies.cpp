@@ -174,6 +174,31 @@ std::string ai::SilvermoonPolicyPanel(Player* bot)
     return "SMPOL\t" + Encode(Get(bot->GetGUIDLow()));
 }
 
+void ai::SilvermoonWeaponTraining(Player* bot)
+{
+    static const std::set<uint32> capitals = { 1519, 1537, 1657, 1637, 1638, 1497 };
+    if (!capitals.count(bot->GetZoneId()) || bot->IsInCombat() || !bot->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_RESTING))
+        return;
+    // weapon skill -> the spell that teaches it
+    static const std::pair<uint32, uint32> skills[] = {
+        { 173, 1180 }, { 43, 201 }, { 44, 196 }, { 54, 198 }, { 473, 15590 }, { 55, 202 }, { 172, 197 }, { 160, 199 },
+        { 229, 200 }, { 136, 227 }, { 45, 264 }, { 46, 266 }, { 226, 5011 }, { 176, 2567 }, { 228, 5009 } };
+    const uint32 fee = 1000;
+    for (auto const& [skill, spell] : skills)
+    {
+        if (bot->HasSpell(spell) || bot->HasSkill(skill) || SilvermoonWeaponAvoided(bot->GetGUIDLow(), skill))
+            continue;
+        if (!bot->IsSpellFitByClassAndRace(spell))
+            continue;
+        if (fee > SilvermoonUpgradeBudget(bot, 50))
+            return;
+        bot->learnSpell(spell, false);
+        bot->ModifyMoney(-int32(fee));
+        sLog.outBasic("Silvermoon: %s learned weapon skill %u at a weapon master for %u copper (policy)", bot->GetName(), skill, fee);
+        return;
+    }
+}
+
 bool SilvermoonPolicyAction::Execute(Event& event)
 {
     Player* requester = event.getOwner() ? event.getOwner() : GetMaster();

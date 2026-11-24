@@ -1210,6 +1210,7 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                         {
                             SilvermoonFillEmptyWeapon(me);
                             SilvermoonProfBuyTools(me);
+                            SilvermoonWeaponTraining(me);
                             // upgrades already sitting in the bags (S): checked every 30 s out of combat
                             if (!me->IsInCombat())
                                 me->GetPlayerbotAI()->DoSpecificAction("equip upgrades", Event("silvermoon auto"), true);
@@ -1232,6 +1233,7 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                     uint32 before = p->GetMoney();
                     SilvermoonDropStaleQuests(p);
                     SilvermoonProfBuyTools(p);
+                    SilvermoonWeaponTraining(p);
                     SilvermoonWeaponUpgrade(p);
                     SilvermoonBuyBag(p);
                     SilvermoonDualWield(p);
