@@ -1197,6 +1197,14 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                 if (Player* me = i.second)
                     if (me->IsInWorld() && me->GetSession())
                     {
+                        // your character on Auto always runs the brain (S: Mommy sat on "starting up" and
+                        // ground mobs with the stock logic - the brain wasn't added when Auto came on)
+                        if (me->GetPlayerbotAI() && !me->GetGroup() && !me->InBattleGround() &&
+                            !me->GetPlayerbotAI()->HasStrategy("silvermoon brain", BotState::BOT_STATE_NON_COMBAT))
+                        {
+                            me->GetPlayerbotAI()->ChangeStrategy("+travel,+rpg,+grind,+silvermoon brain", BotState::BOT_STATE_NON_COMBAT);
+                            sLog.outBasic("Silvermoon: %s on Auto had no brain, added it", me->GetName());
+                        }
                         if (me->GetPlayerbotAI() && me->IsAlive())
                         {
                             SilvermoonFillEmptyWeapon(me);
