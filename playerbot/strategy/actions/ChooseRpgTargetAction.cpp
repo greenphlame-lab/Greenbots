@@ -406,6 +406,16 @@ bool ChooseRpgTargetAction::Execute(Event& event)
         }
     }
 
+    // Silvermoon (S): idle role-play (emoting, chatting, "working" next to someone) is for an audience -
+    // without another player character nearby a bot doesn't stop to chat with a wolf
+    bool audience = false;
+    for (ObjectGuid const& guid : AI_VALUE(std::list<ObjectGuid>, "nearest friendly players"))
+        if (guid != bot->GetObjectGuid())
+        {
+            audience = true;
+            break;
+        }
+
     uint32 checked = 0;
     for (auto it = begin(targets); it != end(targets);)
     {        
@@ -414,6 +424,8 @@ bool ChooseRpgTargetAction::Execute(Event& event)
 
         bool shouldErase = false;
         if (it->second <= 0) //Remove empty targets.
+            shouldErase = true;
+        else if (it->second <= 1.0 && !audience)
             shouldErase = true;
         else if (hasGoodRelevance && it->second <= 1.0)  //Remove useless targets if there's any good ones.
             shouldErase = true;
