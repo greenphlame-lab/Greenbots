@@ -1294,6 +1294,11 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                 Player* p = sObjectMgr.GetPlayer(ObjectGuid(HIGHGUID_PLAYER, alt.second));
                 if (!p || !p->IsInWorld() || !p->GetPlayerbotAI() || SilvermoonAutoOn(alt.second))
                     continue;
+                // not while you are playing it yourself (S: Mommy, logged in on Auto, lost the brain
+                // every 30 s here - its alt switch was off - and went back to stock questing,
+                // ignoring the profession you queued)
+                if (p->GetPlayerbotAI()->IsRealPlayer())
+                    continue;
                 PlayerbotAI* pai = p->GetPlayerbotAI();
                 if (pai->HasStrategy("silvermoon brain", BotState::BOT_STATE_NON_COMBAT))
                 {
