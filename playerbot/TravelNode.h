@@ -465,3 +465,8 @@ uint32 SilvermoonDeathsNearPoint(uint32 guid, uint32 map, float x, float y, floa
 // bot stays out of that zone for an hour. Returns true when this death started an avoidance.
 bool SilvermoonNotePvpDeath(uint32 guid, uint32 zone);
 uint32 SilvermoonAvoidedZone(uint32 guid);
+// Silvermoon auto mode (layer 1): which of S's own always-online characters play on the brain.
+// Rows in characters.silvermoon_auto; re-read every 30 s; "auto on/off" whispers write them.
+bool SilvermoonAutoOn(uint32 guid);
+void SilvermoonSetAuto(uint32 guid, bool on);   // memory + database
+void SilvermoonLoadAuto();                      // world thread, every 30 s

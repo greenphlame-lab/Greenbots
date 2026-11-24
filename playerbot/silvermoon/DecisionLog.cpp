@@ -2,10 +2,12 @@
 #include "DecisionLog.h"
 #include "Database/DatabaseEnv.h"
 #include <mutex>
+#include <unordered_map>
 #include <sstream>
 
 namespace silvermoon
 {
+    static std::unordered_map<uint32_t, DecisionRow>& LastRows() { static std::unordered_map<uint32_t, DecisionRow> v; return v; }
     namespace
     {
         const time_t FLUSH_SECONDS = 30;
@@ -65,8 +67,19 @@ namespace silvermoon
         row.runnerUp1 = StripLinks(row.runnerUp1);
         row.runnerUp2 = StripLinks(row.runnerUp2);
         std::lock_guard<std::mutex> guard(bufferLock);
+        LastRows()[row.guid] = row;
         if (buffer.size() < MAX_BUFFERED)
             buffer.push_back(std::move(row));
+    }
+
+    bool DecisionLog::Last(uint32_t guid, DecisionRow& row)
+    {
+        std::lock_guard<std::mutex> guard(bufferLock);
+        auto it = LastRows().find(guid);
+        if (it == LastRows().end())
+            return false;
+        row = it->second;
+        return true;
     }
 
     void DecisionLog::FlushIfDue()

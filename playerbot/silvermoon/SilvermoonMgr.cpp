@@ -948,17 +948,40 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
         static time_t ledgerStart = nowFast;
         // always-online alts: every 5 minutes an ungrouped alt with travel but no brain gets it
         // (Guile kept stock travel only although AiFactory should have given it the brain)
+        static time_t lastAutoLoad = 0;
+        if (nowFast - lastAutoLoad >= 30)
+        {
+            lastAutoLoad = nowFast;
+            SilvermoonLoadAuto();
+            // auto off: an alt that still runs the brain drops it (and its current goal)
+            for (auto const& alt : sPlayerbotAIConfig.freeAltBots)
+            {
+                Player* p = sObjectMgr.GetPlayer(ObjectGuid(HIGHGUID_PLAYER, alt.second));
+                if (!p || !p->IsInWorld() || !p->GetPlayerbotAI() || SilvermoonAutoOn(alt.second))
+                    continue;
+                PlayerbotAI* pai = p->GetPlayerbotAI();
+                if (pai->HasStrategy("silvermoon brain", BotState::BOT_STATE_NON_COMBAT))
+                {
+                    pai->ChangeStrategy("-silvermoon brain", BotState::BOT_STATE_NON_COMBAT);
+                    if (TravelTarget* target = pai->GetAiObjectContext()->GetValue<TravelTarget*>("travel target")->Get())
+                        target->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
+                    sLog.outBasic("Silvermoon: auto off for %s, brain removed", p->GetName());
+                }
+            }
+        }
         static time_t lastAltCheck = 0;
-        if (sPlayerbotAIConfig.silvermoonBrain && nowFast - lastAltCheck >= 5 * MINUTE)
+        if (sPlayerbotAIConfig.silvermoonBrain && nowFast - lastAltCheck >= 30)
         {
             lastAltCheck = nowFast;
             for (auto const& alt : sPlayerbotAIConfig.freeAltBots)
             {
                 Player* p = sObjectMgr.GetPlayer(ObjectGuid(HIGHGUID_PLAYER, alt.second));
-                if (!p || !p->IsInWorld() || p->GetGroup() || p->InBattleGround() || !p->GetPlayerbotAI())
+                if (!p || !p->IsInWorld() || p->GetGroup() || p->InBattleGround() || !p->GetPlayerbotAI() || !SilvermoonAutoOn(alt.second))
                     continue;
                 PlayerbotAI* pai = p->GetPlayerbotAI();
-                if (pai->HasStrategy("travel", BotState::BOT_STATE_NON_COMBAT) && !pai->HasStrategy("silvermoon brain", BotState::BOT_STATE_NON_COMBAT))
+                if (!pai->HasStrategy("travel", BotState::BOT_STATE_NON_COMBAT))
+                    pai->ChangeStrategy("+travel,+rpg,+grind", BotState::BOT_STATE_NON_COMBAT);
+                if (!pai->HasStrategy("silvermoon brain", BotState::BOT_STATE_NON_COMBAT))
                 {
                     pai->ChangeStrategy("+silvermoon brain", BotState::BOT_STATE_NON_COMBAT);
                     sLog.outBasic("Silvermoon: always-online alt %s had no brain, added it", p->GetName());

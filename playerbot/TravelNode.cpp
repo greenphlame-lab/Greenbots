@@ -297,6 +297,44 @@ namespace
     std::unordered_map<uint32, SilvermoonPvpState> silvermoonPvp;
 }
 
+namespace
+{
+    std::mutex silvermoonAutoLock;
+    std::unordered_map<uint32, bool> silvermoonAuto;
+}
+
+bool SilvermoonAutoOn(uint32 guid)
+{
+    std::lock_guard<std::mutex> guard(silvermoonAutoLock);
+    auto it = silvermoonAuto.find(guid);
+    return it != silvermoonAuto.end() && it->second;
+}
+
+void SilvermoonSetAuto(uint32 guid, bool on)
+{
+    {
+        std::lock_guard<std::mutex> guard(silvermoonAutoLock);
+        silvermoonAuto[guid] = on;
+    }
+    CharacterDatabase.PExecute("INSERT INTO silvermoon_auto (guid, enabled, updated_at) VALUES (%u, %u, UNIX_TIMESTAMP()) "
+        "ON DUPLICATE KEY UPDATE enabled = VALUES(enabled), updated_at = VALUES(updated_at)", guid, on ? 1 : 0);
+}
+
+void SilvermoonLoadAuto()
+{
+    std::unordered_map<uint32, bool> rows;
+    if (auto result = CharacterDatabase.Query("SELECT guid, enabled FROM silvermoon_auto"))
+    {
+        do
+        {
+            Field* f = result->Fetch();
+            rows[f[0].GetUInt32()] = f[1].GetUInt32() != 0;
+        } while (result->NextRow());
+    }
+    std::lock_guard<std::mutex> guard(silvermoonAutoLock);
+    silvermoonAuto.swap(rows);
+}
+
 bool SilvermoonNotePvpDeath(uint32 guid, uint32 zone)
 {
     std::lock_guard<std::mutex> guard(silvermoonPvpLock);

@@ -28,6 +28,8 @@ namespace silvermoon
     {
     public:
         static void Add(DecisionRow row);
+        // the latest decision of a bot (for the "why" whisper); false when there is none
+        static bool Last(uint32_t guid, DecisionRow& row);
         static void FlushIfDue();  // world thread
         static void Flush();
     };

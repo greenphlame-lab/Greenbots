@@ -1,5 +1,6 @@
 #include "playerbot/playerbot.h"
 #include "playerbot/AiFactory.h"
+#include "playerbot/TravelNode.h"
 #include "strategy/AiObjectContext.h"
 #include "strategy/ReactionEngine.h"
 
@@ -992,7 +993,7 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
                 // it is far away and not grouped with them, so they never got the brain (Guile sat in
                 // Brill at level 9 for hours): an ungrouped always-online alt gets it too.
                 if (sPlayerbotAIConfig.silvermoonBrain &&
-                    (!facade->HasRealPlayerMaster() || (sPlayerbotAIConfig.IsFreeAltBot(player) && !player->GetGroup())) &&
+                    (!facade->HasRealPlayerMaster() || (sPlayerbotAIConfig.IsFreeAltBot(player) && !player->GetGroup() && SilvermoonAutoOn(player->GetGUIDLow()))) &&
                     !sRandomPlayerbotMgr.SilvermoonDungeonOf(player->GetGUIDLow()))
                     nonCombatEngine->addStrategy("silvermoon brain");
             }
