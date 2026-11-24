@@ -16,6 +16,8 @@ using namespace ai;
 // Silvermoon (S): grey mobs (no XP) are only worth it for a destitute bot - weapon at 0 durability -
 // which farms them for coin; everyone else leaves them alone unless a quest needs them. (Stock let 1
 // in 50 through and, on long trips, bots spent their time killing grey mobs.)
+namespace ai { uint8 SilvermoonTravelRules(Player* bot); bool SilvermoonIsOwn(Player* bot); }
+
 static bool SilvermoonGreyAllowed(Player* bot)
 {
     Item* weapon = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND);
@@ -181,6 +183,9 @@ Unit* GrindTargetValue::FindTargetForGrinding(int assistCount)
                 careful = 2;    // Resurrection Sickness: no new fights until it wears off
             else if (SilvermoonOnRelocateTrip(bot->GetGUIDLow()))
                 careful = 2;    // on a relocation trip: keep moving, fight only what attacks
+            // policy (S): "avoid mobs while travelling" - no new pulls on the way anywhere
+            else if ((SilvermoonTravelRules(bot) & 1) && AI_VALUE(bool, "travel target traveling"))
+                careful = 2;
         }
         // Silvermoon patch: a random bot on its own (no real player leading it) leaves alone
         // mobs 3 or more levels above it and elites it cannot handle alone.
@@ -325,7 +330,11 @@ Unit* GrindTargetValue::FindTargetForGrinding(int assistCount)
 
                 continue;
             }
-            else if (creature && !MaNGOS::XP::Gain(bot, creature) && (urand(0, 50) || !SilvermoonGreyAllowed(bot)))
+            // policy (S): "ignore grey mobs while travelling" (on by default for your characters,
+            // even when broke); off lets the usual rule decide
+            else if (creature && !MaNGOS::XP::Gain(bot, creature) &&
+                ((SilvermoonIsOwn(bot) && !(SilvermoonTravelRules(bot) & 2) && AI_VALUE(bool, "travel target traveling")) ||
+                 urand(0, 50) || !SilvermoonGreyAllowed(bot)))
             {
                 if (ai->HasStrategy("debug grind", BotState::BOT_STATE_NON_COMBAT))
                     if ((AI_VALUE(bool, "travel target traveling") && typeid(AI_VALUE(TravelTarget*, "travel target")->GetDestination()) != typeid(GrindTravelDestination)))

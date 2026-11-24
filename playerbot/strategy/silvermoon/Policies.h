@@ -29,6 +29,9 @@ namespace ai
         std::set<uint32> allowedZones;   // empty = the bot picks zones itself
         uint8 eatTo = 0;             // percent health to eat up to, 0 = default (full)
         uint8 drinkTo = 0;           // percent mana to drink up to, 0 = default (full)
+        // travel (S): bit 1 = avoid mobs while travelling (no new pulls on the way);
+        // bit 2 = grey mobs allowed while travelling (default: ignored)
+        uint8 travel = 0;
         uint8 fleeMobs = 0;          // 0 = off
         uint8 fleeHealth = 0;        // percent, 0 = off
         uint32 ahGold = 0;           // copper, 0 = off
@@ -38,7 +41,7 @@ namespace ai
         // item rules (S): item id -> (action, always). action 1 sell, 2 auction, 3 destroy, 4 keep;
         // "once" rules end when none of the item is left
         std::map<uint32, std::pair<uint8, bool>> items;
-        bool Any() const { return !allowedZones.empty() || eatTo || drinkTo || fleeMobs || fleeHealth || ahGold || upgradePct || !weapons.empty() || bags || !items.empty(); }
+        bool Any() const { return !allowedZones.empty() || eatTo || drinkTo || travel || fleeMobs || fleeHealth || ahGold || upgradePct || !weapons.empty() || bags || !items.empty(); }
     };
 
     // your own character playing on its own: Auto (self-bot) or an always-online alt with auto on
@@ -51,6 +54,8 @@ namespace ai
     bool SilvermoonAhTripDue(Player* bot, std::list<Item*> const& items);
     // eat / drink until X% (0 = default)
     uint8 SilvermoonRestTarget(Player* bot, bool mana);
+    // travel rules for your own characters (bits as SilvermoonPolicy::travel), 0 for everyone else
+    uint8 SilvermoonTravelRules(Player* bot);
     // most the character may spend on one upgrade (its default share when no policy is set)
     uint32 SilvermoonUpgradeBudget(Player* bot, uint32 defaultPct);
     bool SilvermoonWeaponAvoided(uint32 guid, uint32 skill);

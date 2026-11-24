@@ -24,7 +24,7 @@ namespace
         out << "za=";
         bool first = true;
         for (uint32 z : p.allowedZones) { out << (first ? "" : ",") << z; first = false; }
-        out << ";et=" << uint32(p.eatTo) << ";dt=" << uint32(p.drinkTo);
+        out << ";et=" << uint32(p.eatTo) << ";dt=" << uint32(p.drinkTo) << ";tv=" << uint32(p.travel);
         out << ";it=";
         first = true;
         for (auto const& [item, rule] : p.items) { out << (first ? "" : ",") << item << ":" << uint32(rule.first) << ":" << (rule.second ? 1 : 0); first = false; }
@@ -49,6 +49,7 @@ namespace
             else if (key == "bg") p.bags = uint8(atoi(value.c_str()));
             else if (key == "fh") p.fleeHealth = uint8(atoi(value.c_str()));
             else if (key == "et") p.eatTo = uint8(atoi(value.c_str()));
+            else if (key == "tv") p.travel = uint8(atoi(value.c_str()));
             else if (key == "dt") p.drinkTo = uint8(atoi(value.c_str()));
             else if (key == "ah") p.ahGold = uint32(strtoul(value.c_str(), nullptr, 10));
             else if (key == "up") p.upgradePct = uint8(atoi(value.c_str()));
@@ -148,6 +149,13 @@ bool ai::SilvermoonAhTripDue(Player* bot, std::list<Item*> const& items)
     return gold ? SilvermoonAhCarried(items) >= gold : true;   // no setting: even one marked item
 }
 
+uint8 ai::SilvermoonTravelRules(Player* bot)
+{
+    if (!SilvermoonIsOwn(bot))
+        return 0;
+    return SilvermoonPolicyFor(bot->GetGUIDLow()).travel;
+}
+
 uint8 ai::SilvermoonRestTarget(Player* bot, bool mana)
 {
     if (!SilvermoonIsOwn(bot))
@@ -190,6 +198,17 @@ bool ai::SilvermoonPolicyCommand(Player* bot, std::string const& param, std::str
         uint32 zone = uint32(atoi(v1.c_str()));
         if (v2 == "on") p.allowedZones.insert(zone); else p.allowedZones.erase(zone);
         reply = p.allowedZones.empty() ? "Zone list off: I pick zones myself." : "Zones updated: I'll stay in ticked zones from my next move.";
+    }
+    else if (k == "travel" && n == 3 && (v1 == "avoid" || v1 == "grey"))
+    {
+        // "travel avoid on|off": no new pulls while travelling
+        // "travel grey on|off":  ignore grey mobs while travelling (on is the default)
+        if (v1 == "avoid")
+            p.travel = v2 == "on" ? (p.travel | 1) : (p.travel & ~1);
+        else
+            p.travel = v2 == "on" ? (p.travel & ~2) : (p.travel | 2);
+        reply = v1 == "avoid" ? (v2 == "on" ? "I'll leave mobs alone while travelling." : "I may fight mobs on the way again.")
+                              : (v2 == "on" ? "I'll ignore grey mobs while travelling." : "I may fight grey mobs on the way.");
     }
     else if ((k == "eat" || k == "drink") && n == 2)
     {
