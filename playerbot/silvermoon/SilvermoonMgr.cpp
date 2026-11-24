@@ -378,6 +378,62 @@ static bool SilvermoonHubTeleport(Player* bot)
     return bot->TeleportTo(best->map, x, y, z, bot->GetOrientation());
 }
 
+// plain vendor one-handers: { item, weapon skill, required level }, best first
+static const uint32 silvermoonVendorWeapons[][3] = {
+    { 2526, 173, 29 }, { 2209, 173, 19 }, { 927, 44, 19 }, { 2028, 54, 16 }, { 2029, 44, 15 },
+    { 2208, 173, 14 }, { 2027, 43, 14 }, { 2207, 173, 11 }, { 853, 44, 11 }, { 851, 43, 10 },
+    { 852, 54, 9 }, { 2490, 44, 4 }, { 2488, 43, 4 }, { 2494, 173, 3 }, { 2492, 54, 2 } };
+
+static float SilvermoonWeaponDps(ItemPrototype const* proto)
+{
+    if (!proto || !proto->Delay)
+        return 0.0f;
+    return (proto->Damage[0].DamageMin + proto->Damage[0].DamageMax) / 2.0f / (proto->Delay / 1000.0f);
+}
+
+// Silvermoon patch: main-hand upgrades (S: Guile had nearly 7 silver and still swung his level-1
+// Worn Dagger, 0.9 dps, with a 3.3 dps Stiletto at 4 silver on the vendor). In town, a melee or
+// hunter bot whose main hand is a one-hander (or empty) buys the best plain vendor one-hander it can
+// use when that is at least 1.5x the damage per second, for at most 70% of its money. The old weapon
+// goes to the bags and is sold on the next vendor visit. Runs before Dual Wield.
+static void SilvermoonWeaponUpgrade(Player* bot)
+{
+    uint8 cls = bot->getClass();
+    if (cls != CLASS_ROGUE && cls != CLASS_WARRIOR && cls != CLASS_HUNTER && cls != CLASS_PALADIN && cls != CLASS_SHAMAN)
+        return;
+    Item* main = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND);
+    if (main && main->GetProto()->InventoryType == INVTYPE_2HWEAPON)
+        return;                                      // two-handers are left to loot and quests
+    float current = main ? SilvermoonWeaponDps(main->GetProto()) : 0.0f;
+    uint32 level = bot->GetLevel();
+    for (auto const& w : silvermoonVendorWeapons)
+    {
+        if (w[2] > level || !bot->HasSkill(w[1]))
+            continue;
+        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(w[0]);
+        if (!proto || proto->BuyPrice * 10 > bot->GetMoney() * 7)
+            continue;
+        if (SilvermoonWeaponDps(proto) < current * 1.5f)
+            continue;
+        if (main)
+        {
+            ItemPosCountVec space;
+            if (bot->CanStoreItem(NULL_BAG, NULL_SLOT, space, main, false) != EQUIP_ERR_OK)
+                return;                              // no room for the old weapon
+            bot->RemoveItem(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND, true);
+            bot->StoreItem(space, main, true);
+        }
+        uint16 dest;
+        if (bot->CanEquipNewItem(EQUIPMENT_SLOT_MAINHAND, dest, w[0], false) != EQUIP_ERR_OK)
+            return;
+        bot->EquipNewItem(dest, w[0], true);
+        bot->ModifyMoney(-int32(proto->BuyPrice));
+        sLog.outBasic("Silvermoon: bot %s (level %u) bought a main-hand %s for %u copper (%.1f -> %.1f dps)",
+            bot->GetName(), level, proto->Name1, proto->BuyPrice, current, SilvermoonWeaponDps(proto));
+        return;
+    }
+}
+
 static void SilvermoonDualWield(Player* bot)
 {
     uint8 cls = bot->getClass();
@@ -398,12 +454,7 @@ static void SilvermoonDualWield(Player* bot)
     Item* main = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND);
     if (!main || main->GetProto()->InventoryType == INVTYPE_2HWEAPON)
         return;
-    // plain vendor one-handers: { item, weapon skill, required level }, best first
-    static const uint32 weapons[][3] = {
-        { 2526, 173, 29 }, { 2209, 173, 19 }, { 927, 44, 19 }, { 2028, 54, 16 }, { 2029, 44, 15 },
-        { 2208, 173, 14 }, { 2027, 43, 14 }, { 2207, 173, 11 }, { 853, 44, 11 }, { 851, 43, 10 },
-        { 852, 54, 9 }, { 2490, 44, 4 }, { 2488, 43, 4 }, { 2494, 173, 3 }, { 2492, 54, 2 } };
-    for (auto const& w : weapons)
+    for (auto const& w : silvermoonVendorWeapons)
     {
         if (w[2] > level || !bot->HasSkill(w[1]))
             continue;
@@ -963,6 +1014,16 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                 Player* p = sObjectMgr.GetPlayer(ObjectGuid(HIGHGUID_PLAYER, alt.second));
                 if (!p || !p->IsInWorld() || !p->GetPlayerbotAI())
                     continue;
+                if (SilvermoonAutoOn(alt.second) && p->IsAlive() && !p->IsInCombat() && p->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_RESTING) &&
+                    !GetEventValue(alt.second, "silvermoon_alt_shop"))
+                {
+                    SetEventValue(alt.second, "silvermoon_alt_shop", 1, 10 * MINUTE);
+                    uint32 before = p->GetMoney();
+                    SilvermoonWeaponUpgrade(p);
+                    SilvermoonDualWield(p);
+                    if (before > p->GetMoney())
+                        silvermoon::Ledger(silvermoon::LG_GEAR) += before - p->GetMoney();
+                }
                 Player* owner = p->GetPlayerbotAI()->GetMaster();
                 if (owner && owner->GetSession() && owner->GetSession()->GetAccountId() == p->GetSession()->GetAccountId() &&
                     owner->isRealPlayer())
@@ -2537,6 +2598,7 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                 uint32 m0 = p->GetMoney();
                 SilvermoonRepairNearby(p);
                 uint32 m1 = p->GetMoney();
+                SilvermoonWeaponUpgrade(p);
                 SilvermoonDualWield(p);
                 SilvermoonLearnGathering(p);
                 SilvermoonBuyBag(p);
