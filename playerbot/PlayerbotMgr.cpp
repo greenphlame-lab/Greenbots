@@ -1,4 +1,6 @@
 #include "playerbot/playerbot.h"
+#include "playerbot/strategy/silvermoon/Policies.h"
+#include "playerbot/strategy/silvermoon/Professions.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include "PlayerbotDbStore.h"
 #include "playerbot/PlayerbotFactory.h"
@@ -723,6 +725,21 @@ std::list<std::string> PlayerbotHolder::HandlePlayerbotCommand(const std::string
         charname = params[1];
     }
     
+    // Silvermoon: the in-game panel's Professions and Policies windows send ".bot prof ..." and
+    // ".bot pol ..." for the character you're logged in as (a whisper to yourself never reached the
+    // bot logic)
+    if (master && (command == "prof" || command == "pol"))
+    {
+        std::string reply;
+        bool ok = command == "prof" ? ai::SilvermoonProfCommand(master, param, reply) : ai::SilvermoonPolicyCommand(master, param, reply);
+        if (ok && master->GetPlayerbotAI())
+            if (TravelTarget* target = master->GetPlayerbotAI()->GetAiObjectContext()->GetValue<TravelTarget*>("travel target")->Get())
+                if (target->IsActive())
+                    target->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);   // re-choose with the new order
+        messages.push_back(ok ? reply : std::string("Usage: .bot ") + command + " ...");
+        return messages;
+    }
+
     for (auto& [prefix, handler] : m_holderHandlers)
     {
         if (command != prefix)
