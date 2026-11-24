@@ -240,6 +240,45 @@ std::string ai::SilvermoonProfPanel(Player* bot)
     return out;
 }
 
+namespace
+{
+    uint32 ToolFor(uint32 skill)
+    {
+        switch (skill)
+        {
+            case 186: return 2901;   // Mining Pick
+            case 393: return 7005;   // Skinning Knife
+            case 356: return 6256;   // Fishing Pole
+            default: return 0;
+        }
+    }
+
+    bool BuyTool(Player* bot, uint32 skill)
+    {
+        uint32 tool = ToolFor(skill);
+        if (!tool || !bot->HasSkill(skill) || bot->HasItemCount(tool, 1, true))
+            return false;
+        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(tool);
+        if (!proto || bot->GetMoney() < proto->BuyPrice)
+            return false;
+        ItemPosCountVec dest;
+        if (bot->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, tool, 1) != EQUIP_ERR_OK)
+            return false;
+        bot->StoreNewItem(dest, tool, true);
+        bot->ModifyMoney(-int32(proto->BuyPrice));
+        sLog.outBasic("Silvermoon: %s bought a %s for %u copper (profession tool)", bot->GetName(), proto->Name1, proto->BuyPrice);
+        return true;
+    }
+}
+
+void ai::SilvermoonProfBuyTools(Player* bot)
+{
+    if (!bot->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_RESTING) || bot->IsInCombat())
+        return;                                   // in a town or inn, like a vendor visit
+    for (uint32 skill : { 186u, 393u, 356u })
+        BuyTool(bot, skill);
+}
+
 bool ProfessionLearnAction::isUseful()
 {
     std::lock_guard<std::mutex> guard(orderLock);
@@ -273,6 +312,7 @@ bool ProfessionLearnAction::Execute(Event& event)
         return false;
     bot->learnSpell(p->learnSpell, false);
     bot->ModifyMoney(-int32(p->fee));
+    BuyTool(bot, p->skill);   // S: the profession comes with its tool (pick, knife, pole) when it can pay
     sLog.outBasic("Silvermoon: %s learned %s at a trainer for %u copper (profession order)", bot->GetName(), p->name, p->fee);
     if (TravelTarget* target = AI_VALUE(TravelTarget*, "travel target"))
         target->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);   // next order, or back to normal

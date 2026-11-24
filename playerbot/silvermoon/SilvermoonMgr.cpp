@@ -90,6 +90,7 @@ using namespace MaNGOS;
 #include "playerbot/silvermoon/Hubs.h"
 #include "Chat/Chat.h"
 #include "playerbot/strategy/silvermoon/Policies.h"
+#include "playerbot/strategy/silvermoon/Professions.h"
 #include "playerbot/silvermoon/Crowd.h"
 #include "playerbot/LootObjectStack.h"
 #include "playerbot/strategy/silvermoon/ChooseGoalAction.h"
@@ -1208,6 +1209,7 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                         if (me->GetPlayerbotAI() && me->IsAlive())
                         {
                             SilvermoonFillEmptyWeapon(me);
+                            SilvermoonProfBuyTools(me);
                             // upgrades already sitting in the bags (S): checked every 30 s out of combat
                             if (!me->IsInCombat())
                                 me->GetPlayerbotAI()->DoSpecificAction("equip upgrades", Event("silvermoon auto"), true);
@@ -1229,6 +1231,7 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                     SetEventValue(alt.second, "silvermoon_alt_shop", 1, 10 * MINUTE);
                     uint32 before = p->GetMoney();
                     SilvermoonDropStaleQuests(p);
+                    SilvermoonProfBuyTools(p);
                     SilvermoonWeaponUpgrade(p);
                     SilvermoonBuyBag(p);
                     SilvermoonDualWield(p);

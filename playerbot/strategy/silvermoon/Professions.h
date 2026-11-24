@@ -25,6 +25,9 @@ namespace ai
     float SilvermoonGatherOrderFactor(uint32 guid, uint32 skill);
     // "SMPROF\t<skill>:<value>:<max>:<state>;..." for the panel; state L = learn queued, G = gathering
     std::string SilvermoonProfPanel(Player* bot);
+    // the tool a gathering profession needs (Mining Pick, Skinning Knife, Fishing Pole): bought
+    // in a town for the vendor price when the character has the profession but not the tool
+    void SilvermoonProfBuyTools(Player* bot);
 
     // at the trainer the learn order points at: learn it (paying the trainer's fee)
     class ProfessionLearnAction : public Action
