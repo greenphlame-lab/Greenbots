@@ -184,7 +184,10 @@ Unit* GrindTargetValue::FindTargetForGrinding(int assistCount)
         }
         // Silvermoon patch: a random bot on its own (no real player leading it) leaves alone
         // mobs 3 or more levels above it and elites it cannot handle alone.
-        if (sRandomPlayerbotMgr.IsRandomBot(bot) && !ai->HasRealPlayerMaster() && (!bot->GetGroup() || bot->GetGroup()->GetMembersCount() < 2) &&
+        // (also your own characters playing on the brain: Auto, and always-online alts with auto on)
+        if (((sRandomPlayerbotMgr.IsRandomBot(bot) && !ai->HasRealPlayerMaster()) || ai->IsRealPlayer() ||
+             (sPlayerbotAIConfig.IsFreeAltBot(bot) && SilvermoonAutoOn(bot->GetGUIDLow()))) &&
+            (!bot->GetGroup() || bot->GetGroup()->GetMembersCount() < 2) &&
             !bot->InBattleGround() && unit->GetTypeId() == TYPEID_UNIT)
         {
             if (int32(unit->GetLevel()) >= int32(bot->GetLevel()) + 3)
