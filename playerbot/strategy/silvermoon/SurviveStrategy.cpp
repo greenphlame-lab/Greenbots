@@ -56,8 +56,9 @@ bool LifesaverAction::isUseful()
 bool LifesaverAction::Execute(Event& event)
 {
     Unit* enemy = bot->GetVictim();
+    // "current target" holds a guid (asking it for a Unit* crashed the server, 2026-11-24)
     if (!enemy)
-        enemy = AI_VALUE(Unit*, "current target");
+        enemy = ai->GetUnit(AI_VALUE(ObjectGuid, "current target"));
     for (Saver const& s : SaversFor(bot->getClass()))
     {
         Unit* on = s.target ? enemy : bot;
