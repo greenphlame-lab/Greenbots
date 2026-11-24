@@ -23,6 +23,44 @@ namespace
     }
 }
 
+namespace
+{
+    // "loot [Tough Wolf Meat] from [Young Wolf] (objective 1)" -> "loot Tough Wolf Meat from Young Wolf"
+    std::string Plain(std::string t)
+    {
+        std::string out;
+        for (char c : t)
+            if (c != '[' && c != ']')
+                out += c;
+        size_t p = out.find(" (objective");
+        if (p != std::string::npos)
+            out = out.substr(0, p);
+        return out;
+    }
+
+    // one short line for the panel: the quest's name when there is one (S)
+    std::string PanelLine(PlayerbotAI* ai, silvermoon::DecisionRow const& row)
+    {
+        uint32 questId = 0;
+        if (TravelTarget* target = ai->GetAiObjectContext()->GetValue<TravelTarget*>("travel target")->Get())
+            if (QuestTravelDestination* q = dynamic_cast<QuestTravelDestination*>(target->GetDestination()))
+                questId = q->GetQuestId();
+        Quest const* quest = questId ? sObjectMgr.GetQuestTemplate(questId) : nullptr;
+        std::string what = Plain(row.target);
+        if (row.goal == "quest objective")
+            return quest ? quest->GetTitle() + ": " + what : what;
+        if (row.goal == "quest turn-in")
+            return quest ? "Turning in " + quest->GetTitle() : "Turning in a quest";
+        if (row.goal == "quest giver")
+            return "Picking up quests (" + Plain(what.substr(what.find("questgiver") != std::string::npos ? what.find("questgiver") + 11 : 0)) + ")";
+        if (row.goal == "grind")
+            return "Grinding " + Plain(what.substr(what.find("killing ") != std::string::npos ? what.find("killing ") + 8 : 0));
+        if (row.goal == "relocate")
+            return "Travelling to " + what;
+        return what.empty() ? row.goal : what;
+    }
+}
+
 void SilvermoonPushBrainPanel(Player* bot, Player* owner)
 {
     if (!bot || !owner || !owner->GetSession())
@@ -39,7 +77,7 @@ void SilvermoonPushBrainPanel(Player* bot, Player* owner)
     snprintf(ago, sizeof(ago), "%u", have && row.ts ? (uint32(time(nullptr)) - row.ts) / 60 : 0);
     std::string text = std::string("SMBRAIN\t") + Clean(bot->GetName()) + ";" + (on ? "1" : "0") + ";" + std::to_string(bot->GetLevel()) + ";" +
         Clean(goal) + ";" + Clean(have ? row.target : "") + ";" + Clean(have ? row.reason : "") + ";" + score + ";" +
-        Clean(have ? row.runnerUp1 : "") + ";" + ago;
+        Clean(have ? row.runnerUp1 : "") + ";" + ago + ";" + Clean(have ? PanelLine(ai, row) : goal);
     WorldPacket data;
     ChatHandler::BuildChatPacket(data, CHAT_MSG_PARTY, text.c_str(), LANG_ADDON, CHAT_TAG_NONE, bot->GetObjectGuid(), bot->GetName());
     owner->GetSession()->SendPacket(data);
