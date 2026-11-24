@@ -39,6 +39,11 @@ void RpgHelper::AfterExecute(bool doDelay, bool waitForGroup, std::string nextAc
     
     SET_AI_VALUE(std::string, "next rpg action", nextAction);
 
+    // Silvermoon (S): your own character on Auto - close any NPC window an rpg step left open on
+    // your screen, so it doesn't sit there or fight with the next step
+    if (ai->IsRealPlayer() && bot->GetPlayerMenu())
+        bot->GetPlayerMenu()->CloseGossip();
+
     if(doDelay)
         setDelay(waitForGroup);
 }
@@ -126,9 +131,14 @@ bool RpgEmoteAction::Execute(Event& event)
     else
         type = TalkAction::GetRandomEmote(rpg->guidP().GetUnit(bot->GetInstanceId()));
 
-    WorldPacket p1;
-    p1 << rpg->guid();
-    bot->GetSession()->HandleGossipHelloOpcode(p1);
+    // Silvermoon (S): not for your own character on Auto - the "hello" opened the NPC's gossip
+    // window ("I want to browse your goods") on your screen while the character was busy selling
+    if (!ai->IsRealPlayer())
+    {
+        WorldPacket p1;
+        p1 << rpg->guid();
+        bot->GetSession()->HandleGossipHelloOpcode(p1);
+    }
 
     bot->HandleEmoteCommand(type);
 
