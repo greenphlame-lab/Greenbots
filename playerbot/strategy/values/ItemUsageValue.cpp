@@ -842,6 +842,22 @@ ItemUsage ItemUsageValue::QueryItemUsageForEquip(ItemQualifier& itemQualifier, P
     if (MustEquipForQuest(oldItemProto, bot))
         return ItemUsage::ITEM_USAGE_KEEP;
 
+    // Silvermoon (S: Mommy kept a Kobold Mining Shovel with a better two-handed mace in her bags):
+    // for melee classes and hunters under level 40, a weapon for the same slot that hits 15%+ harder
+    // (damage per second) is an upgrade, whatever the stat weights or spec tables say - plain white
+    // and green weapons have no stats, so the stat comparison never saw the difference
+    if (itemProto->Class == ITEM_CLASS_WEAPON && oldItemProto->Class == ITEM_CLASS_WEAPON && bot->GetLevel() < 40 &&
+        (bot->getClass() == CLASS_WARRIOR || bot->getClass() == CLASS_ROGUE || bot->getClass() == CLASS_PALADIN ||
+         bot->getClass() == CLASS_HUNTER || bot->getClass() == CLASS_SHAMAN) &&
+        itemProto->Delay && oldItemProto->Delay && itemProto->SubClass != ITEM_SUBCLASS_WEAPON_FISHING_POLE)
+    {
+        float newDps = (itemProto->Damage[0].DamageMin + itemProto->Damage[0].DamageMax) / 2.0f / (itemProto->Delay / 1000.0f);
+        float oldDps = (oldItemProto->Damage[0].DamageMin + oldItemProto->Damage[0].DamageMax) / 2.0f / (oldItemProto->Delay / 1000.0f);
+        uint32 skill = itemProto->GetSkill();
+        if (newDps >= oldDps * 1.15f && newDps > 0.0f && (!skill || bot->GetSkillValue(skill) > 0) && bot->CanUseItem(itemProto) == EQUIP_ERR_OK)
+            return ItemUsage::ITEM_USAGE_EQUIP;
+    }
+
     if (itemProto->Class == ITEM_CLASS_ARMOR && itemProto->InventoryType == INVTYPE_TABARD)
     {
         uint32 currentStacks = CurrentStacks(ai, itemProto);
