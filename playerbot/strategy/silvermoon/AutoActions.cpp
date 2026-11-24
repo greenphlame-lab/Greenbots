@@ -3,6 +3,7 @@
 #include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/TravelMgr.h"
 #include "playerbot/TravelNode.h"
+#include "playerbot/GuidPosition.h"
 #include "playerbot/silvermoon/DecisionLog.h"
 #include "Chat/Chat.h"
 #include <cstdio>
@@ -41,6 +42,18 @@ namespace
     // one short line for the panel: the quest's name when there is one (S)
     std::string PanelLine(PlayerbotAI* ai, silvermoon::DecisionRow const& row)
     {
+        // a stop on the way (stock role-play layer: handing in a finished quest, selling, training at
+        // an NPC nearby) runs underneath the goal - show it, or the panel looks stuck (S: Mommy went
+        // to hand in Milly's Harvest and the panel still said "selling")
+        GuidPosition rpg = ai->GetAiObjectContext()->GetValue<GuidPosition>("rpg target")->Get();
+        if (rpg && rpg.IsCreature())
+            if (CreatureInfo const* info = rpg.GetCreatureTemplate())
+            {
+                std::string next = ai->GetAiObjectContext()->GetValue<std::string>("next rpg action")->Get();
+                std::string what = next.find("quest") != std::string::npos ? "quests" : next.find("sell") != std::string::npos || next.find("vendor") != std::string::npos ? "selling" :
+                    next.find("train") != std::string::npos ? "training" : next.find("repair") != std::string::npos ? "repairing" : "";
+                return std::string("Stopping at ") + info->Name + (what.empty() ? "" : " (" + what + ")");
+            }
         uint32 questId = 0;
         if (TravelTarget* target = ai->GetAiObjectContext()->GetValue<TravelTarget*>("travel target")->Get())
             if (QuestTravelDestination* q = dynamic_cast<QuestTravelDestination*>(target->GetDestination()))

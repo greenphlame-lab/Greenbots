@@ -1078,7 +1078,7 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
         // always-online alts: every 5 minutes an ungrouped alt with travel but no brain gets it
         // (Guile kept stock travel only although AiFactory should have given it the brain)
         static time_t lastAutoLoad = 0;
-        if (nowFast - lastAutoLoad >= 30)
+        if (nowFast - lastAutoLoad >= 10)   // panel updates every 10 s (was 30)
         {
             lastAutoLoad = nowFast;
             SilvermoonLoadAuto();
