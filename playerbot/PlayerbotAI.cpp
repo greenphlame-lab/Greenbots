@@ -17,6 +17,7 @@
 #include "strategy/values/LastSpellCastValue.h"
 #include "LootObjectStack.h"
 #include "playerbot/PlayerbotAIConfig.h"
+#include "playerbot/TravelNode.h"
 #include "PlayerbotAI.h"
 #include "playerbot/PlayerbotFactory.h"
 #include "PlayerbotSecurity.h"
@@ -3494,6 +3495,7 @@ ChatChannelSource PlayerbotAI::GetChatChannelSource(Player* bot, uint32 type, st
 
 bool PlayerbotAI::SayToGuild(std::string msg, bool likePlayer)
 {
+    if (SilvermoonMuted()) return false;   // Silvermoon: your own characters on Auto stay quiet in public chat
     if (msg.empty())
     {
         return false;
@@ -3542,6 +3544,7 @@ bool PlayerbotAI::SayToGuild(std::string msg, bool likePlayer)
 
 bool PlayerbotAI::SayToWorld(std::string msg)
 {
+    if (SilvermoonMuted()) return false;   // Silvermoon: your own characters on Auto stay quiet in public chat
     if (msg.empty())
     {
         return false;
@@ -3565,6 +3568,7 @@ bool PlayerbotAI::SayToWorld(std::string msg)
 
 bool PlayerbotAI::SayToGeneral(std::string msg)
 {
+    if (SilvermoonMuted()) return false;   // Silvermoon: your own characters on Auto stay quiet in public chat
     if (msg.empty())
     {
         return false;
@@ -3598,6 +3602,7 @@ bool PlayerbotAI::SayToGeneral(std::string msg)
 
 bool PlayerbotAI::SayToTrade(std::string msg)
 {
+    if (SilvermoonMuted()) return false;   // Silvermoon: your own characters on Auto stay quiet in public chat
     if (msg.empty())
     {
         return false;
@@ -3639,6 +3644,7 @@ bool PlayerbotAI::SayToTrade(std::string msg)
 
 bool PlayerbotAI::SayToLFG(std::string msg)
 {
+    if (SilvermoonMuted()) return false;   // Silvermoon: your own characters on Auto stay quiet in public chat
     if (msg.empty())
     {
         return false;
@@ -3671,6 +3677,7 @@ bool PlayerbotAI::SayToLFG(std::string msg)
 
 bool PlayerbotAI::SayToLocalDefense(std::string msg)
 {
+    if (SilvermoonMuted()) return false;   // Silvermoon: your own characters on Auto stay quiet in public chat
     if (msg.empty())
     {
         return false;
@@ -3704,6 +3711,7 @@ bool PlayerbotAI::SayToLocalDefense(std::string msg)
 
 bool PlayerbotAI::SayToWorldDefense(std::string msg)
 {
+    if (SilvermoonMuted()) return false;   // Silvermoon: your own characters on Auto stay quiet in public chat
 #ifdef MANGOSBOT_ZERO
     //check if 11 honor rank
     if (bot->GetHonorRankInfo().rank < 11)
@@ -3736,6 +3744,7 @@ bool PlayerbotAI::SayToWorldDefense(std::string msg)
 
 bool PlayerbotAI::SayToGuildRecruitment(std::string msg)
 {
+    if (SilvermoonMuted()) return false;   // Silvermoon: your own characters on Auto stay quiet in public chat
     //check for bot's level? level 60?
     if (msg.empty())
     {
@@ -3838,6 +3847,7 @@ bool PlayerbotAI::SayToRaid(std::string msg)
 
 bool PlayerbotAI::Yell(std::string msg, bool likePlayer)
 {
+    if (SilvermoonMuted()) return false;   // Silvermoon: your own characters on Auto stay quiet in public chat
     uint32 lang = LANG_UNIVERSAL;
     if (bot->GetTeam() == ALLIANCE)
     {
@@ -3873,6 +3883,7 @@ bool PlayerbotAI::Yell(std::string msg, bool likePlayer)
 
 bool PlayerbotAI::Say(std::string msg, bool likePlayer)
 {
+    if (SilvermoonMuted()) return false;   // Silvermoon: your own characters on Auto stay quiet in public chat
     uint32 lang = LANG_UNIVERSAL;
     if (bot->GetTeam() == ALLIANCE)
     {
@@ -9178,4 +9189,12 @@ bool PlayerbotAI::SilvermoonSyncQuests() const
 {
     return sPlayerbotAIConfig.syncQuestWithPlayer && master && master != bot && bot->GetGroup() &&
         master->GetGroup() == bot->GetGroup();
+}
+
+// Silvermoon (S): your own characters playing on their own - your character on Auto, and always-online
+// alts with auto on - don't chat, broadcast or yell in public channels (party, raid and whispers still
+// work)
+bool PlayerbotAI::SilvermoonMuted() const
+{
+    return IsRealPlayerConst() || (sPlayerbotAIConfig.IsFreeAltBot(bot->GetGUIDLow()) && SilvermoonAutoOn(bot->GetGUIDLow()));
 }
