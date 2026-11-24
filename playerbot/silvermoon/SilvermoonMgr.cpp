@@ -435,6 +435,42 @@ static void SilvermoonWeaponUpgrade(Player* bot)
     }
 }
 
+// Silvermoon patch (S): quests a bot hasn't finished within 5 levels are abandoned - they clog the
+// log and pull the bot back to low zones. Unfinished (not ready to hand in), not class quests. The
+// level a quest was first seen in the log is remembered; without a record (after a restart) the
+// quest's own level stands in for it.
+static void SilvermoonDropStaleQuests(Player* bot)
+{
+    static std::mutex lock;
+    static std::unordered_map<uint32, std::unordered_map<uint32, uint32>> seenAt;   // guid -> quest -> level
+    uint32 level = bot->GetLevel();
+    std::lock_guard<std::mutex> guard(lock);
+    auto& seen = seenAt[bot->GetGUIDLow()];
+    for (uint8 slot = 0; slot < MAX_QUEST_LOG_SIZE; ++slot)
+    {
+        uint32 questId = bot->GetQuestSlotQuestId(slot);
+        Quest const* quest = questId ? sObjectMgr.GetQuestTemplate(questId) : nullptr;
+        if (!quest)
+            continue;
+        auto it = seen.find(questId);
+        if (it == seen.end())
+            it = seen.emplace(questId, level).first;
+        if (bot->GetQuestStatus(questId) != QUEST_STATUS_INCOMPLETE || quest->GetRequiredClasses())
+            continue;
+        int32 questLevel = quest->GetQuestLevel() > 0 ? quest->GetQuestLevel() : int32(level);
+        bool stale = int32(level) >= int32(it->second) + 5 || int32(level) >= questLevel + 5;
+        if (!stale)
+            continue;
+        bot->SetQuestSlot(slot, 0);
+        bot->TakeQuestSourceItem(questId, false);
+        bot->SetQuestStatus(questId, QUEST_STATUS_NONE);
+        bot->getQuestStatusMap()[questId].m_rewarded = false;
+        seen.erase(it);
+        sLog.outBasic("Silvermoon: bot %s (level %u) abandoned quest %u \"%s\" (level %d, unfinished for 5 levels)",
+            bot->GetName(), level, questId, quest->GetTitle().c_str(), questLevel);
+    }
+}
+
 static void SilvermoonDualWield(Player* bot)
 {
     uint8 cls = bot->getClass();
@@ -1021,6 +1057,7 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                 {
                     SetEventValue(alt.second, "silvermoon_alt_shop", 1, 10 * MINUTE);
                     uint32 before = p->GetMoney();
+                    SilvermoonDropStaleQuests(p);
                     SilvermoonWeaponUpgrade(p);
                     SilvermoonBuyBag(p);
                     SilvermoonDualWield(p);
@@ -2601,6 +2638,7 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                 uint32 m0 = p->GetMoney();
                 SilvermoonRepairNearby(p);
                 uint32 m1 = p->GetMoney();
+                SilvermoonDropStaleQuests(p);
                 SilvermoonWeaponUpgrade(p);
                 SilvermoonBuyBag(p);            // S: bags before Dual Wield and professions
                 SilvermoonDualWield(p);
