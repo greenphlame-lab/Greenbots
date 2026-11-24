@@ -6,6 +6,7 @@
 #include "playerbot/TravelMgr.h"
 #include "playerbot/strategy/actions/ChooseTravelTargetAction.h"
 #include "ChooseGoalAction.h"
+#include "Professions.h"
 
 using namespace ai;
 
@@ -63,6 +64,14 @@ std::vector<SilvermoonGoalFetch> ai::SilvermoonBuildGoalFetches(PlayerbotAI* ai,
         if (bot->GetSkillValue(SKILL_HERBALISM) > 0)
             fetches.push_back({ (uint32)TravelDestinationPurpose::GatherHerbalism, {}, 1500.0f });
     }
+    // Professions window "Gather" order (S: clicking Gather did nothing - gathering spots were only
+    // fetched for a broke bot): gathering spots for the ordered skill, always while the order lasts
+    if (SilvermoonGatherOrderFactor(bot->GetGUIDLow(), SKILL_MINING) > 1.0f)
+        fetches.push_back({ (uint32)TravelDestinationPurpose::GatherMining, {}, 3000.0f });
+    if (SilvermoonGatherOrderFactor(bot->GetGUIDLow(), SKILL_HERBALISM) > 1.0f)
+        fetches.push_back({ (uint32)TravelDestinationPurpose::GatherHerbalism, {}, 3000.0f });
+    if (SilvermoonGatherOrderFactor(bot->GetGUIDLow(), SKILL_FISHING) > 1.0f)
+        fetches.push_back({ (uint32)TravelDestinationPurpose::GatherFishing, {}, 3000.0f });
     // mail: stock bots fetch it after an hour or more (the brain silenced that request), and mail
     // from a real player right away (Velyna never picked up a cloak sent to her)
     if (context->GetValue<bool>("can get mail")->Get() &&

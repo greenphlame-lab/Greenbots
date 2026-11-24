@@ -369,7 +369,9 @@ static SilvermoonScoredGoal ScoreWith(Player* bot, BotSnapshot const& snapshot, 
         float f = skill ? SilvermoonGatherOrderFactor(bot->GetGUIDLow(), skill) : 1.0f;
         if (f > 1.0f)
         {
-            goal.score.score *= f;
+            // the order comes first (S): ahead of quests, like a learn order; the nearest
+            // spot it can gather wins among the gathering spots
+            goal.score.score = 500000.0f / std::max(1.0f, goal.score.minutes);
             goal.score.reason = "gather order";
         }
     }
