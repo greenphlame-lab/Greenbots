@@ -54,7 +54,8 @@ namespace
         if (row.goal == "quest giver")
             return "Picking up quests (" + Plain(what.substr(what.find("questgiver") != std::string::npos ? what.find("questgiver") + 11 : 0)) + ")";
         if (row.goal == "grind")
-            return "Grinding " + Plain(what.substr(what.find("killing ") != std::string::npos ? what.find("killing ") + 8 : 0));
+            return std::string(row.reason == "quest mob" ? "Quest mobs: " : "Grinding ") +
+                Plain(what.substr(what.find("killing ") != std::string::npos ? what.find("killing ") + 8 : 0));
         if (row.goal == "relocate")
             return "Travelling to " + what;
         return what.empty() ? row.goal : what;

@@ -355,6 +355,15 @@ static SilvermoonScoredGoal ScoreWith(Player* bot, BotSnapshot const& snapshot, 
 
     goal.kind = c.kind;
     goal.score = GoalScorer::Score(snapshot, c, frand(0.9f, 1.1f));
+    // a grind spot on mobs an active quest needs is quest work (S: Mommy "grind fallback"-ed Kobold
+    // Vermin for Kobold Camp Cleanup - grind 38 against the objective's 36): worth a third more and
+    // labelled as such
+    if (c.kind == GoalKind::Grind && destination->GetEntry() > 0 && bot->GetPlayerbotAI() &&
+        bot->GetPlayerbotAI()->GetAiObjectContext()->GetValue<bool>("need for quest", std::to_string(destination->GetEntry()))->Get())
+    {
+        goal.score.score *= 1.33f;
+        goal.score.reason = "quest mob";
+    }
     // gathering stays near the bot's level: no nodes in an area more than 8 levels below it
     // (broke level 16-24 bots went back to Elwynn for Peacebloom, Silverleaf and copper)
     if (c.kind == GoalKind::Gather && position)
