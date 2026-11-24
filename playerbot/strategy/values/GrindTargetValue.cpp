@@ -213,14 +213,21 @@ Unit* GrindTargetValue::FindTargetForGrinding(int assistCount)
                 continue;
             // single pulls: skip a mob with another idle hostile mob right next to it (two at once
             // is how most ordinary fights were lost)
+            // packs (S: Kojimbo pulled a 4-mob worgen pack): skip a mob with an idle hostile within
+            // 12 yards (15 in careful mode; was 8), or with 2+ idle hostiles within 20 yards - camps
+            // and packs that come together
             bool pack = false;
+            uint32 around = 0;
             for (ObjectGuid const& other : targets)
             {
                 if (other == unit->GetObjectGuid())
                     continue;
                 Unit* near = ai->GetUnit(other);
-                if (near && near->IsAlive() && !near->IsInCombat() && near->GetTypeId() == TYPEID_UNIT && !((Creature*)near)->IsCritter() &&
-                    near->CanAttackOnSight(bot) && near->GetDistance(unit) < (careful ? 15.0f : 8.0f))
+                if (!near || !near->IsAlive() || near->IsInCombat() || near->GetTypeId() != TYPEID_UNIT || ((Creature*)near)->IsCritter() ||
+                    !near->CanAttackOnSight(bot))
+                    continue;
+                float d = near->GetDistance(unit);
+                if (d < (careful ? 15.0f : 12.0f) || (d < 20.0f && ++around >= 2))
                 {
                     pack = true;
                     break;
