@@ -58,7 +58,9 @@ static bool SellAllLegacy(SellAction* action, PlayerbotAI* ai, Player* bot, Play
 
         const ItemUsage usage = context->GetValue<ItemUsage>("item usage", ItemQualifier(item).GetQualifier())->Get();
         bool sellable = usage == ItemUsage::ITEM_USAGE_VENDOR;
-        if (proto->Quality == ITEM_QUALITY_POOR)
+        // Silvermoon (S): your own characters also sell white items they have no use for (not
+        // equipped, not an upgrade, not for a profession - those are marked for the bank)
+        if (proto->Quality == ITEM_QUALITY_POOR || (proto->Quality == ITEM_QUALITY_NORMAL && !sRandomPlayerbotMgr.IsRandomBot(bot) && !ai->IsRealPlayer()))
         {
             sellable = sellable || usage == ItemUsage::ITEM_USAGE_NONE || usage == ItemUsage::ITEM_USAGE_BAD_EQUIP
                 || usage == ItemUsage::ITEM_USAGE_AH || usage == ItemUsage::ITEM_USAGE_BROKEN_AH;

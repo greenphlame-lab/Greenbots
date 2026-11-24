@@ -106,6 +106,17 @@ ItemUsage ItemUsageValue::Calculate()
     if (!proto)
         return ItemUsage::ITEM_USAGE_NONE;
 
+    // Silvermoon (S): white trade goods and white junk (misc) on your own characters - always-online
+    // alts and your character on Auto - go to the vendor unless one of the character's professions
+    // uses them; those are marked for the bank. Random bots keep their own sell-everything rules.
+    if (proto->Quality == ITEM_QUALITY_NORMAL && !sRandomPlayerbotMgr.IsRandomBot(bot) &&
+        (proto->Class == ITEM_CLASS_TRADE_GOODS || (proto->Class == ITEM_CLASS_MISC && proto->SubClass == ITEM_SUBCLASS_JUNK)))
+    {
+        if (IsItemNeededForSkill(proto) || IsItemUsefulForSkill(proto) || IsItemNeededForUsefullCraft(proto, false))
+            return ItemUsage::ITEM_USAGE_BANK;
+        return ItemUsage::ITEM_USAGE_VENDOR;
+    }
+
     // Silvermoon auto mode: S's own character playing itself (self-bot) sells only grey junk and
     // keeps everything else - nothing is auctioned, destroyed or swapped in or out of its gear
     if (ai->IsRealPlayer())
