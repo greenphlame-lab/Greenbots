@@ -2,6 +2,7 @@
 #include "CheetahAction.h"
 #include "playerbot/TravelMgr.h"
 #include "playerbot/ServerFacade.h"
+#include "playerbot/strategy/values/ItemUsageValue.h"
 
 using namespace ai;
 
@@ -92,6 +93,8 @@ bool ErrandDoneAction::isUseful()
         return AI_VALUE(uint8, "bag space") < 40;
     if (purpose == TravelDestinationPurpose::Repair)
         return AI_VALUE(uint8, "durability") > 90;
+    if (purpose == TravelDestinationPurpose::AH)
+        return AI_VALUE2(std::list<Item*>, "inventory items", "usage " + std::to_string((uint8)ItemUsage::ITEM_USAGE_AH)).size() < 2;
     return false;
 }
 

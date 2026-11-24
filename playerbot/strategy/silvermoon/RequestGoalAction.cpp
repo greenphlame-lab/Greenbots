@@ -1,4 +1,5 @@
 #include "playerbot/playerbot.h"
+#include "playerbot/strategy/values/ItemUsageValue.h"
 #include "playerbot/silvermoon/BrainTimer.h"
 #include "RequestGoalAction.h"
 #include "playerbot/TravelMgr.h"
@@ -72,6 +73,12 @@ std::vector<SilvermoonGoalFetch> ai::SilvermoonBuildGoalFetches(PlayerbotAI* ai,
         if (!trainers.empty())
             fetches.push_back({ (uint32)TravelDestinationPurpose::Trainer, trainers, 10000.0f });
     }
+
+    // auction house (S: ore, herbs and cloth almost never reached the AH - 9,000 Linen Cloth sat in
+    // bot bags, 93 auctions in all): the brain never planned an AH trip, bots only posted when they
+    // happened to pass an auctioneer. Now: 6+ stacks marked for the AH make it a chore
+    if (context->GetValue<std::list<Item*>>("inventory items", "usage " + std::to_string((uint8)ItemUsage::ITEM_USAGE_AH))->Get().size() >= 6)
+        fetches.push_back({ (uint32)TravelDestinationPurpose::AH, {}, 10000.0f });
 
     // a little exploring, short range only (worth little until Phase 2 adds quest hubs)
     fetches.push_back({ (uint32)TravelDestinationPurpose::Explore, {}, 500.0f });

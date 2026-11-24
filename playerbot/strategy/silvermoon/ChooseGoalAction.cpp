@@ -11,6 +11,7 @@
 #include "RelocateGoal.h"
 #include "Professions.h"
 #include "Policies.h"
+#include "playerbot/strategy/values/ItemUsageValue.h"
 #include "Mails/Mail.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include <deque>
@@ -333,7 +334,7 @@ static SilvermoonScoredGoal ScoreWith(Player* bot, BotSnapshot const& snapshot, 
     }
     else if (dynamic_cast<ExploreTravelDestination*>(destination))
         c.kind = GoalKind::Explore;
-    else if (purpose == TravelDestinationPurpose::Vendor)
+    else if (purpose == TravelDestinationPurpose::Vendor || purpose == TravelDestinationPurpose::AH)
         c.kind = GoalKind::Vendor;
     else if (purpose == TravelDestinationPurpose::Repair)
         c.kind = GoalKind::Repair;
@@ -379,6 +380,16 @@ static SilvermoonScoredGoal ScoreWith(Player* bot, BotSnapshot const& snapshot, 
                 goal.score.score *= 5.0f;
                 goal.score.reason = "gather order: skinning";
             }
+    // auction house trip: worth 1 minute of XP per stack marked for the AH, up to 25 (a vendor chore
+    // is worth 3-20); the label says where it's going
+    if (purpose == TravelDestinationPurpose::AH && bot->GetPlayerbotAI())
+    {
+        uint32 stacks = (uint32)bot->GetPlayerbotAI()->GetAiObjectContext()->GetValue<std::list<Item*>>("inventory items", "usage " + std::to_string((uint8)ItemUsage::ITEM_USAGE_AH))->Get().size();
+        float minutes = float(std::min<uint32>(25, stacks));
+        goal.score.value = GoalScorer::XpPerMinute(snapshot) * minutes;
+        goal.score.score = goal.score.minutes > 0.0f ? goal.score.value / goal.score.minutes : 0.0f;
+        goal.score.reason = "auction house";
+    }
     // doable quests close by come before grinding (S: Mommy ground Kobold Workers with quest
     // objectives 200-250 yards away): quest objectives within 250 yards that aren't elite or 3+
     // levels up are worth half again
