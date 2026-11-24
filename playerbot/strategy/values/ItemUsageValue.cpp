@@ -147,6 +147,17 @@ ItemUsage ItemUsageValue::Calculate()
             return ItemUsage::ITEM_USAGE_KEEP;
         if (tg == 2 && (IsItemNeededForSkill(proto) || IsItemUsefulForSkill(proto) || IsItemNeededForUsefullCraft(proto, false)))
             return ItemUsage::ITEM_USAGE_KEEP;
+        // ...and what its gathering professions bring in (S: Mommy, an herbalist, sold her
+        // Peacebloom and Silverleaf - no crafting profession of hers "uses" herbs)
+        if (tg == 2)
+        {
+            std::string name = proto->Name1;
+            bool herb = proto->SubClass == 9;
+            bool ore = name.find(" Ore") != std::string::npos || name.find(" Stone") != std::string::npos;
+            bool leather = name.find("Leather") != std::string::npos || name.find(" Hide") != std::string::npos;
+            if ((herb && bot->HasSkill(SKILL_HERBALISM)) || (ore && bot->HasSkill(SKILL_MINING)) || (leather && bot->HasSkill(SKILL_SKINNING)))
+                return ItemUsage::ITEM_USAGE_KEEP;
+        }
     }
     if (proto->Quality == ITEM_QUALITY_NORMAL && !sRandomPlayerbotMgr.IsRandomBot(bot) &&
         (proto->Class == ITEM_CLASS_TRADE_GOODS || (proto->Class == ITEM_CLASS_MISC && proto->SubClass == ITEM_SUBCLASS_JUNK)))
