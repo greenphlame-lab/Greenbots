@@ -29,7 +29,10 @@ namespace ai
         uint8 upgradePct = 0;        // 0 = the bot's defaults
         std::map<uint32, uint8> weapons;   // skill -> 1 train, 2 avoid
         uint8 bags = 0;              // bit 1: don't buy bags; bit 2: replace small bags with bigger ones
-        bool Any() const { return !blockedZones.empty() || fleeMobs || fleeHealth || ahGold || upgradePct || !weapons.empty() || bags; }
+        // item rules (S): item id -> (action, always). action 1 sell, 2 auction, 3 destroy, 4 keep;
+        // "once" rules end when none of the item is left
+        std::map<uint32, std::pair<uint8, bool>> items;
+        bool Any() const { return !blockedZones.empty() || fleeMobs || fleeHealth || ahGold || upgradePct || !weapons.empty() || bags || !items.empty(); }
     };
 
     // your own character playing on its own: Auto (self-bot) or an always-online alt with auto on
@@ -45,6 +48,10 @@ namespace ai
     // the class can use and doesn't know yet, is learned for the weapon masters' 10 silver when it
     // fits the character's upgrade budget. One per call.
     void SilvermoonWeaponTraining(Player* bot);
+    // item rules: 0 = none, else 1 sell, 2 auction, 3 destroy, 4 keep
+    uint8 SilvermoonItemRule(uint32 guid, uint32 itemId);
+    // destroys items ruled "destroy" and ends finished "once" rules (your characters, every 10 s)
+    void SilvermoonApplyItemRules(Player* bot);
 
     class SilvermoonPolicyAction : public ChatCommandAction
     {

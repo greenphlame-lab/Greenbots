@@ -8,6 +8,7 @@
 #include <mutex>
 #include <sstream>
 #include <unordered_map>
+#include <vector>
 
 using namespace ai;
 
@@ -23,6 +24,9 @@ namespace
         out << "z=";
         bool first = true;
         for (uint32 z : p.blockedZones) { out << (first ? "" : ",") << z; first = false; }
+        out << ";it=";
+        first = true;
+        for (auto const& [item, rule] : p.items) { out << (first ? "" : ",") << item << ":" << uint32(rule.first) << ":" << (rule.second ? 1 : 0); first = false; }
         out << ";bg=" << uint32(p.bags) << ";fm=" << uint32(p.fleeMobs) << ";fh=" << uint32(p.fleeHealth) << ";ah=" << p.ahGold << ";up=" << uint32(p.upgradePct) << ";ws=";
         first = true;
         for (auto const& [skill, mode] : p.weapons) { out << (first ? "" : ",") << skill << ":" << uint32(mode); first = false; }
@@ -45,6 +49,17 @@ namespace
             else if (key == "fh") p.fleeHealth = uint8(atoi(value.c_str()));
             else if (key == "ah") p.ahGold = uint32(strtoul(value.c_str(), nullptr, 10));
             else if (key == "up") p.upgradePct = uint8(atoi(value.c_str()));
+            else if (key == "it")
+            {
+                std::stringstream vs(value);
+                std::string item;
+                while (std::getline(vs, item, ','))
+                {
+                    unsigned a = 0, b = 0, c = 0;
+                    if (sscanf(item.c_str(), "%u:%u:%u", &a, &b, &c) == 3 && a && b)
+                        p.items[a] = std::make_pair(uint8(b), c != 0);
+                }
+            }
             else if (key == "z" || key == "ws")
             {
                 std::stringstream vs(value);
@@ -172,6 +187,24 @@ bool ai::SilvermoonPolicyCommand(Player* bot, std::string const& param, std::str
             p.bags = v2 == "on" ? (p.bags | 2) : (p.bags & ~2);
         reply = "Bag rules updated.";
     }
+    else if (k == "item" && n >= 2)
+    {
+        // pol item <id> sell|ah|destroy|keep|clear [once|always]
+        uint32 item = uint32(atoi(v1.c_str()));
+        char act[16] = {}, freq[16] = {};
+        sscanf(param.c_str(), "%*s %*s %15s %15s", act, freq);
+        std::string a(act), f(freq);
+        uint8 action = a == "sell" ? 1 : a == "ah" ? 2 : a == "destroy" ? 3 : a == "keep" ? 4 : 0;
+        if (!item)
+            return false;
+        if (!action)
+            p.items.erase(item), reply = "Item rule cleared.";
+        else
+        {
+            p.items[item] = std::make_pair(action, f != "once");
+            reply = std::string("Item rule set: ") + a + (f == "once" ? " once." : " always.");
+        }
+    }
     else if (k == "reset")
         p = SilvermoonPolicy(), reply = "Policies reset.";
     else
@@ -208,6 +241,46 @@ void ai::SilvermoonWeaponTraining(Player* bot)
         bot->ModifyMoney(-int32(fee));
         sLog.outBasic("Silvermoon: %s learned weapon skill %u at a weapon master for %u copper (policy)", bot->GetName(), skill, fee);
         return;
+    }
+}
+
+uint8 ai::SilvermoonItemRule(uint32 guid, uint32 itemId)
+{
+    std::lock_guard<std::mutex> guard(policyLock);
+    auto const& items = Get(guid).items;
+    auto it = items.find(itemId);
+    return it == items.end() ? 0 : it->second.first;
+}
+
+void ai::SilvermoonApplyItemRules(Player* bot)
+{
+    std::vector<uint32> destroy;
+    bool changed = false;
+    {
+        std::lock_guard<std::mutex> guard(policyLock);
+        SilvermoonPolicy& p = Get(bot->GetGUIDLow());
+        for (auto it = p.items.begin(); it != p.items.end();)
+        {
+            uint32 count = bot->GetItemCount(it->first);
+            if (it->second.first == 3 && count)
+                destroy.push_back(it->first);
+            if (!it->second.second && (!count || it->second.first == 3))
+            {
+                it = p.items.erase(it);                // a "once" rule is done
+                changed = true;
+            }
+            else
+                ++it;
+        }
+        if (changed)
+            Save(bot->GetGUIDLow(), p);
+    }
+    for (uint32 item : destroy)
+    {
+        uint32 count = bot->GetItemCount(item);
+        bot->DestroyItemCount(item, count, true);
+        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(item);
+        sLog.outBasic("Silvermoon: %s destroyed %u x %s (item rule)", bot->GetName(), count, proto ? proto->Name1 : "?");
     }
 }
 

@@ -1248,6 +1248,7 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                         if (me->GetPlayerbotAI() && me->IsAlive())
                         {
                             SilvermoonFillEmptyWeapon(me);
+                            SilvermoonApplyItemRules(me);
                             SilvermoonProfBuyTools(me);
                             SilvermoonWeaponTraining(me);
                             if (me->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_RESTING) && !me->IsInCombat())
@@ -1273,6 +1274,7 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                     SetEventValue(alt.second, "silvermoon_alt_shop", 1, 10 * MINUTE);
                     uint32 before = p->GetMoney();
                     SilvermoonDropStaleQuests(p);
+                    SilvermoonApplyItemRules(p);
                     SilvermoonProfBuyTools(p);
                     SilvermoonWeaponTraining(p);
                     SilvermoonWeaponUpgrade(p);

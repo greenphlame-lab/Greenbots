@@ -1,5 +1,6 @@
 
 #include "playerbot/playerbot.h"
+#include "playerbot/strategy/silvermoon/Policies.h"
 #include "ItemUsageValue.h"
 #include "AuctionHouse/AuctionHouseMgr.h"
 #include "CraftValues.h"
@@ -105,6 +106,16 @@ ItemUsage ItemUsageValue::Calculate()
     const ItemPrototype* proto = sObjectMgr.GetItemPrototype(itemId);
     if (!proto)
         return ItemUsage::ITEM_USAGE_NONE;
+
+    // Silvermoon (S): your item rules (sell / auction / keep) win for your own characters
+    if (SilvermoonIsOwn(bot))
+        switch (SilvermoonItemRule(bot->GetGUIDLow(), itemId))
+        {
+            case 1: return ItemUsage::ITEM_USAGE_VENDOR;
+            case 2: return ItemUsage::ITEM_USAGE_AH;
+            case 4: return ItemUsage::ITEM_USAGE_KEEP;
+            default: break;
+        }
 
     // Silvermoon (S): white trade goods and white junk (misc) on your own characters - always-online
     // alts and your character on Auto - go to the vendor unless one of the character's professions
