@@ -1297,6 +1297,11 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                             SilvermoonFillEmptyWeapon(me);
                             SilvermoonInnBind(me);
                             SilvermoonLevelPass(me);   // "Level it" orders (Professions window)
+                            // a Gather order needs the gathering step (it finds and loots the nodes)
+                            if ((SilvermoonGatherOrderFactor(me->GetGUIDLow(), 182) > 1.0f || SilvermoonGatherOrderFactor(me->GetGUIDLow(), 186) > 1.0f ||
+                                 SilvermoonGatherOrderFactor(me->GetGUIDLow(), 356) > 1.0f) &&
+                                !me->GetPlayerbotAI()->HasStrategy("gather", BotState::BOT_STATE_NON_COMBAT))
+                                me->GetPlayerbotAI()->ChangeStrategy("+gather,+loot", BotState::BOT_STATE_NON_COMBAT);
                             // policy (S): disenchant green gear it won't wear, one item per pass
                             if (!me->IsInCombat() && me->HasSkill(333) && SilvermoonPolicyFor(me->GetGUIDLow()).disenchant)
                                 me->GetPlayerbotAI()->DoSpecificAction("disenchant random item", Event("silvermoon policy"), true);

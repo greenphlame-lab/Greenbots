@@ -36,6 +36,9 @@ namespace
     std::map<uint32, std::pair<TravelDestination*, time_t>> lastGoal;   // bot -> last chosen, when
     std::map<uint32, WorldPosition> lastGoalAt;                          // bot -> where that goal was
     std::map<uint32, std::map<TravelDestination*, time_t>> skipUntil;   // bot -> destination -> until
+    // Gather orders: spawn spots a bot already stood on lately (herbs and ore respawn on their own
+    // clock - an empty spot is not a success, the bot moves on to the next spot)
+    std::map<uint32, std::vector<std::pair<WorldPosition, time_t>>> gatherVisited;
 
     // Chores that keep coming back without effect (a broke bot's repairs, a trainer it can't reach,
     // a vendor that doesn't take what's in the bags): chosen 3 times in 15 minutes, that kind of
@@ -559,6 +562,22 @@ std::vector<SilvermoonScoredGoal> ai::SilvermoonScoreGoals(Player* bot, Playerbo
     // order on, gathering spots are always considered (the cap still applies to everything else).
     bool gatherOrder = SilvermoonGatherOrderFactor(bot->GetGUIDLow(), 186) > 1.0f || SilvermoonGatherOrderFactor(bot->GetGUIDLow(), 182) > 1.0f ||
         SilvermoonGatherOrderFactor(bot->GetGUIDLow(), 356) > 1.0f;
+    // Gather order as a patrol (S): every spawn spot is its own stop (not one stop per herb type),
+    // the spot the bot is standing on now counts as visited, and spots visited in the last 15 minutes
+    // are passed over - so it walks spot to spot, and the gathering step loots any node it sees on
+    // the way (60 yards, see AddLootAction)
+    std::vector<WorldPosition> recentSpots;
+    if (gatherOrder)
+    {
+        std::lock_guard<std::mutex> guard(goalLock);
+        auto& visited = gatherVisited[bot->GetGUIDLow()];
+        time_t now = time(nullptr);
+        visited.erase(std::remove_if(visited.begin(), visited.end(), [now](std::pair<WorldPosition, time_t> const& v) { return now - v.second > 15 * MINUTE; }), visited.end());
+        visited.push_back({ WorldPosition(bot), now });
+        for (auto const& v : visited)
+            recentSpots.push_back(v.first);
+    }
+    uint32 gatherStops = 0;
     // partitions are ordered by distance, so this walks nearest first
     for (auto& [partition, points] : list)
     {
@@ -570,7 +589,20 @@ std::vector<SilvermoonScoredGoal> ai::SilvermoonScoreGoals(Player* bot, Playerbo
                 (destination->GetPurpose() != TravelDestinationPurpose::GatherHerbalism && destination->GetPurpose() != TravelDestinationPurpose::GatherMining &&
                  destination->GetPurpose() != TravelDestinationPurpose::GatherFishing)))
                 continue;
-            if (!destination || !seen.insert(destination).second || skip.count(destination))
+            bool gatherSpot = gatherOrder && destination && position &&
+                (destination->GetPurpose() == TravelDestinationPurpose::GatherHerbalism || destination->GetPurpose() == TravelDestinationPurpose::GatherMining ||
+                 destination->GetPurpose() == TravelDestinationPurpose::GatherFishing);
+            if (gatherSpot)
+            {
+                bool recent = false;
+                for (WorldPosition const& v : recentSpots)
+                    if (v.getMapId() == position->getMapId() && v.fDist(*position) < 40.0f)
+                        recent = true;
+                if (recent || gatherStops >= 12 || skip.count(destination))
+                    continue;
+                ++gatherStops;
+            }
+            else if (!destination || !seen.insert(destination).second || skip.count(destination))
                 continue;
             if (!destination->IsActive(bot, info))
                 continue;

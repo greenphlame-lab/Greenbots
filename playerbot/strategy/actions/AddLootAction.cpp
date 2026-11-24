@@ -16,6 +16,8 @@
 using namespace ai;
 using namespace MaNGOS;
 
+namespace ai { float SilvermoonGatherOrderFactor(uint32 guid, uint32 skill); }
+
 using namespace ai;
 
 namespace
@@ -306,6 +308,11 @@ bool AddGatheringLootAction::AddLoot(Player* requester, ObjectGuid guid)
     {
         gatheringDistanceToUse = sPlayerbotAIConfig.gatheringDistance;
     }
+
+    // Silvermoon (S): with a Gather order on, your character looks 60 yards around for nodes of
+    // that skill while it walks from spawn spot to spawn spot
+    if (loot.skillId && SilvermoonGatherOrderFactor(bot->GetGUIDLow(), loot.skillId) > 1.0f)
+        gatheringDistanceToUse = std::max(gatheringDistanceToUse, 60.0f);
 
     if (sServerFacade.IsDistanceGreaterThan(sServerFacade.GetDistance2d(requester, wo), gatheringDistanceToUse))
     {
