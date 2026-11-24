@@ -187,9 +187,10 @@ bool ai::SilvermoonBestRelocate(Player* bot, PlayerbotAI* ai, float bestLocalSco
         }
     }
     // stuck at this level (S: Cavol spent 47 hours at level 24 in a Barrens with 213 Horde bots -
-    // crowded quests, open quest log, broke): 3+ hours at one level overrides the open-quests hold
+    // crowded quests, open quest log, broke): 18+ hours at one level (about twice the usual 10 at
+    // level 20-24) overrides the open-quests hold
     // and counts as thin, so the bot goes looking for a less crowded hub
-    bool stuckAtLevel = level >= 10 && bot->m_Played_time[PLAYED_TIME_LEVEL] >= 3 * HOUR;
+    bool stuckAtLevel = level >= 10 && bot->m_Played_time[PLAYED_TIME_LEVEL] >= 18 * HOUR;
     // a bot under level 6 stays in its starting area (Grashnak, level 1, set off for Red Cloud
     // Mesa - another race's starting valley - two minutes after logging in)
     if (level < 6 && !outgrown && !want)
