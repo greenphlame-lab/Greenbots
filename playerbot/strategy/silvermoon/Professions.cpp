@@ -5,6 +5,9 @@
 #include "playerbot/TravelNode.h"
 #include "playerbot/ServerFacade.h"
 #include "playerbot/silvermoon/GoalScorer.h"
+#include "playerbot/strategy/values/CraftValues.h"
+#include "Spells/SpellMgr.h"
+#include <set>
 #include <algorithm>
 #include <cstdio>
 #include <deque>
@@ -41,7 +44,7 @@ namespace
         return nullptr;
     }
 
-    struct Orders { std::deque<uint32> learn; uint32 gather = 0; };
+    struct Orders { std::deque<uint32> learn; uint32 gather = 0; std::set<uint32> level; };
     std::mutex orderLock;
     std::unordered_map<uint32, Orders> orders;
 
@@ -159,6 +162,26 @@ bool ai::SilvermoonProfCommand(Player* bot, std::string const& param, std::strin
         reply = std::string("Gathering with ") + p->name + " until you stop me.";
         return true;
     }
+    if ((v == "level" || v == "unlevel") && n == 2)
+    {
+        Profession const* p = Find(skill);
+        if (!p)
+            return false;
+        if (v == "unlevel")
+        {
+            o.level.erase(skill);
+            reply = std::string("I'll stop levelling ") + p->name + ".";
+            return true;
+        }
+        if (!bot->HasSkill(p->skill))
+        {
+            reply = std::string("I don't know ") + p->name + " yet.";
+            return true;
+        }
+        o.level.insert(skill);
+        reply = std::string("Levelling ") + p->name + ": I'll craft what still gives skill and buy vendor materials.";
+        return true;
+    }
     if (v == "stop")
     {
         if (n == 2)
@@ -166,6 +189,7 @@ bool ai::SilvermoonProfCommand(Player* bot, std::string const& param, std::strin
             o.learn.erase(std::remove(o.learn.begin(), o.learn.end(), skill), o.learn.end());
             if (o.gather == skill)
                 o.gather = 0;
+            o.level.erase(skill);
         }
         else
             o = Orders();
@@ -230,8 +254,8 @@ std::string ai::SilvermoonProfPanel(Player* bot)
             state = 'L';
         if (o && o->gather == p.skill)
             state = 'G';
-        snprintf(buf, sizeof(buf), "%s%u:%u:%u:%c", first ? "" : ";", p.skill, bot->HasSkill(p.skill) ? uint32(bot->GetSkillValue(p.skill)) : 0,
-            bot->HasSkill(p.skill) ? uint32(bot->GetSkillMax(p.skill)) : 0, state);
+        snprintf(buf, sizeof(buf), "%s%u:%u:%u:%c:%u", first ? "" : ";", p.skill, bot->HasSkill(p.skill) ? uint32(bot->GetSkillValue(p.skill)) : 0,
+            bot->HasSkill(p.skill) ? uint32(bot->GetSkillMax(p.skill)) : 0, state, (o && o->level.count(p.skill)) ? 1u : 0u);
         out += buf;
         first = false;
     }
@@ -302,7 +326,7 @@ namespace
         });
         return spots;
     }
-    struct GoOrder { uint32 flag = 0; std::string what; };
+    struct GoOrder { uint32 flag = 0; std::string what; std::set<uint32> entries; };   // entries: only these NPCs
     std::unordered_map<uint32, GoOrder> goOrders;
 }
 
@@ -327,6 +351,149 @@ bool ai::SilvermoonGoCommand(Player* bot, std::string const& param, std::string&
     return true;
 }
 
+namespace
+{
+    // NPC entries that sell this item (their own list or their vendor template), cached
+    std::set<uint32> const& VendorsSelling(uint32 itemId)
+    {
+        static std::mutex lock;
+        static std::unordered_map<uint32, std::set<uint32>> cache;
+        std::lock_guard<std::mutex> guard(lock);
+        auto it = cache.find(itemId);
+        if (it != cache.end())
+            return it->second;
+        std::set<uint32>& out = cache[itemId];
+        if (auto r = WorldDatabase.PQuery("SELECT entry FROM npc_vendor WHERE item = %u UNION "
+            "SELECT ct.entry FROM npc_vendor_template vt JOIN creature_template ct ON ct.VendorTemplateId = vt.entry WHERE vt.item = %u", itemId, itemId))
+        {
+            do { out.insert(r->Fetch()[0].GetUInt32()); } while (r->NextRow());
+        }
+        return out;
+    }
+
+    uint32 SkillOfSpell(uint32 spellId)
+    {
+        SkillLineAbilityMapBounds bounds = sSpellMgr.GetSkillLineAbilityMapBoundsBySpellId(spellId);
+        for (auto i = bounds.first; i != bounds.second; ++i)
+            if (i->second->skillId)
+                return i->second->skillId;
+        return 0;
+    }
+}
+
+void ai::SilvermoonLevelPass(Player* bot)
+{
+    PlayerbotAI* ai = bot->GetPlayerbotAI();
+    if (!ai || !bot->IsAlive() || bot->IsInCombat() || bot->IsTaxiFlying())
+        return;
+    std::set<uint32> skills;
+    bool goingSomewhere = false;
+    {
+        std::lock_guard<std::mutex> guard(orderLock);
+        auto it = orders.find(bot->GetGUIDLow());
+        if (it == orders.end() || it->second.level.empty())
+            return;
+        skills = it->second.level;
+        goingSomewhere = goOrders.count(bot->GetGUIDLow()) > 0;
+    }
+    AiObjectContext* context = ai->GetAiObjectContext();
+    std::vector<uint32> spells = context->GetValue<std::vector<uint32>>("craft spells")->Get();
+    uint32 crafted = 0;
+    uint32 wantItem = 0;          // a vendor material it still needs
+    for (uint32 spellId : spells)
+    {
+        if (crafted >= 5)
+            break;
+        uint32 skill = SkillOfSpell(spellId);
+        if (!skill || !skills.count(skill) || !ShouldCraftSpellValue::SpellGivesSkillUp(spellId, bot))
+            continue;
+        SpellEntry const* spell = sServerFacade.LookupSpellInfo(spellId);
+        if (!spell)
+            continue;
+        uint32 itemId = spell->Effect[0] == SPELL_EFFECT_CREATE_ITEM ? spell->EffectItemType[0] : 0;
+        // materials: what's missing, and whether a vendor sells all of it
+        std::map<uint32, uint32> missing;
+        bool any = false;
+        for (uint8 i = 0; i < MAX_SPELL_REAGENTS; ++i)
+        {
+            if (spell->Reagent[i] <= 0 || !spell->ReagentCount[i])
+                continue;
+            any = true;
+            uint32 have = bot->GetItemCount(uint32(spell->Reagent[i]));
+            if (have < spell->ReagentCount[i])
+                missing[uint32(spell->Reagent[i])] = spell->ReagentCount[i] - have;
+        }
+        if (!any)
+            continue;
+        if (!missing.empty())
+        {
+            // buy it from a vendor right here, if one sells it and the money allows (a quarter of it)
+            bool allBought = true;
+            for (auto const& need : missing)
+            {
+                ItemPrototype const* rp = sObjectMgr.GetItemPrototype(need.first);
+                std::set<uint32> const& sellers = VendorsSelling(need.first);
+                if (!rp || sellers.empty())
+                {
+                    allBought = false;      // not sold by vendors: it has to find or loot it
+                    continue;
+                }
+                Creature* seller = nullptr;
+                for (ObjectGuid const& g : context->GetValue<std::list<ObjectGuid>>("nearest npcs")->Get())
+                    if (Creature* c = bot->GetMap()->GetCreature(g))
+                        if (sellers.count(c->GetEntry()) && !c->IsHostileTo(bot) && bot->GetDistance(c) < 30.0f)
+                            seller = c;
+                if (!seller)
+                {
+                    allBought = false;
+                    if (!wantItem)
+                        wantItem = need.first;
+                    continue;
+                }
+                uint32 buyCount = rp->BuyCount ? rp->BuyCount : 1;
+                uint32 lots = (need.second + buyCount - 1) / buyCount;
+                uint32 cost = rp->BuyPrice * lots;
+                ItemPosCountVec dest;
+                if (cost * 4 > bot->GetMoney() || bot->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, need.first, lots * buyCount) != EQUIP_ERR_OK)
+                {
+                    allBought = false;
+                    continue;
+                }
+                bot->ModifyMoney(-int32(cost));
+                bot->StoreNewItem(dest, need.first, true);
+                sLog.outBasic("Silvermoon: %s bought %u x %s from %s to level a profession", bot->GetName(), lots * buyCount, rp->Name1, seller->GetName());
+            }
+            if (!allBought)
+                continue;
+        }
+        if (!itemId)
+            continue;
+        int32 made = spell->CalculateSimpleValue(EFFECT_INDEX_0);
+        uint32 count = uint32(std::max(1, std::min(made, 20)));
+        ItemPosCountVec dest;
+        if (bot->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, itemId, count) != EQUIP_ERR_OK)
+            continue;
+        for (uint8 i = 0; i < MAX_SPELL_REAGENTS; ++i)
+            if (spell->Reagent[i] > 0 && spell->ReagentCount[i])
+                bot->DestroyItemCount(uint32(spell->Reagent[i]), spell->ReagentCount[i], true);
+        bot->StoreNewItem(dest, itemId, true, Item::GenerateItemRandomPropertyId(itemId));
+        bot->UpdateCraftSkill(spellId);
+        ++crafted;
+        if (ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId))
+            sLog.outBasic("Silvermoon: %s crafted %s to level a profession", bot->GetName(), proto->Name1);
+    }
+    // nothing to craft right now and a vendor material is missing: go to a vendor that sells it
+    if (!crafted && wantItem && !goingSomewhere)
+    {
+        ItemPrototype const* rp = sObjectMgr.GetItemPrototype(wantItem);
+        std::lock_guard<std::mutex> guard(orderLock);
+        GoOrder& order = goOrders[bot->GetGUIDLow()];
+        order.flag = UNIT_NPC_FLAG_VENDOR;
+        order.what = std::string("a vendor for ") + (rp ? rp->Name1 : "materials");
+        order.entries = VendorsSelling(wantItem);
+    }
+}
+
 bool ai::SilvermoonGoGoal(Player* bot, SilvermoonScoredGoal& goal)
 {
     GoOrder order;
@@ -343,6 +510,8 @@ bool ai::SilvermoonGoGoal(Player* bot, SilvermoonScoredGoal& goal)
     for (GoSpot const& s : GoSpots())
     {
         if (!(s.flag & order.flag) || s.map != bot->GetMapId() || !Friendly(bot, s.entry))
+            continue;
+        if (!order.entries.empty() && !order.entries.count(s.entry))
             continue;
         float d = here.fDist(WorldPosition(s.map, s.x, s.y, s.z));
         if (!best || d < bestDist)

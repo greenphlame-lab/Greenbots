@@ -28,6 +28,11 @@ namespace ai
     // the tool a gathering profession needs (Mining Pick, Skinning Knife, Fishing Pole): bought
     // in a town for the vendor price when the character has the profession but not the tool
     void SilvermoonProfBuyTools(Player* bot);
+    // "Level it" (S): for professions you told it to level, craft recipes that still give skill-ups
+    // with the materials it has (a few per pass, out of combat); a missing material that a vendor
+    // sells is bought from a vendor standing nearby, or the character goes to the nearest vendor
+    // that sells it. Command: ".bot prof level <skill>" / ".bot prof unlevel <skill>"
+    void SilvermoonLevelPass(Player* bot);
 
     // "Go to" (S): send your character to the nearest friendly inn(keeper), flight master, auction
     // house, bank or vendor on its continent - ahead of everything else until it gets there.
