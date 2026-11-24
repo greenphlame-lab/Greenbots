@@ -6,6 +6,8 @@
 #include <algorithm>
 using namespace ai;
 
+namespace ai { bool SilvermoonIsOwn(Player* bot); }
+
 bool DestroyItemAction::Execute(Event& event)
 {
     Player* requester = event.getOwner() ? event.getOwner() : GetMaster();
@@ -49,6 +51,12 @@ bool SmartDestroyItemAction::Execute(Event& event)
 
     if(sPlayerbotAIConfig.IsFreeAltBot(bot) && !ai->HasActivePlayerMaster())
         onlyDestroyGray = false;
+
+    // Silvermoon (S): your own characters (Auto, always-online alts) never destroy anything but
+    // grey junk to make room - Mommy destroyed her Hearthstone and Fishing Pole with full bags.
+    // Your "destroy" item rules still apply (they're handled elsewhere).
+    if (SilvermoonIsOwn(bot))
+        onlyDestroyGray = true;
 
     // only destroy grey items if with real player/guild
     if (onlyDestroyGray)

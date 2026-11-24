@@ -120,6 +120,25 @@ ItemUsage ItemUsageValue::Calculate()
     // Silvermoon (S): white trade goods and white junk (misc) on your own characters - always-online
     // alts and your character on Auto - go to the vendor unless one of the character's professions
     // uses them; those are marked for the bank. Random bots keep their own sell-everything rules.
+    // Silvermoon (S): things your characters must never sell or lose - the Hearthstone, and the
+    // tools of the professions they have (fishing poles, Mining Pick, Skinning Knife, Blacksmith
+    // Hammer, Arclight Spanner, Runed Copper Rod). Mommy's Hearthstone (a white "junk" item) and
+    // Fishing Pole were marked for the vendor and then destroyed when her bags filled up.
+    if (SilvermoonIsOwn(bot))
+    {
+        if (itemId == 6948)
+            return ItemUsage::ITEM_USAGE_KEEP;
+        if (proto->Class == ITEM_CLASS_WEAPON && proto->SubClass == ITEM_SUBCLASS_WEAPON_FISHING_POLE && bot->HasSkill(SKILL_FISHING))
+            return ItemUsage::ITEM_USAGE_KEEP;
+        if ((itemId == 2901 && bot->HasSkill(SKILL_MINING)) || (itemId == 7005 && bot->HasSkill(SKILL_SKINNING)) ||
+            (itemId == 5956 && bot->HasSkill(SKILL_BLACKSMITHING)) || (itemId == 6219 && bot->HasSkill(SKILL_ENGINEERING)) ||
+            (itemId == 6218 && bot->HasSkill(SKILL_ENCHANTING)))
+            return ItemUsage::ITEM_USAGE_KEEP;
+        // white "junk" with a use (an on-use spell) isn't junk
+        if (proto->Class == ITEM_CLASS_MISC && proto->Spells[0].SpellId)
+            return ItemUsage::ITEM_USAGE_KEEP;
+    }
+
     // trade goods policy (S): keep all, keep the ones its professions use (default), or neither
     if (proto->Class == ITEM_CLASS_TRADE_GOODS && SilvermoonIsOwn(bot))
     {
