@@ -338,6 +338,11 @@ void EquipAction::EquipItem(PlayerbotAI* ai, Player* requester, Item* item, bool
 
 bool EquipUpgradesAction::Execute(Event& event)
 {
+    // Silvermoon: your own character on Auto (self-bot) never swaps gear. This action takes the
+    // weapons off first and re-equips the best "equip" items; on Auto everything is "keep", so Guile
+    // ended up fighting unarmed after a vendor visit (and "my bags are full" when the backpack was full)
+    if (ai->IsRealPlayer())
+        return false;
     if (!sPlayerbotAIConfig.autoEquipUpgradeLoot && !sRandomPlayerbotMgr.IsRandomBot(bot))
         return false;
 
