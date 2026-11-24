@@ -468,10 +468,65 @@ static void SilvermoonInnBind(Player* bot)
         if (!npc || !npc->IsAlive() || !npc->HasFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_INNKEEPER) || npc->IsEnemy(bot) ||
             bot->GetDistance(npc) > 30.0f)
             continue;
+        // not at an inn in a zone well above it (S: Mommy, level 10, bound in Southshore - a 20-30
+        // zone - and kept hearthing back to Hillsbrad)
+        uint32 zoneId = 0, areaId = 0;
+        npc->GetZoneAndAreaId(zoneId, areaId);
+        AreaTableEntry const* zone = zoneId ? GetAreaEntryByAreaID(zoneId) : nullptr;
+        if (zone && zone->area_level > 0 && int32(bot->GetLevel()) + 5 < zone->area_level)
+            continue;
         npc->CastSpell(bot, 3286, TRIGGERED_OLD_TRIGGERED);    // "Bind", what the innkeeper's gossip does
         sLog.outBasic("Silvermoon: %s set its hearthstone at %s", bot->GetName(), npc->GetName());
         return;
     }
+}
+
+// hearthstone at a hub that doesn't fit the character (level or faction): moved to the inn of the
+// nearest hub that does (S: Alliance level 20s bound in Southshore kept hearthing back to Hillsbrad;
+// Mommy, level 10, too). Random bots every 30 minutes; your own characters as well.
+static void SilvermoonFixMisfitBind(Player* player)
+{
+    if (!player->IsInWorld() || !player->IsAlive() || player->IsInCombat() || player->GetGroup())
+        return;
+        float hx = 0.0f, hy = 0.0f, hz = 0.0f;
+        uint32 hmap = 0;
+        player->GetHomebindLocation(hx, hy, hz, hmap);
+        WorldPosition bind(hmap, hx, hy, hz);
+        bool alliance = player->GetTeam() == ALLIANCE;
+        int32 level = int32(player->GetLevel());
+        silvermoon::Hub const* at = nullptr;
+        for (silvermoon::Hub const& h : silvermoon::Hubs::All())
+            if (h.map == hmap && bind.fDist(WorldPosition(h.map, h.innkeeper ? h.innX : h.x, h.innkeeper ? h.innY : h.y, h.innkeeper ? h.innZ : h.z)) < 150.0f)
+                at = &h;
+        bool misfit = at && ((at->side != 3 && at->side != (alliance ? 1 : 2)) || level + 2 < int32(at->minLevel) || level > int32(at->maxLevel) + 5);
+        if (misfit)
+        {
+            WorldPosition here(player);
+            silvermoon::Hub const* best = nullptr;
+            float bestDist = 0.0f;
+            for (silvermoon::Hub const& h : silvermoon::Hubs::All())
+            {
+                if (!h.innkeeper || !(h.side == 3 || h.side == (alliance ? 1 : 2)))
+                    continue;
+                if (level < int32(h.minLevel) || level > int32(h.maxLevel))
+                    continue;
+                float dist = h.map == here.getMapId() ? here.fDist(WorldPosition(h.map, h.innX, h.innY, h.innZ)) : 1000000.0f;
+                if (!best || dist < bestDist)
+                {
+                    best = &h;
+                    bestDist = dist;
+                }
+            }
+            if (best)
+            {
+                uint32 zoneId = 0, areaId = 0;
+                sTerrainMgr.GetZoneAndAreaId(zoneId, areaId, best->map, best->innX, best->innY, best->innZ);
+                WorldLocation home(best->map, best->innX, best->innY, best->innZ, 0.0f);
+                player->SetHomebindToLocation(home, areaId ? areaId : zoneId);
+                sLog.outBasic("Silvermoon: bot %s (level %u) hearthstone moved from %s to %s (didn't fit its level)",
+                    player->GetName(), player->GetLevel(), at->name, best->name);
+            }
+        }
 }
 
 static void SilvermoonFillEmptyWeapon(Player* bot)
@@ -1295,6 +1350,7 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                         if (me->GetPlayerbotAI() && me->IsAlive())
                         {
                             SilvermoonFillEmptyWeapon(me);
+                            SilvermoonFixMisfitBind(me);
                             SilvermoonInnBind(me);
                             SilvermoonLevelPass(me);   // "Level it" orders (Professions window)
                             // a Gather order needs the gathering step (it finds and loots the nodes)
@@ -1331,6 +1387,7 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                     SetEventValue(alt.second, "silvermoon_alt_shop", 1, 10 * MINUTE);
                     uint32 before = p->GetMoney();
                     SilvermoonDropStaleQuests(p);
+                    SilvermoonFixMisfitBind(p);
                     SilvermoonInnBind(p);
                     if (p->HasSkill(333) && SilvermoonPolicyFor(p->GetGUIDLow()).disenchant)
                         p->GetPlayerbotAI()->DoSpecificAction("disenchant random item", Event("silvermoon policy"), true);
@@ -3602,45 +3659,7 @@ void RandomPlayerbotMgr::SilvermoonProcessBot(Player* player, PlayerbotAI* ai, u
             !sPlayerbotAIConfig.IsFreeAltBot(player) && !ai->IsRealPlayer() && !GetEventValue(bot, "silvermoon_bindcheck"))
         {
             SetEventValue(bot, "silvermoon_bindcheck", 1, 30 * MINUTE);
-            float hx = 0.0f, hy = 0.0f, hz = 0.0f;
-            uint32 hmap = 0;
-            player->GetHomebindLocation(hx, hy, hz, hmap);
-            WorldPosition bind(hmap, hx, hy, hz);
-            bool alliance = player->GetTeam() == ALLIANCE;
-            int32 level = int32(player->GetLevel());
-            silvermoon::Hub const* at = nullptr;
-            for (silvermoon::Hub const& h : silvermoon::Hubs::All())
-                if (h.map == hmap && bind.fDist(WorldPosition(h.map, h.innkeeper ? h.innX : h.x, h.innkeeper ? h.innY : h.y, h.innkeeper ? h.innZ : h.z)) < 150.0f)
-                    at = &h;
-            bool misfit = at && ((at->side != 3 && at->side != (alliance ? 1 : 2)) || level + 2 < int32(at->minLevel) || level > int32(at->maxLevel) + 5);
-            if (misfit)
-            {
-                WorldPosition here(player);
-                silvermoon::Hub const* best = nullptr;
-                float bestDist = 0.0f;
-                for (silvermoon::Hub const& h : silvermoon::Hubs::All())
-                {
-                    if (!h.innkeeper || !(h.side == 3 || h.side == (alliance ? 1 : 2)))
-                        continue;
-                    if (level < int32(h.minLevel) || level > int32(h.maxLevel))
-                        continue;
-                    float dist = h.map == here.getMapId() ? here.fDist(WorldPosition(h.map, h.innX, h.innY, h.innZ)) : 1000000.0f;
-                    if (!best || dist < bestDist)
-                    {
-                        best = &h;
-                        bestDist = dist;
-                    }
-                }
-                if (best)
-                {
-                    uint32 zoneId = 0, areaId = 0;
-                    sTerrainMgr.GetZoneAndAreaId(zoneId, areaId, best->map, best->innX, best->innY, best->innZ);
-                    WorldLocation home(best->map, best->innX, best->innY, best->innZ, 0.0f);
-                    player->SetHomebindToLocation(home, areaId ? areaId : zoneId);
-                    sLog.outBasic("Silvermoon: bot %s (level %u) hearthstone moved from %s to %s (didn't fit its level)",
-                        player->GetName(), player->GetLevel(), at->name, best->name);
-                }
-            }
+            SilvermoonFixMisfitBind(player);
         }
 
         // Silvermoon patch: once a level-zone teleport has landed, make the new area the

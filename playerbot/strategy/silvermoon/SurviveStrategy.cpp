@@ -64,6 +64,11 @@ bool LifesaverAction::Execute(Event& event)
         Unit* on = s.target ? enemy : bot;
         if (!on)
             continue;
+        // area spells around the caster (Frost Nova, Psychic Scream, Intimidating Shout...) never
+        // passed the cast check on the bot itself - 0 uses in the audit with 86 mages and 92 priests
+        // knowing them: try them on the enemy too
+        if (!s.target && enemy && !ai->CanCastSpell(s.spell, bot, 0))
+            on = enemy;
         if (ai->CanCastSpell(s.spell, on, 0) && ai->CastSpell(s.spell, on))
         {
             sLog.outBasic("Silvermoon: lifesaver: %s (level %u, class %u) used %s at %.0f%% health", bot->GetName(), bot->GetLevel(),
