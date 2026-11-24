@@ -346,6 +346,38 @@ static void SilvermoonFixProfessions(Player* bot)
 // from 20, without Dual Wield pays the trainer fee and learns it; a bot with Dual Wield, a
 // one-handed main hand and an empty off hand buys the best plain vendor one-hander it can use
 // (dagger, sword, axe or mace by its weapon skills) for at most half its money.
+// Silvermoon patch: the level-zone teleports (death-loop rescue, stuck spots, failed trips) went
+// through the stock random teleport, which picks any zone with mobs of the bot's level - it sent
+// Alliance 20s to Southshore (Hillsbrad: Horde-heavy, an Alliance 32-39 hub here) with Redridge
+// quests still open. Now: the inn of the nearest own-faction hub the bot is 2+ levels into (same
+// continent first). Returns false when none fits, and the caller falls back to the stock teleport.
+static bool SilvermoonHubTeleport(Player* bot)
+{
+    bool alliance = bot->GetTeam() == ALLIANCE;
+    int32 level = int32(bot->GetLevel());
+    WorldPosition here(bot);
+    silvermoon::Hub const* best = nullptr;
+    float bestDist = 0.0f;
+    for (silvermoon::Hub const& h : silvermoon::Hubs::All())
+    {
+        if (!(h.side == 3 || h.side == (alliance ? 1 : 2)))
+            continue;
+        if (level < int32(h.minLevel) + 2 || level > int32(h.maxLevel) - 2)
+            continue;
+        float dist = h.map == here.getMapId() ? here.fDist(WorldPosition(h.map, h.x, h.y, h.z)) : 1000000.0f;
+        if (!best || dist < bestDist)
+        {
+            best = &h;
+            bestDist = dist;
+        }
+    }
+    if (!best)
+        return false;
+    float x = best->innkeeper ? best->innX : best->x, y = best->innkeeper ? best->innY : best->y, z = best->innkeeper ? best->innZ : best->z;
+    sLog.outBasic("Silvermoon: bot %s (level %u) moved to hub %s", bot->GetName(), bot->GetLevel(), best->name);
+    return bot->TeleportTo(best->map, x, y, z, bot->GetOrientation());
+}
+
 static void SilvermoonDualWield(Player* bot)
 {
     uint8 cls = bot->getClass();
@@ -975,7 +1007,7 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                     if (nudged.count(p->GetGUIDLow()))
                     {
                         ++silvermoon::Tp(silvermoon::TP_STUCK);
-                        RandomTeleportForLevel(p, false);
+                        if (!SilvermoonHubTeleport(p)) RandomTeleportForLevel(p, false);
                         continue;
                     }
                     if (TravelTarget* target = p->GetPlayerbotAI()->GetAiObjectContext()->GetValue<TravelTarget*>("travel target")->Get())
@@ -2639,7 +2671,7 @@ void RandomPlayerbotMgr::SilvermoonFastProcessBot(Player* player, PlayerbotAI* a
                 player->GetName(), player->GetLevel());
             SilvermoonClearDeaths(bot);
             ++silvermoon::Tp(silvermoon::TP_TOO_DANGEROUS);
-            RandomTeleportForLevel(player, false);
+            if (!SilvermoonHubTeleport(player)) RandomTeleportForLevel(player, false);
             // crash 2026-11-23 (x3): after a teleport to another map the rest of this function
             // called GetMap() on a bot that had no map yet (assert in WorldObject::GetMap)
             return;
@@ -2923,7 +2955,7 @@ void RandomPlayerbotMgr::SilvermoonProcessBot(Player* player, PlayerbotAI* ai, u
                     if (travelTarget)
                         travelTarget->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
                     ++silvermoon::Tp(silvermoon::TP_CITY);
-                    RandomTeleportForLevel(player, false);
+                    if (!SilvermoonHubTeleport(player)) RandomTeleportForLevel(player, false);
                     SetEventValue(bot, "silvermoon_city_since", 0, 0);
                     SetEventValue(bot, "silvermoon_bind_home", 1, 10 * MINUTE);
                 }
@@ -3085,7 +3117,7 @@ void RandomPlayerbotMgr::SilvermoonProcessBot(Player* player, PlayerbotAI* ai, u
                     travelTarget->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
                 if (!fallback)
                     ++silvermoon::Tp(silvermoon::TP_LEVEL_ZONE);
-                RandomTeleportForLevel(player, false);
+                if (!SilvermoonHubTeleport(player)) RandomTeleportForLevel(player, false);
                 SetEventValue(bot, "silvermoon_bind_home", 1, 10 * MINUTE);
             }
         }
@@ -3131,7 +3163,7 @@ void RandomPlayerbotMgr::SilvermoonProcessBot(Player* player, PlayerbotAI* ai, u
                 if (travelTarget)
                     travelTarget->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
                 ++silvermoon::Tp(silvermoon::TP_TOO_DANGEROUS);
-                RandomTeleportForLevel(player, false);
+                if (!SilvermoonHubTeleport(player)) RandomTeleportForLevel(player, false);
                 SetEventValue(bot, "silvermoon_bind_home", 1, 10 * MINUTE);
             }
         }
