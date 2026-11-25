@@ -128,7 +128,9 @@ namespace silvermoon
         case GoalKind::Gather:
             // mining or herbalism: worth a few minutes of XP normally, much more when broke
             // (sellable materials, no fighting)
-            s.value = xpm * (bot.broke || bot.brokenGear ? 6.0f : 1.0f);
+            // x2 when broke (was x6: S, Nov 25 - 112 bots stuck 18h+ at a level spent 14% of their
+            // choices gathering to sell, which pays little next to quest rewards)
+            s.value = xpm * (bot.broke || bot.brokenGear ? 2.0f : 1.0f);
             s.minutes = travel + CHORE_MINUTES;
             s.reason = bot.broke || bot.brokenGear ? "broke: gather to sell" : "gather";
             break;
@@ -185,8 +187,20 @@ namespace silvermoon
                     s.value *= 2.5f;
                 s.reason = bot.recentDeaths >= 3 ? "dying: green mobs" : "broke: green mobs";
             }
+            // quests are a broke bot's best money and XP (S, Nov 25: stuck broke bots handed in 2
+            // quests per 3 hours against 5 for the rest, and took 1 new one against 4): a quest
+            // objective at or below the bot's level and not elite keeps its full value; only harder
+            // ones, and grind spots near its level, wait
+            else if (c.kind == GoalKind::QuestObjective && c.mobLevel <= int32_t(bot.level) && !c.elite)
+                ;
             else if (gap < 3)
                 s.value *= 0.15f;
+        }
+        // broke: a hand-in is money right now
+        if ((bot.broke || bot.brokenGear) && c.kind == GoalKind::QuestTurnIn)
+        {
+            s.value *= 1.5f;
+            s.reason = "broke: hand in for money";
         }
 
         // crowding (Phase 2a): a camp or objective area shared with other bots is worth less
