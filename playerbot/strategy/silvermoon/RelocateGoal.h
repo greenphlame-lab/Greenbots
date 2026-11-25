@@ -17,7 +17,9 @@ namespace ai
     bool SilvermoonBestRelocate(Player* bot, PlayerbotAI* ai, float bestLocalScore, SilvermoonScoredGoal& goal, uint16& hubId);
 
     // estimateMinutes: the route time the hub was scored with (a trip over 2x that is abandoned)
-    void SilvermoonRelocateStarted(uint32 guid, uint16 hubId, TravelDestination* destination, float estimateMinutes);
+    void SilvermoonRelocateStarted(uint32 guid, uint16 hubId, TravelDestination* destination, float estimateMinutes, bool resumed = false);
+    // the trip still on, as a goal again (same hub); false when there is none
+    bool SilvermoonResumeTrip(Player* bot, SilvermoonScoredGoal& goal, uint16& hubId);
     // the level-zone check asks for a Relocate decision instead of teleporting
     void SilvermoonWantRelocate(uint32 guid);
     bool SilvermoonOnRelocateTrip(uint32 guid);

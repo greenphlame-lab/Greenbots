@@ -37,7 +37,7 @@ namespace silvermoon
         static void SaveIfDue();                               // world thread, batched every 10 minutes
         static Hub const* Nearest(uint32_t map, float x, float y, float maxDistance);
         // false when the spot is a hub's inn (within 150 yards) that doesn't fit the bot: the other
-        // faction's, or a level range it is 3+ under or 6+ over (S: level 18-28 Alliance kept
+        // faction's, one it is 3+ levels over, or (Alliance) 3+ under (S: level 18-28 Alliance kept
         // binding in Southshore, a 32-39 hub, and hearthing back to Hillsbrad)
         static bool InnFits(uint32_t map, float x, float y, bool alliance, int level);
     };

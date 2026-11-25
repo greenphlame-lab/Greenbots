@@ -341,7 +341,7 @@ bool ai::SilvermoonBestRelocate(Player* bot, PlayerbotAI* ai, float bestLocalSco
     return true;
 }
 
-void ai::SilvermoonRelocateStarted(uint32 guid, uint16 hubId, TravelDestination* destination, float estimateMinutes)
+void ai::SilvermoonRelocateStarted(uint32 guid, uint16 hubId, TravelDestination* destination, float estimateMinutes, bool resumed)
 {
     std::lock_guard<std::mutex> guard(tripLock);
     // a trip to the same hub picked again within 2 minutes means the last one was dropped at once
@@ -350,6 +350,12 @@ void ai::SilvermoonRelocateStarted(uint32 guid, uint16 hubId, TravelDestination*
     // every ~5 seconds by a bot standing still. Count it as a failed trip, so the hub is skipped
     // for 30 minutes and the level-zone teleport fallback comes after 3 failures.
     auto previous = trips.find(guid);
+    // a resumed trip: same hub, new destination object, the rest kept
+    if (previous != trips.end() && previous->second.hub == hubId && resumed)
+    {
+        previous->second.destination = destination;
+        return;
+    }
     if (previous != trips.end() && previous->second.hub == hubId && time(nullptr) - previous->second.start < 2 * MINUTE)
     {
         FailTrip(guid, hubId);
@@ -395,6 +401,36 @@ float ai::SilvermoonSettleFactor(uint32 guid, WorldPosition const& goal)
             return 1.0f;
     }
     return 0.2f;
+}
+
+// Trip in progress (S: Guile picked the Sepulcher 13 times and never arrived - 760 trips a day ended
+// as "another goal took over", mostly a quest objective, grinding or a trainer chosen mid-trip):
+// when the brain chooses again while a trip is still on, the trip is the goal again, to the same
+// hub, keeping its start time and deaths. Urgent needs are the caller's to put first.
+bool ai::SilvermoonResumeTrip(Player* bot, SilvermoonScoredGoal& goal, uint16& hubId)
+{
+    Trip trip;
+    {
+        std::lock_guard<std::mutex> guard(tripLock);
+        auto it = trips.find(bot->GetGUIDLow());
+        if (it == trips.end())
+            return false;
+        trip = it->second;
+    }
+    Hub const* h = Hubs::Get(trip.hub);
+    if (!h)
+        return false;
+    WorldPosition target(h->map, h->innkeeper ? h->innX : h->x, h->innkeeper ? h->innY : h->y, h->innkeeper ? h->innZ : h->z);
+    TemporaryTravelDestination* destination = new TemporaryTravelDestination(target);
+    goal.destination = destination;
+    goal.position = destination->GetPosition();
+    goal.kind = GoalKind::Relocate;
+    goal.score.value = 1.0f;
+    goal.score.minutes = trip.estimateMinutes;
+    goal.score.score = 1000000.0f;
+    goal.score.reason = std::string("relocate (resumed): ") + h->name;
+    hubId = trip.hub;
+    return true;
 }
 
 bool ai::SilvermoonOnRelocateTrip(uint32 guid)

@@ -159,8 +159,12 @@ namespace silvermoon
                 continue;
             if (h.side != 3 && h.side != (alliance ? 1 : 2))
                 return false;
-            // the level part for Alliance only (S): Horde bots keep binding as before
-            if (alliance && (level + 2 < int(h.minLevel) || level > int(h.maxLevel) + 5))
+            // too high for it (3+ over): both factions, so the misfit check and the inn don't undo
+            // each other (Guile, 15, in Brill 7-11)
+            if (level > int(h.maxLevel) + 2)
+                return false;
+            // too low for it: Alliance only (S)
+            if (alliance && level + 2 < int(h.minLevel))
                 return false;
         }
         return true;

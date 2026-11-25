@@ -851,10 +851,19 @@ bool ChooseGoalAction::Execute(Event& event)
 
     // Phase 2b: a quest hub elsewhere, when local options are thin (or now and then an unvisited one)
     uint16 relocateHub = 0;
+    bool resumedTrip = false;
     {
         SilvermoonScoredGoal relocate;
         float bestLocal = goals.empty() ? 0.0f : goals.front().score.score;
-        if (SilvermoonBestRelocate(bot, ai, bestLocal, relocate, relocateHub))
+        // a trip still on wins again, unless the bot needs a repair it can get or its bags are
+        // nearly full (those come first, then the trip carries on)
+        bool urgent = (AI_VALUE(bool, "should repair") && AI_VALUE(bool, "can repair")) || AI_VALUE(uint8, "bag space") > 90;
+        if (!urgent && SilvermoonResumeTrip(bot, relocate, relocateHub))
+        {
+            goals.insert(goals.begin(), relocate);
+            resumedTrip = true;
+        }
+        else if (SilvermoonBestRelocate(bot, ai, bestLocal, relocate, relocateHub))
             goals.insert(goals.begin(), relocate);
     }
 
@@ -922,7 +931,7 @@ bool ChooseGoalAction::Execute(Event& event)
             tripMinutes = std::max(tripMinutes, best.position->fDist(WorldPosition(bot)) / (7.0f * 60.0f));
         tripMinutes = std::max(tripMinutes, 10.0f);
         goals.front().score.minutes = tripMinutes;   // best is goals.front()
-        SilvermoonRelocateStarted(bot->GetGUIDLow(), relocateHub, best.destination, best.score.minutes);
+        SilvermoonRelocateStarted(bot->GetGUIDLow(), relocateHub, best.destination, best.score.minutes, resumedTrip);
         // the stock trip timer is twice the straight-line walk; a trip by road, boat or flight can
         // take longer, so give it twice the route estimate plus 5 minutes (the abandon rule's limit)
         travelTarget->SetExpireIn(uint32((2.0f * best.score.minutes + 5.0f) * MINUTE * IN_MILLISECONDS));

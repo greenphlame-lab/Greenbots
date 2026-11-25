@@ -500,7 +500,7 @@ static void SilvermoonFixMisfitBind(Player* player)
         for (silvermoon::Hub const& h : silvermoon::Hubs::All())
             if (h.map == hmap && bind.fDist(WorldPosition(h.map, h.innkeeper ? h.innX : h.x, h.innkeeper ? h.innY : h.y, h.innkeeper ? h.innZ : h.z)) < 150.0f)
                 at = &h;
-        bool misfit = at && ((at->side != 3 && at->side != (alliance ? 1 : 2)) || level + 2 < int32(at->minLevel) || level > int32(at->maxLevel) + 5);
+        bool misfit = at && ((at->side != 3 && at->side != (alliance ? 1 : 2)) || level + 2 < int32(at->minLevel) || level > int32(at->maxLevel) + 2);   // +2 (was +5): Guile, 15, stayed bound in Brill (7-11)
         if (misfit)
         {
             WorldPosition here(player);
