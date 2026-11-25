@@ -846,6 +846,16 @@ bool ChooseGoalAction::Execute(Event& event)
     setNewTarget(requester, &newTarget, travelTarget);
     if (best.kind == GoalKind::Relocate)
     {
+        // trip time allowed (S, Nov 24 audit: 1,024 trips were abandoned as "over twice the route
+        // time" after a median of 7 minutes, still moving - 1,800 yards on average - because the
+        // route estimate was often under a minute: hearthstone links and flight hops cost seconds
+        // in the route search even when the stone is on cooldown). At least the straight-line walk
+        // at running speed, and never under 10 minutes.
+        float tripMinutes = best.score.minutes;
+        if (best.position && best.position->getMapId() == bot->GetMapId())
+            tripMinutes = std::max(tripMinutes, best.position->fDist(WorldPosition(bot)) / (7.0f * 60.0f));
+        tripMinutes = std::max(tripMinutes, 10.0f);
+        goals.front().score.minutes = tripMinutes;   // best is goals.front()
         SilvermoonRelocateStarted(bot->GetGUIDLow(), relocateHub, best.destination, best.score.minutes);
         // the stock trip timer is twice the straight-line walk; a trip by road, boat or flight can
         // take longer, so give it twice the route estimate plus 5 minutes (the abandon rule's limit)
