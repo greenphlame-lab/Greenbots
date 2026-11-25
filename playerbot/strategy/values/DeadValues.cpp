@@ -2,6 +2,7 @@
 #include "playerbot/playerbot.h"
 #include "DeadValues.h"
 #include "playerbot/TravelMgr.h"
+#include "playerbot/strategy/silvermoon/Policies.h"
 
 using namespace ai;
 
@@ -135,6 +136,12 @@ GuidPosition BestGraveyardValue::Calculate()
 
     uint32 deathCount = AI_VALUE(uint32, "death count");
 
+    // Silvermoon (S: Mommy, level 13, died in Elwynn and came back at the Southshore spirit healer):
+    // your own characters revive at the graveyard nearest their corpse, never at one picked for
+    // their travel target or another zone - that was a free teleport across the continent
+    if (SilvermoonIsOwn(bot))
+        return AI_VALUE2(GuidPosition, "graveyard", "self");
+
     //attempt to revive at other same map graveyards which are not enemy territory
     if (!ai->HasActivePlayerMaster() && deathCount >= DEATH_COUNT_BEFORE_TRYING_ANOTHER_GRAVEYARD)
     {
@@ -175,9 +182,14 @@ GuidPosition BestGraveyardValue::Calculate()
     if (AI_VALUE2(GuidPosition, "graveyard", "travel") && AI_VALUE2(GuidPosition, "graveyard", "travel").fDist(corpse) > sPlayerbotAIConfig.reactDistance)
     {
         GuidPosition travelGraveyard = AI_VALUE2(GuidPosition, "graveyard", "travel");
+        // ...and for every bot, not in a zone over 3 levels above it (a low-level bot whose travel
+        // target was far off came back in Hillsbrad - Alliance bots under 20 kept showing up there)
         if (travelGraveyard)
         {
-            return travelGraveyard;
+            uint32 zoneId = sTerrainMgr.GetZoneId(travelGraveyard.getMapId(), travelGraveyard.getX(), travelGraveyard.getY(), travelGraveyard.getZ());
+            AreaTableEntry const* zone = zoneId ? GetAreaEntryByAreaID(zoneId) : nullptr;
+            if (!zone || int32(zone->area_level) <= int32(bot->GetLevel()) + 3)
+                return travelGraveyard;
         }
         sLog.outDetail(
             "ERROR: Unable to find travel graveyard in BestGraveyardValue, resorting to self graveyard - bot #%d %s:%d <%s>",
