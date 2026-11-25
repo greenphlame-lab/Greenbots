@@ -918,7 +918,21 @@ bool ChooseGoalAction::Execute(Event& event)
     }
     TravelTarget newTarget = TravelTarget(ai);
     newTarget.SetRelevance(AI_VALUE2(int, "manual int", "future travel relevance"));
-    newTarget.SetTarget(best.destination, best.position);
+    // gather order: the bot walks to the spot itself (a plain point), not to the herb type's travel
+    // destination - that one counts as inactive whenever no node of the type is in sight, and the
+    // movement layer then never starts the walk (S, 1.6.10: Mommy re-chose the same Peacebloom
+    // spot every minute without moving). The 60-yard gathering scan picks up whatever is there.
+    TravelDestination* targetDestination = best.destination;
+    WorldPosition* targetPosition = best.position;
+    if (best.kind == GoalKind::Gather && best.position && best.destination &&
+        (SilvermoonGatherOrderFactor(bot->GetGUIDLow(), 186) > 1.0f || SilvermoonGatherOrderFactor(bot->GetGUIDLow(), 182) > 1.0f ||
+         SilvermoonGatherOrderFactor(bot->GetGUIDLow(), 356) > 1.0f))
+    {
+        TemporaryTravelDestination* spot = new TemporaryTravelDestination(*best.position, best.destination->GetEntry());
+        targetDestination = spot;
+        targetPosition = spot->GetPosition();
+    }
+    newTarget.SetTarget(targetDestination, targetPosition);
     Player* requester = event.getOwner() ? event.getOwner() : (GetMaster() ? GetMaster() : bot);
     // The bot keeps one travel target object for its whole life, and SetTarget/CopyTarget never
     // clear its conditions: a finished quest objective's "need quest objective" condition stayed

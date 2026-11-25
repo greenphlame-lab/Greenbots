@@ -46,7 +46,7 @@ bool RecheckGoalAction::Execute(Event& event)
     // a relocation trip (Phase 2b) is not re-scored against local goals on the way: it would lose
     // every time, since its value is the hub, not the road
     if (dynamic_cast<TemporaryTravelDestination*>(current->GetDestination()))
-        return false;
+        return false;   // (also a gather order's spot: S wants the patrol uninterrupted)
 
     PartitionedTravelList list = future.get();
     std::vector<SilvermoonScoredGoal> goals = SilvermoonScoreGoals(bot, ai, list);
