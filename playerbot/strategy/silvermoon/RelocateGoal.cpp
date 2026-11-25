@@ -226,7 +226,7 @@ bool ai::SilvermoonBestRelocate(Player* bot, PlayerbotAI* ai, float bestLocalSco
 
     bool alliance = bot->GetTeam() == ALLIANCE;
     WorldPosition here(bot);
-    struct Option { Hub const* hub; float distance; bool visited; float score; float minutes; };
+    struct Option { Hub const* hub; float distance; bool visited; float score; float minutes; float pvp; };
     std::vector<Option> options;
     for (Hub const& h : Hubs::All())
     {
@@ -265,7 +265,15 @@ bool ai::SilvermoonBestRelocate(Player* bot, PlayerbotAI* ai, float bestLocalSco
         float distance = here.distance(target);
         if (h.map == here.getMapId() && here.fDist(target) < AT_HUB)
             continue;
-        options.push_back({ &h, distance, visited, 0.0f, 0.0f });
+        // contested hubs: a zone where bots died to players 40 times in the last hour counts half,
+        // 300 times about a tenth (Ashenvale, Nov 25)
+        float pvp = 1.0f;
+        {
+            uint32 zoneId = 0, areaId = 0;
+            sTerrainMgr.GetZoneAndAreaId(zoneId, areaId, h.map, h.x, h.y, h.z);
+            pvp = 1.0f / (1.0f + float(SilvermoonZonePvpDeaths(zoneId)) / 40.0f);
+        }
+        options.push_back({ &h, distance, visited, 0.0f, 0.0f, pvp });
     }
     // same continent first: a trip to another continent needs a boat or zeppelin and failed far
     // more often; other-continent hubs only when none on this one fit
@@ -294,7 +302,7 @@ bool ai::SilvermoonBestRelocate(Player* bot, PlayerbotAI* ai, float bestLocalSco
         // XP per minute over the whole plan (the trip plus the questing there), the same unit as a
         // local goal: dividing by the trip alone made a hub 3 minutes away look ~15x better than any
         // quest, and bots relocated 2,100 times in an hour
-        o.score = value * (o.visited ? 1.0f : UNVISITED_BONUS) / (o.minutes + RELOCATE_MINUTES);
+        o.score = value * (o.visited ? 1.0f : UNVISITED_BONUS) * o.pvp / (o.minutes + RELOCATE_MINUTES);
     }
     std::sort(options.begin(), options.end(), [](Option const& a, Option const& b) { return a.score > b.score; });
     // the real route for the top 1-2, re-scored with it: close on the map but far by road loses
@@ -309,7 +317,7 @@ bool ai::SilvermoonBestRelocate(Player* bot, PlayerbotAI* ai, float bestLocalSco
             continue;
         }
         options[i].minutes = minutes;
-        options[i].score = value * (options[i].visited ? 1.0f : UNVISITED_BONUS) / (minutes + RELOCATE_MINUTES);
+        options[i].score = value * (options[i].visited ? 1.0f : UNVISITED_BONUS) * options[i].pvp / (minutes + RELOCATE_MINUTES);
     }
     std::sort(options.begin(), options.begin() + std::min(options.size(), ROUTED_HUBS),
         [](Option const& a, Option const& b) { return a.score > b.score; });

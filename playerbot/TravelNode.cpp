@@ -1,6 +1,7 @@
 #include "TravelNode.h"
 #include <mutex>
 #include <unordered_map>
+#include <deque>
 #include <shared_mutex>
 #include <set>
 #include <cmath>
@@ -364,9 +365,32 @@ void SilvermoonLoadAuto()
     silvermoonAuto.swap(rows);
 }
 
+// bot deaths to players per zone over the last hour (S, Nov 25: PvP deaths in Ashenvale went from
+// 141 to 379 an hour once Barrens bots relocated there; relocation now weighs this)
+static std::unordered_map<uint32, std::deque<time_t>> silvermoonZonePvp;
+
+uint32 SilvermoonZonePvpDeaths(uint32 zone)
+{
+    std::lock_guard<std::mutex> guard(silvermoonPvpLock);
+    auto it = silvermoonZonePvp.find(zone);
+    if (it == silvermoonZonePvp.end())
+        return 0;
+    time_t now = time(nullptr);
+    while (!it->second.empty() && it->second.front() < now - HOUR)
+        it->second.pop_front();
+    return uint32(it->second.size());
+}
+
 bool SilvermoonNotePvpDeath(uint32 guid, uint32 zone)
 {
     std::lock_guard<std::mutex> guard(silvermoonPvpLock);
+    {
+        std::deque<time_t>& zd = silvermoonZonePvp[zone];
+        time_t t = time(nullptr);
+        zd.push_back(t);
+        while (!zd.empty() && zd.front() < t - HOUR)
+            zd.pop_front();
+    }
     SilvermoonPvpState& st = silvermoonPvp[guid];
     time_t now = time(nullptr);
     st.deaths.erase(std::remove_if(st.deaths.begin(), st.deaths.end(), [now](std::pair<uint32, time_t> const& d) { return d.second < now - 30 * MINUTE; }), st.deaths.end());
