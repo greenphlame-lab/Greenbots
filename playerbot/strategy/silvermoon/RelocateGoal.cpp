@@ -75,6 +75,13 @@ namespace
     std::unordered_map<uint32, Trip> trips;
     std::unordered_map<uint32, uint32> failures;
     std::unordered_map<uint32, time_t> arrivedAt;   // guid -> last arrival at a hub (stay a while)
+    // settling in at a new hub (S, Nov 24 audit: 232 of 446 bots that arrived somewhere were back over
+    // 2,000 yards away an hour later, mostly walking back to leftover quests in the zone they left):
+    // for 3 hours after arriving, quest, grind and gathering goals outside the hub's zone and over
+    // 1,200 yards away count a fifth. Chores (trainer, vendor, repair, mail) are untouched.
+    struct Settled { time_t at; uint32 map; float x, y; uint32 zone; };
+    std::unordered_map<uint32, Settled> settled;
+    const time_t SETTLE_FOR = 3 * HOUR;
     const time_t STAY_AFTER_ARRIVAL = 45 * MINUTE;
     std::unordered_map<uint32, std::unordered_map<uint16, time_t>> skipHub;   // guid -> hub -> until (failed trips)
 
@@ -348,12 +355,38 @@ void ai::SilvermoonRelocateStarted(uint32 guid, uint16 hubId, TravelDestination*
         trips.erase(previous);
         return;
     }
+    settled.erase(guid);       // off somewhere new
     Trip trip;
     trip.hub = hubId;
     trip.destination = destination;
     trip.start = time(nullptr);
     trip.estimateMinutes = estimateMinutes;
     trips[guid] = trip;
+}
+
+float ai::SilvermoonSettleFactor(uint32 guid, WorldPosition const& goal)
+{
+    std::lock_guard<std::mutex> guard(tripLock);
+    auto it = settled.find(guid);
+    if (it == settled.end())
+        return 1.0f;
+    if (time(nullptr) - it->second.at > SETTLE_FOR)
+    {
+        settled.erase(it);
+        return 1.0f;
+    }
+    Settled const& s = it->second;
+    if (goal.getMapId() == s.map)
+    {
+        float dx = goal.getX() - s.x, dy = goal.getY() - s.y;
+        if (dx * dx + dy * dy < 1200.0f * 1200.0f)
+            return 1.0f;
+        uint32 zoneId = 0, areaId = 0;
+        sTerrainMgr.GetZoneAndAreaId(zoneId, areaId, goal.getMapId(), goal.getX(), goal.getY(), goal.getZ());
+        if (zoneId == s.zone)
+            return 1.0f;
+    }
+    return 0.2f;
 }
 
 bool ai::SilvermoonOnRelocateTrip(uint32 guid)
@@ -496,6 +529,7 @@ bool ai::SilvermoonRelocateTick(Player* bot, PlayerbotAI* ai)
         trips.erase(guid);
         failures.erase(guid);
         arrivedAt[guid] = time(nullptr);
+        settled[guid] = { time(nullptr), bot->GetMapId(), bot->GetPositionX(), bot->GetPositionY(), bot->GetZoneId() };
         return true;
     }
     if (!stillGoing)

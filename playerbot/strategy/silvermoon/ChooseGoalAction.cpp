@@ -758,6 +758,26 @@ bool ChooseGoalAction::Execute(Event& event)
         }
     }
 
+    // settling in at a hub it just relocated to: leftover work back in the old zone counts a fifth
+    {
+        bool any = false;
+        for (SilvermoonScoredGoal& g : goals)
+        {
+            if (!g.position || !(g.kind == GoalKind::QuestObjective || g.kind == GoalKind::QuestTurnIn ||
+                g.kind == GoalKind::QuestGiver || g.kind == GoalKind::Grind || g.kind == GoalKind::Explore || g.kind == GoalKind::Gather))
+                continue;
+            float f = SilvermoonSettleFactor(bot->GetGUIDLow(), *g.position);
+            if (f < 1.0f)
+            {
+                g.score.score *= f;
+                g.score.reason = "away from new hub: " + g.score.reason;
+                any = true;
+            }
+        }
+        if (any)
+            std::stable_sort(goals.begin(), goals.end(), [](SilvermoonScoredGoal const& a, SilvermoonScoredGoal const& b) { return a.score.score > b.score.score; });
+    }
+
     // Professions tab: a learn order goes ahead of everything
     {
         SilvermoonScoredGoal prof;

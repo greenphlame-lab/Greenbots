@@ -21,6 +21,8 @@ namespace ai
     // the level-zone check asks for a Relocate decision instead of teleporting
     void SilvermoonWantRelocate(uint32 guid);
     bool SilvermoonOnRelocateTrip(uint32 guid);
+    // 0.2 for a quest/grind/gather goal away from the hub the bot arrived at in the last 3 hours, else 1
+    float SilvermoonSettleFactor(uint32 guid, WorldPosition const& goal);
     uint32 SilvermoonRelocateFailures(uint32 guid);
     void SilvermoonResetRelocateFailures(uint32 guid);
 
