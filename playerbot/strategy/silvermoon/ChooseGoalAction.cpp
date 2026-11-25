@@ -663,7 +663,11 @@ std::vector<SilvermoonScoredGoal> ai::SilvermoonScoreGoals(Player* bot, Playerbo
             }
             else if (!destination || !seen.insert(destination).second || skip.count(destination))
                 continue;
-            if (!destination->IsActive(bot, info))
+            // a gathering spot under a gather order only has to be possible (skill): "active" means a
+            // node of that kind in sight whenever the bot stands inside the herb's area, so in the
+            // middle of Elwynn every Peacebloom and Silverleaf spot went inactive at once and Mommy
+            // idled "nowhere to travel" (S, 1.6.9). The patrol's visited list does the rest.
+            if (gatherSpot ? !destination->IsPossible(info) : !destination->IsActive(bot, info))
                 continue;
             if (position && EnemyGround(bot, *position))
                 continue;
