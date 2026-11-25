@@ -75,6 +75,7 @@ namespace
     std::map<uint32, std::pair<TravelDestination*, time_t>> lastGoal;   // bot -> last chosen, when
     std::map<uint32, WorldPosition> lastGoalAt;                          // bot -> where that goal was
     std::map<uint32, bool> lastGoalGather;                               // bot -> that goal was a gathering spot
+    std::map<uint32, bool> lastGoalObject;                               // bot -> that goal was a quest object (chest, keg, mound)
     std::map<uint32, std::map<TravelDestination*, time_t>> skipUntil;   // bot -> destination -> until
     // Gather orders: spawn spots a bot already stood on lately (herbs and ore respawn on their own
     // clock - an empty spot is not a success, the bot moves on to the next spot)
@@ -772,7 +773,11 @@ bool ChooseGoalAction::Execute(Event& event)
         // (remembered when the goal was chosen: the stored destination may be gone by now - reading
         // it here crashed the server twice on 2026-11-24)
         bool gatherDest = lastGoalGather[bot->GetGUIDLow()];
-        if (last != lastGoal.end() && last->second.first && now - last->second.second < ABANDONED_WITHIN && !reached && !gatherDest)
+        // ...but a quest object the bot reached and still wants isn't there (S: Kojimbo stuck on
+        // Chen's Empty Keg - 14 bots chose it 1,179 times; it has 9 spawn points but few spawned at
+        // a time, so they kept walking to empty ones): that one goes on the list even when reached
+        bool objectDest = lastGoalObject[bot->GetGUIDLow()];
+        if (last != lastGoal.end() && last->second.first && now - last->second.second < ABANDONED_WITHIN && (!reached || objectDest) && !gatherDest)
             skipUntil[bot->GetGUIDLow()][last->second.first] = now + SKIP_FOR;
     }
 
@@ -896,6 +901,7 @@ bool ChooseGoalAction::Execute(Event& event)
         std::lock_guard<std::mutex> guard(goalLock);
         lastGoal[bot->GetGUIDLow()] = { best.destination, time(nullptr) };
         lastGoalGather[bot->GetGUIDLow()] = best.kind == GoalKind::Gather;
+        lastGoalObject[bot->GetGUIDLow()] = best.kind == GoalKind::QuestObjective && best.destination && best.destination->GetEntry() < 0;
         uint32 objectiveKey = 0;
         if (best.kind == GoalKind::QuestObjective)
             if (QuestObjectiveTravelDestination* o = dynamic_cast<QuestObjectiveTravelDestination*>(best.destination))
