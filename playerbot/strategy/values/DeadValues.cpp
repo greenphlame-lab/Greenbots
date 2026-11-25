@@ -190,8 +190,8 @@ GuidPosition BestGraveyardValue::Calculate()
         {
             uint32 zoneId = sTerrainMgr.GetZoneId(travelGraveyard.getMapId(), travelGraveyard.getX(), travelGraveyard.getY(), travelGraveyard.getZ());
             AreaTableEntry const* zone = zoneId ? GetAreaEntryByAreaID(zoneId) : nullptr;
-            // and no further than 2,000 yards from the corpse: 21 of 36 Alliance bots in Hillsbrad
-            // had died in Redridge, Wetlands, Arathi or Elwynn and come back at Southshore
+            // and no further than 2,000 yards from the corpse: 19 of 36 Alliance bots in Hillsbrad
+            // had last died in another zone and come back at Southshore
             if ((!zone || int32(zone->area_level) <= int32(bot->GetLevel()) + 3) && travelGraveyard.fDist(corpse) < 2000.0f)
                 return travelGraveyard;
         }
