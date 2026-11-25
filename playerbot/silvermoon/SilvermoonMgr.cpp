@@ -686,6 +686,44 @@ std::vector<std::string> SilvermoonAwayLogMessages(Player* bot)
     return out;
 }
 
+// corpse out of reach (S: Guile's ghost stood on Lordamere Lake right above his body at the bottom -
+// ghosts walk on water and can't get within reviving range; Mommy's corpse fell under the ground): a
+// ghost that has been within 40 yards (on the map) of its corpse for 2 minutes without reviving, or
+// dead 15+ minutes in all, is revived where it stands. For your characters (and any bot calling it).
+static void SilvermoonGhostRescue(Player* bot)
+{
+    static std::mutex lock;
+    static std::unordered_map<uint32, std::pair<time_t, time_t>> seen;   // guid -> (dead since, near corpse since)
+    uint32 guid = bot->GetGUIDLow();
+    std::lock_guard<std::mutex> guard(lock);
+    if (bot->IsAlive() || !bot->IsInWorld() || bot->IsBeingTeleported() || bot->InBattleGround())
+    {
+        seen.erase(guid);
+        return;
+    }
+    time_t now = time(nullptr);
+    auto& st = seen[guid];
+    if (!st.first)
+        st.first = now;
+    Corpse* corpse = bot->GetCorpse();
+    bool near = corpse && corpse->GetMapId() == bot->GetMapId() && bot->GetDistance2d(corpse) < 40.0f;
+    if (near && !st.second)
+        st.second = now;
+    else if (!near)
+        st.second = 0;
+    if ((st.second && now - st.second >= 2 * MINUTE) || now - st.first >= 15 * MINUTE)
+    {
+        sLog.outBasic("Silvermoon: %s couldn't reach its corpse (%s), revived where it stands", bot->GetName(),
+            st.second ? "right above it" : "dead 15 minutes");
+        bot->ResurrectPlayer(0.5f);
+        bot->SpawnCorpseBones();
+        if (PlayerbotAI* ai = bot->GetPlayerbotAI())
+            if (TravelTarget* target = ai->GetAiObjectContext()->GetValue<TravelTarget*>("travel target")->Get())
+                target->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
+        seen.erase(guid);
+    }
+}
+
 static void SilvermoonFillEmptyWeapon(Player* bot)
 {
     if (bot->IsInCombat() || bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND))
@@ -1504,6 +1542,8 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                             me->GetPlayerbotAI()->ChangeStrategy("+travel,+rpg,+grind,+silvermoon brain", BotState::BOT_STATE_NON_COMBAT);
                             sLog.outBasic("Silvermoon: %s on Auto had no brain, added it", me->GetName());
                         }
+                        if (me->GetPlayerbotAI())
+                            SilvermoonGhostRescue(me);
                         if (me->GetPlayerbotAI() && me->IsAlive())
                         {
                             SilvermoonFillEmptyWeapon(me);
@@ -1543,6 +1583,7 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                 // Guile's day left nothing in the log - it only ran while he rested in a town)
                 if (p->IsAlive())
                     SilvermoonAwayTick(p);
+                SilvermoonGhostRescue(p);
                 if (SilvermoonAutoOn(alt.second) && p->IsAlive() && !p->IsInCombat() && p->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_RESTING) &&
                     !GetEventValue(alt.second, "silvermoon_alt_shop"))
                 {
