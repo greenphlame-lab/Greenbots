@@ -32,6 +32,45 @@ namespace
     // Destinations each bot gave up on (chosen, then a new goal was needed within a few minutes:
     // unreachable, no path, wrong side of a wall). Zugzug picked a different far-away vendor every
     // minute for 12 minutes without moving.
+    // Objective demand (S, Nov 24: "something bigger than competition" in the Barrens): Egg Hunt was
+    // 14,707 of 33,449 Barrens objective choices in a day - 276 bots held it for 20 Silithid
+    // Mounds that respawn every 5 minutes, about 480 eggs an hour for 3,300 needed; 224 of them had
+    // no egg at all. Bots per quest objective (chosen in the last 15 minutes), rebuilt every 30s.
+    std::mutex demandLock;
+    std::unordered_map<uint32, std::pair<uint32, time_t>> objectiveChoice;   // bot -> quest*8+objective, when
+    std::unordered_map<uint32, uint32> demandCounts;
+    time_t demandBuilt = 0;
+    uint32 ObjectiveDemand(uint32 key)
+    {
+        std::lock_guard<std::mutex> guard(demandLock);
+        time_t now = time(nullptr);
+        if (now - demandBuilt >= 30)
+        {
+            demandBuilt = now;
+            demandCounts.clear();
+            for (auto it = objectiveChoice.begin(); it != objectiveChoice.end();)
+            {
+                if (now - it->second.second > 15 * MINUTE)
+                    it = objectiveChoice.erase(it);
+                else
+                {
+                    ++demandCounts[it->second.first];
+                    ++it;
+                }
+            }
+        }
+        auto it = demandCounts.find(key);
+        return it == demandCounts.end() ? 0 : it->second;
+    }
+    void NoteObjectiveChoice(uint32 guid, uint32 key)
+    {
+        std::lock_guard<std::mutex> guard(demandLock);
+        if (key)
+            objectiveChoice[guid] = { key, time(nullptr) };
+        else
+            objectiveChoice.erase(guid);
+    }
+
     std::mutex goalLock;
     std::map<uint32, std::pair<TravelDestination*, time_t>> lastGoal;   // bot -> last chosen, when
     std::map<uint32, WorldPosition> lastGoalAt;                          // bot -> where that goal was
@@ -472,6 +511,24 @@ static SilvermoonScoredGoal ScoreWith(Player* bot, BotSnapshot const& snapshot, 
             goal.score.reason = "few spawns: " + goal.score.reason;
         }
     }
+    // oversubscribed objective: more than one bot per two spawns working it scores down in
+    // proportion (to a tenth), so the bot does something else or goes looking for a quieter hub
+    if (c.kind == GoalKind::QuestObjective && position)
+        if (QuestObjectiveTravelDestination* o = dynamic_cast<QuestObjectiveTravelDestination*>(destination))
+        {
+            uint32 key = o->GetQuestId() * 8 + o->GetObjective();
+            uint32 supply = destination->GetEntry() > 0 ? SpawnCount(uint32(destination->GetEntry())) : 0;
+            if (!supply)
+                if (QuestArea const* area = QuestIndex::NearestArea(o->GetQuestId(), uint8(o->GetObjective() + 1), position->getMapId(), position->getX(), position->getY()))
+                    supply = area->spawns;
+            float room = std::max(2.0f, float(supply) / 2.0f);
+            float demand = float(ObjectiveDemand(key));
+            if (demand > room)
+            {
+                goal.score.score *= std::max(0.1f, room / demand);
+                goal.score.reason = "oversubscribed (" + std::to_string(uint32(demand)) + " bots): " + goal.score.reason;
+            }
+        }
     uint32 colourQuest = 0;
     if (c.kind == GoalKind::QuestGiver)
         if (QuestRelationTravelDestination* q = dynamic_cast<QuestRelationTravelDestination*>(destination))
@@ -826,6 +883,11 @@ bool ChooseGoalAction::Execute(Event& event)
         std::lock_guard<std::mutex> guard(goalLock);
         lastGoal[bot->GetGUIDLow()] = { best.destination, time(nullptr) };
         lastGoalGather[bot->GetGUIDLow()] = best.kind == GoalKind::Gather;
+        uint32 objectiveKey = 0;
+        if (best.kind == GoalKind::QuestObjective)
+            if (QuestObjectiveTravelDestination* o = dynamic_cast<QuestObjectiveTravelDestination*>(best.destination))
+                objectiveKey = o->GetQuestId() * 8 + o->GetObjective();
+        NoteObjectiveChoice(bot->GetGUIDLow(), objectiveKey);
         if (best.position)
             lastGoalAt[bot->GetGUIDLow()] = *best.position;
         else
