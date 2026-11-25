@@ -3,6 +3,7 @@
 #include "RecheckGoalAction.h"
 #include "RequestGoalAction.h"
 #include "ChooseGoalAction.h"
+#include "Professions.h"
 #include "playerbot/strategy/values/TravelValues.h"
 #include <mutex>
 
@@ -94,6 +95,19 @@ bool RecheckGoalAction::Execute(Event& event)
 bool RecheckGoalAction::isUseful()
 {
     silvermoon::BrainTimer brainTimer(silvermoon::BrainMicros());
+    // Gather order patrol (S: "if nothing at a spawn point, continue on; if a herb is visible, gather
+    // it"): at the spot (12 yards) with nothing to gather in the 60-yard scan, out of combat and not
+    // casting, the stop is over - the trip ends and the brain picks the next unvisited spot at once.
+    // Without this the bot stood at an empty spot until the trip's timer ran out (1.6.11, Mommy).
+    if (SilvermoonGatherOrderFactor(bot->GetGUIDLow(), 182) > 1.0f || SilvermoonGatherOrderFactor(bot->GetGUIDLow(), 186) > 1.0f)
+    {
+        TravelTarget* target = AI_VALUE(TravelTarget*, "travel target");
+        if (target && target->GetPosition() && dynamic_cast<TemporaryTravelDestination*>(target->GetDestination()) &&
+            target->GetStatus() != TravelStatus::TRAVEL_STATUS_EXPIRED && target->GetStatus() != TravelStatus::TRAVEL_STATUS_NONE &&
+            target->GetPosition()->getMapId() == bot->GetMapId() && target->GetPosition()->fDist(WorldPosition(bot)) < 12.0f &&
+            !bot->IsInCombat() && !bot->IsNonMeleeSpellCasted(false) && !bot->GetLootGuid() && !AI_VALUE(bool, "has available loot"))
+            target->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
+    }
     if (!ai->AllowActivity(TRAVEL_ACTIVITY) || bot->IsInCombat())
         return false;
     if (bot->GetGroup() && bot->GetGroup()->GetMembersCount() > 1)
