@@ -726,6 +726,34 @@ static void SilvermoonGhostRescue(Player* bot)
     }
 }
 
+// hunter pets get a name made from two syllable lists - "Snarlfang", "Mistpaw", ... - when they
+// still carry their species' name (random bots every 10 minutes; your characters too - S: Kojimbo's
+// pet kept its species name). The bots' pets come pre-marked as renamed, so the flag can't be used.
+static void SilvermoonNamePet(Player* p)
+{
+    static const std::vector<std::string> first = { "Ash", "Bris", "Cin", "Dusk", "Ember", "Fen", "Gar", "Grim", "Hal", "Iron", "Jax", "Kip",
+        "Lu", "Mist", "Nib", "Ol", "Pip", "Quill", "Rus", "Snarl", "Thorn", "Umb", "Vex", "Whis", "Yip", "Zar", "Bram", "Chomp", "Dax", "Fizz",
+        "Gnash", "Hob", "Moss", "Nox", "Pounce", "Rumble", "Scruff", "Tuft", "Waggle", "Biscuit" };
+    static const std::vector<std::string> last = { "", "", "", "fang", "paw", "claw", "tail", "ears", "bit", "y", "ie", "o", "kin", "le",
+        "nose", "tooth", "whisker", "hide", "mane", "stripe" };
+    if (!p || !p->IsInWorld() || p->getClass() != CLASS_HUNTER)
+        return;
+    Pet* pet = p->GetPet();
+    if (!pet || pet->getPetType() != HUNTER_PET || !pet->GetCharmInfo() || !pet->GetCreatureInfo() ||
+        std::string(pet->GetName()) != pet->GetCreatureInfo()->Name)
+        return;
+    std::string name = first[urand(0, first.size() - 1)] + last[urand(0, last.size() - 1)];
+    if (name.size() < 3 || name.size() > 12)
+        return;
+    std::string old = pet->GetName();
+    pet->SetName(name);
+    pet->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PET_RENAME);
+    pet->SetUInt32Value(UNIT_FIELD_PET_NAME_TIMESTAMP, uint32(time(nullptr)));
+    CharacterDatabase.PExecute("UPDATE character_pet SET name = '%s', renamed = '1' WHERE owner = '%u' AND id = '%u'",
+        name.c_str(), p->GetGUIDLow(), pet->GetCharmInfo()->GetPetNumber());
+    sLog.outBasic("Silvermoon: hunter %s named its pet (%s) %s", p->GetName(), old.c_str(), name.c_str());
+}
+
 static void SilvermoonFillEmptyWeapon(Player* bot)
 {
     if (bot->IsInCombat() || bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND))
@@ -1549,6 +1577,7 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                         if (me->GetPlayerbotAI() && me->IsAlive())
                         {
                             SilvermoonFillEmptyWeapon(me);
+                            SilvermoonNamePet(me);
                             SilvermoonFixMisfitBind(me);
                             SilvermoonAwayTick(me);
                             SilvermoonInnBind(me);
@@ -1584,7 +1613,10 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                 // the "while you were away" log follows your alts everywhere, not just in town (S:
                 // Guile's day left nothing in the log - it only ran while he rested in a town)
                 if (p->IsAlive())
+                {
                     SilvermoonAwayTick(p);
+                    SilvermoonNamePet(p);
+                }
                 SilvermoonGhostRescue(p);
                 if (SilvermoonAutoOn(alt.second) && p->IsAlive() && !p->IsInCombat() && p->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_RESTING) &&
                     !GetEventValue(alt.second, "silvermoon_alt_shop"))
@@ -3056,31 +3088,10 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                 if (nowTime - lastPetNames >= 600)
                 {
                     lastPetNames = nowTime;
-                    static const std::vector<std::string> first = { "Ash", "Bris", "Cin", "Dusk", "Ember", "Fen", "Gar", "Grim", "Hal", "Iron", "Jax", "Kip",
-                        "Lu", "Mist", "Nib", "Ol", "Pip", "Quill", "Rus", "Snarl", "Thorn", "Umb", "Vex", "Whis", "Yip", "Zar", "Bram", "Chomp", "Dax", "Fizz",
-                        "Gnash", "Hob", "Moss", "Nox", "Pounce", "Rumble", "Scruff", "Tuft", "Waggle", "Biscuit" };
-                    static const std::vector<std::string> last = { "", "", "", "fang", "paw", "claw", "tail", "ears", "bit", "y", "ie", "o", "kin", "le",
-                        "nose", "tooth", "whisker", "hide", "mane", "stripe" };
                     ForEachPlayerbot([&](Player* p)
                     {
-                        if (!p || !p->IsInWorld() || !IsRandomBot(p) || p->getClass() != CLASS_HUNTER)
-                            return;
-                        Pet* pet = p->GetPet();
-                        // still called by its species name ("Mottled Boar") = never named (the bots' pets
-                        // come pre-marked as renamed, so the rename flag could not be used)
-                        if (!pet || pet->getPetType() != HUNTER_PET || !pet->GetCharmInfo() || !pet->GetCreatureInfo() ||
-                            std::string(pet->GetName()) != pet->GetCreatureInfo()->Name)
-                            return;
-                        std::string name = first[urand(0, first.size() - 1)] + last[urand(0, last.size() - 1)];
-                        if (name.size() < 3 || name.size() > 12)
-                            return;
-                        std::string old = pet->GetName();
-                        pet->SetName(name);
-                        pet->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PET_RENAME);
-                        pet->SetUInt32Value(UNIT_FIELD_PET_NAME_TIMESTAMP, uint32(time(nullptr)));
-                        CharacterDatabase.PExecute("UPDATE character_pet SET name = '%s', renamed = '1' WHERE owner = '%u' AND id = '%u'",
-                            name.c_str(), p->GetGUIDLow(), pet->GetCharmInfo()->GetPetNumber());
-                        sLog.outBasic("Silvermoon: hunter %s named its pet (%s) %s", p->GetName(), old.c_str(), name.c_str());
+                        if (p && p->IsInWorld() && IsRandomBot(p))
+                            SilvermoonNamePet(p);
                     });
                 }
             }
