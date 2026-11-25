@@ -83,11 +83,30 @@ bool ai::AttackAnythingAction::Execute(Event& event)
             {
                 sPlayerbotAIConfig.logEvent(ai, "AttackAnythingAction", grindName, std::to_string(grindTarget->GetEntry()));
 
-                if (ai->HasStrategy("pull", BotState::BOT_STATE_COMBAT))
+                // Silvermoon (S: melee levels fall behind): warriors and rogues pull with their
+                // ranged weapon - bow, gun or crossbow with ammo, or a thrown weapon - but only when
+                // other enemies stand within 15 yards of the target, so a lone mob is still charged
+                bool meleePuller = bot->getClass() == CLASS_WARRIOR || bot->getClass() == CLASS_ROGUE;
+                bool crowdedTarget = false;
+                bool thrown = false;
+                if (meleePuller)
+                {
+                    if (Item* ranged = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_RANGED))
+                        thrown = ranged->GetProto() && ranged->GetProto()->SubClass == ITEM_SUBCLASS_WEAPON_THROWN;
+                    for (ObjectGuid const& g : AI_VALUE(std::list<ObjectGuid>, "possible targets"))
+                        if (g != grindTarget->GetObjectGuid())
+                            if (Unit* u = ai->GetUnit(g))
+                                if (u->IsAlive() && u->GetDistance(grindTarget) < 15.0f)
+                                {
+                                    crowdedTarget = true;
+                                    break;
+                                }
+                }
+                if (ai->HasStrategy("pull", BotState::BOT_STATE_COMBAT) && (!meleePuller || crowdedTarget))
                 {
                     if (PullStrategy* strategy = PullStrategy::Get(ai))
                     {
-                        if (strategy->CanDoPullAction(grindTarget) && (ai->GetBot()->getClass() == CLASS_DRUID || ai->GetBot()->getClass() == CLASS_PALADIN || AI_VALUE2(uint32, "item count", "ammo")))
+                        if (strategy->CanDoPullAction(grindTarget) && (ai->GetBot()->getClass() == CLASS_DRUID || ai->GetBot()->getClass() == CLASS_PALADIN || thrown || AI_VALUE2(uint32, "item count", "ammo")))
                         {
                             Event pullEvent("attack anything", grindTarget->GetObjectGuid());
                             bool doAction = ai->DoSpecificAction("pull my target", pullEvent, true);

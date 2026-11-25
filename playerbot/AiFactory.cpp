@@ -370,6 +370,10 @@ void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const fa
             }
 
             combatEngine->addStrategies("aoe", "cc", "buff", "boost", NULL);
+            // Silvermoon (S): melee pulls a mob out of a group with its ranged weapon (see
+            // AttackAnythingAction: only when other enemies stand near the target)
+            if (tab != 2)
+                combatEngine->addStrategies("pull", "pull back", NULL);
             break;
         }
 
@@ -488,6 +492,7 @@ void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const fa
             }
 
             combatEngine->addStrategies("dps assist", "aoe", "close", "cc", "behind", "stealth", "poisons", "buff", "boost", NULL);
+            combatEngine->addStrategies("pull", "pull back", NULL);   // Silvermoon: ranged pull from groups
             break;
         }
 

@@ -20,6 +20,11 @@ void UseFoodStrategy::InitNonCombatTriggers(std::list<TriggerNode*> &triggers)
         "medium health",
         NextAction::array(0, new NextAction("food", 3.0f), NULL)));
 
+    // ...and from 80% (S): the "should eat" check decides; this only wakes the food action up
+    triggers.push_back(new TriggerNode(
+        "almost full health",
+        NextAction::array(0, new NextAction("food", 3.0f), NULL)));
+
     triggers.push_back(new TriggerNode(
         "high mana",
         NextAction::array(0, new NextAction("drink", 3.0f), NULL)));

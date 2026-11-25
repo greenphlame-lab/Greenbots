@@ -211,11 +211,15 @@ namespace ai
         ShouldEatValue(PlayerbotAI* ai) : BoolCalculatedValue(ai, "should eat", 2) {}
         virtual bool Calculate() override
         {
-            if (AI_VALUE2(uint8, "health", "self target") >= sPlayerbotAIConfig.lowHealth)
-                return false;
+            // Silvermoon (S: eat to at least 80-90% before pulling): a bot out of combat eats below
+            // 80% (was below LowHealth, 45% - the "medium health" food trigger never got past
+            // this check, so bots pulled at 46-65%), and eats until full (see "eat duration").
+            // Your characters use their Policies "eat until" instead, when set.
+            uint8 eatBelow = 80;
             if (uint8 to = SilvermoonRestTarget(bot, false))
-                if (AI_VALUE2(uint8, "health", "self target") >= to)
-                    return false;
+                eatBelow = to;
+            if (AI_VALUE2(uint8, "health", "self target") >= eatBelow)
+                return false;
 
             Player* master = ai->GetMaster();
             if (!master)
