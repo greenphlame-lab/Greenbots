@@ -1387,6 +1387,9 @@ void PlayerbotAI::LogKillEvents()
     logIfDead(target);
 }
 
+// the bot whose deferred chat packets this thread is handling right now (see SMSG_MESSAGECHAT)
+static thread_local PlayerbotAI* silvermoonDeferredChatOwner = nullptr;
+
 void PlayerbotAI::UpdateAIInternal(uint32 elapsed, bool minimal)
 {
     if (bot->IsBeingTeleported() || !bot->IsInWorld())
@@ -1398,6 +1401,19 @@ void PlayerbotAI::UpdateAIInternal(uint32 elapsed, bool minimal)
     auto pmo = sPerformanceMonitor.start(PERF_MON_TOTAL, "PlayerbotAI::UpdateAIInternal " + mapString, nullptr, bot->GetMapId(), bot->GetInstanceId());
 
     ExternalEventHelper helper(aiObjectContext);
+
+    // chat packets queued from other threads (Silvermoon), read here on the bot's own thread
+    {
+        std::deque<WorldPacket> chat;
+        {
+            std::lock_guard<std::mutex> guard(deferredChatMutex);
+            chat.swap(deferredChat);
+        }
+        silvermoonDeferredChatOwner = this;
+        for (WorldPacket const& p : chat)
+            HandleBotOutgoingPacket(p);
+        silvermoonDeferredChatOwner = nullptr;
+    }
 
     // chat replies
     std::list<ChatQueuedReply> delayedResponses;
@@ -1873,6 +1889,16 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
     }
     case SMSG_MESSAGECHAT: // do not react to self or if not ready to reply
     {
+        // Silvermoon (crash 2026-11-24 22:25 CST): a bot's reply in a world channel ran this for
+        // every bot in the channel on the speaker's map thread, touching their AI values and lists
+        // while their own threads used them. Queued and handled on this bot's own update instead.
+        if (silvermoonDeferredChatOwner != this)
+        {
+            std::lock_guard<std::mutex> guard(deferredChatMutex);
+            if (deferredChat.size() < 64)
+                deferredChat.push_back(packet);
+            return;
+        }
         if (!AllowActivity())
             return;
 

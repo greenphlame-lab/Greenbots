@@ -789,6 +789,10 @@ protected:
     std::queue<ChatCommandHolder> chatCommands;
     std::queue<ChatQueuedReply> chatReplies;
     std::mutex chatRepliesMutex;
+    // Silvermoon: chat packets arrive on the speaker's thread (a channel message reaches every bot in
+    // the channel, on any map); they're queued here and read on this bot's own update
+    std::deque<WorldPacket> deferredChat;
+    std::mutex deferredChatMutex;
     PacketHandlingHelper botOutgoingPacketHandlers;
     PacketHandlingHelper masterIncomingPacketHandlers;
     PacketHandlingHelper masterOutgoingPacketHandlers;
