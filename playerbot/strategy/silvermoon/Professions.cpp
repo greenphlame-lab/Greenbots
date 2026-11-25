@@ -182,6 +182,35 @@ bool ai::SilvermoonProfCommand(Player* bot, std::string const& param, std::strin
         reply = std::string("Levelling ") + p->name + ": I'll craft what still gives skill and buy vendor materials.";
         return true;
     }
+    if (v == "unlearn" && n == 2)
+    {
+        // S: unlearn from the professions pane - drops every spell of the skill line (ranks, recipes,
+        // Find Herbs etc.) and the skill itself, and clears any orders for it
+        Profession const* p = Find(skill);
+        if (!p)
+            return false;
+        if (!bot->HasSkill(p->skill))
+        {
+            reply = std::string("I don't know ") + p->name + ".";
+            return true;
+        }
+        std::vector<uint32> spells;
+        for (uint32 j = 0; j < sSkillLineAbilityStore.GetNumRows(); ++j)
+            if (SkillLineAbilityEntry const* e = sSkillLineAbilityStore.LookupEntry(j))
+                if (e->skillId == p->skill && bot->HasSpell(e->spellId))
+                    spells.push_back(e->spellId);
+        if (p->learnSpell && bot->HasSpell(p->learnSpell))
+            spells.push_back(p->learnSpell);
+        for (uint32 spellId : spells)
+            bot->removeSpell(spellId, false, false);
+        bot->SetSkill(p->skill, 0, 0, 0);
+        o.learn.erase(std::remove(o.learn.begin(), o.learn.end(), skill), o.learn.end());
+        if (o.gather == skill)
+            o.gather = 0;
+        o.level.erase(skill);
+        reply = std::string("Unlearned ") + p->name + ".";
+        return true;
+    }
     if (v == "stop")
     {
         if (n == 2)
