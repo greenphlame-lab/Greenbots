@@ -466,7 +466,8 @@ static SilvermoonScoredGoal ScoreWith(Player* bot, BotSnapshot const& snapshot, 
     }
     // gathering stays near the bot's level: no nodes in an area more than 8 levels below it
     // (broke level 16-24 bots went back to Elwynn for Peacebloom, Silverleaf and copper)
-    if (c.kind == GoalKind::Gather && position)
+    if (c.kind == GoalKind::Gather && position && !(purpose == TravelDestinationPurpose::GatherMining && SilvermoonGatherOrderFactor(bot->GetGUIDLow(), 186) > 1.0f) &&
+        !(purpose == TravelDestinationPurpose::GatherHerbalism && SilvermoonGatherOrderFactor(bot->GetGUIDLow(), 182) > 1.0f))
     {
         uint32 zoneId = 0, areaId = 0;
         sTerrainMgr.GetZoneAndAreaId(zoneId, areaId, position->getMapId(), position->getX(), position->getY(), position->getZ());
@@ -658,7 +659,6 @@ std::vector<SilvermoonScoredGoal> ai::SilvermoonScoreGoals(Player* bot, Playerbo
                         recent = true;
                 if (recent || gatherStops >= 12)
                     continue;
-                ++gatherStops;
             }
             else if (!destination || !seen.insert(destination).second || skip.count(destination))
                 continue;
@@ -691,6 +691,9 @@ std::vector<SilvermoonScoredGoal> ai::SilvermoonScoreGoals(Player* bot, Playerbo
             // the last hour (10 bots died 61-95 times in one night, going back to the same place)
             if (position && SilvermoonDeathsNearPoint(bot->GetGUIDLow(), position->getMapId(), position->getX(), position->getY(), 250.0f, HOUR) >= 2)
                 continue;
+            if (gatherSpot)
+                ++gatherStops;   // counted once it passed every check (S: Mommy idled "nowhere to travel"
+                                 // after a Peacebloom - 12 stops were used up by spots then thrown out)
             goals.push_back(ScoreWith(bot, snapshot, destination, position, distance));
             if (starterPull && position)
             {
@@ -810,7 +813,8 @@ bool ChooseGoalAction::Execute(Event& event)
                 std::lock_guard<std::mutex> guard(goalLock);
                 gatherVisited[bot->GetGUIDLow()].clear();
             }
-            SET_AI_VALUE2(int, "manual int", "silvermoon goal retry at", int(time(nullptr) + 10));
+            // try again at once with the list cleared (was 10 seconds of "nowhere to travel")
+            SET_AI_VALUE2(int, "manual int", "silvermoon goal retry at", int(time(nullptr) + 1));
             return false;
         }
     }
