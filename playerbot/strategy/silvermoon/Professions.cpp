@@ -355,7 +355,7 @@ namespace
         });
         return spots;
     }
-    struct GoOrder { uint32 flag = 0; std::string what; std::set<uint32> entries; };   // entries: only these NPCs
+    struct GoOrder { uint32 flag = 0; std::string what; std::set<uint32> entries; time_t at = 0; };   // entries: only these NPCs
     std::unordered_map<uint32, GoOrder> goOrders;
 }
 
@@ -375,7 +375,7 @@ bool ai::SilvermoonGoCommand(Player* bot, std::string const& param, std::string&
     auto k = kinds.find(param);
     if (k == kinds.end())
         return false;
-    goOrders[bot->GetGUIDLow()] = { k->second.first, k->second.second };
+    goOrders[bot->GetGUIDLow()] = { k->second.first, k->second.second, {}, time(nullptr) };
     reply = "Heading to " + k->second.second + ".";
     return true;
 }
@@ -520,6 +520,7 @@ void ai::SilvermoonLevelPass(Player* bot)
         order.flag = UNIT_NPC_FLAG_VENDOR;
         order.what = std::string("a vendor for ") + (rp ? rp->Name1 : "materials");
         order.entries = VendorsSelling(wantItem);
+        order.at = time(nullptr);
     }
 }
 
@@ -549,10 +550,14 @@ bool ai::SilvermoonGoGoal(Player* bot, SilvermoonScoredGoal& goal)
             bestDist = d;
         }
     }
-    if (best && bestDist < 8.0f && (order.flag & UNIT_NPC_FLAG_REPAIR))
+    // there: within 15 yards (S: Kojimbo stood 10 yards from Ranik, behind his counter in Ratchet,
+    // "heading to a vendor" and not moving - 8 yards was closer than the bot could get), or the
+    // order is 20 minutes old
+    bool there = best && bestDist < 15.0f;
+    if (there && (order.flag & UNIT_NPC_FLAG_REPAIR))
         SilvermoonRepairNearby(bot);           // Go to > Repair (S): repair on arrival
     std::lock_guard<std::mutex> guard(orderLock);
-    if (!best || bestDist < 8.0f)
+    if (!best || there || (order.at && time(nullptr) - order.at > 20 * MINUTE))
     {
         goOrders.erase(bot->GetGUIDLow());     // there (or none on this continent): order done
         return false;
