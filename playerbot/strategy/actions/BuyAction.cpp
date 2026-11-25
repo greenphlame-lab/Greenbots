@@ -118,6 +118,12 @@ bool BuyAction::Execute(Event& event)
                     if (!usageAllowed)
                         break;
 
+                    // Silvermoon (S: Kojimbo bought 19 Small Quivers): a quiver or bag that counts as an
+                    // upgrade but is already in the bags failed to equip (a full quiver can't be swapped
+                    // out), so it stayed an "upgrade" and was bought again on every vendor visit
+                    if ((proto->Class == ITEM_CLASS_QUIVER || proto->Class == ITEM_CLASS_CONTAINER) && bot->HasItemCount(proto->ItemId, 1))
+                        break;
+
                     // Gold affordability 
                     RESET_AI_VALUE2(uint32, "free money for", moneyKey);
                     uint32 money = AI_VALUE2(uint32, "free money for", moneyKey);
