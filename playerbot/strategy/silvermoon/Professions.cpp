@@ -342,7 +342,7 @@ namespace
         static std::vector<GoSpot> spots;
         std::call_once(once, []()
         {
-            const uint32 wanted = UNIT_NPC_FLAG_INNKEEPER | UNIT_NPC_FLAG_FLIGHTMASTER | UNIT_NPC_FLAG_AUCTIONEER | UNIT_NPC_FLAG_BANKER | UNIT_NPC_FLAG_VENDOR;
+            const uint32 wanted = UNIT_NPC_FLAG_INNKEEPER | UNIT_NPC_FLAG_FLIGHTMASTER | UNIT_NPC_FLAG_AUCTIONEER | UNIT_NPC_FLAG_BANKER | UNIT_NPC_FLAG_VENDOR | UNIT_NPC_FLAG_REPAIR;
             if (auto r = WorldDatabase.PQuery("SELECT t.NpcFlags, c.id, c.map, c.position_x, c.position_y, c.position_z FROM creature c "
                 "JOIN creature_template t ON t.entry = c.id WHERE (t.NpcFlags & %u) <> 0 AND c.map IN (0, 1)", wanted))
             {
@@ -364,7 +364,7 @@ bool ai::SilvermoonGoCommand(Player* bot, std::string const& param, std::string&
     static const std::map<std::string, std::pair<uint32, std::string>> kinds = {
         { "inn", { UNIT_NPC_FLAG_INNKEEPER, "the inn" } }, { "flight", { UNIT_NPC_FLAG_FLIGHTMASTER, "the flight master" } },
         { "ah", { UNIT_NPC_FLAG_AUCTIONEER, "the auction house" } }, { "bank", { UNIT_NPC_FLAG_BANKER, "the bank" } },
-        { "vendor", { UNIT_NPC_FLAG_VENDOR, "a vendor" } } };
+        { "vendor", { UNIT_NPC_FLAG_VENDOR, "a vendor" } }, { "repair", { UNIT_NPC_FLAG_REPAIR, "a repair vendor" } } };
     std::lock_guard<std::mutex> guard(orderLock);
     if (param == "stop")
     {
@@ -549,6 +549,8 @@ bool ai::SilvermoonGoGoal(Player* bot, SilvermoonScoredGoal& goal)
             bestDist = d;
         }
     }
+    if (best && bestDist < 8.0f && (order.flag & UNIT_NPC_FLAG_REPAIR))
+        SilvermoonRepairNearby(bot);           // Go to > Repair (S): repair on arrival
     std::lock_guard<std::mutex> guard(orderLock);
     if (!best || bestDist < 8.0f)
     {

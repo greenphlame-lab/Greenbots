@@ -989,7 +989,7 @@ static void SilvermoonBuyBag(Player* bot)
 // could afford a repair; the trip to a repair npc is where they got lost. A bot resting in a
 // town repairs at any friendly repair npc within 60 yards, paying the normal price (weapons
 // first, then the rest, as far as its money goes). Returns true when it repaired something.
-static bool SilvermoonRepairNearby(Player* bot)
+bool SilvermoonRepairNearby(Player* bot)
 {
     bool damaged = false;
     for (uint8 slot = EQUIPMENT_SLOT_START; slot < EQUIPMENT_SLOT_END && !damaged; ++slot)
