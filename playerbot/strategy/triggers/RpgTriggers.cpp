@@ -9,6 +9,7 @@
 #include "playerbot/strategy/values/ItemUsageValue.h"
 #include "playerbot/strategy/values/QuestValues.h"
 #include "playerbot/TravelMgr.h"
+#include "playerbot/silvermoon/Hubs.h"
 #include "AI/ScriptDevAI/ScriptDevAIMgr.h"
 
 using namespace ai;
@@ -492,6 +493,12 @@ bool RpgHomeBindTrigger::IsActive()
         if (PlayerInfo const* start = sObjectMgr.GetPlayerInfo(bot->getRace(), bot->getClass()))
             if (guidP.getMapId() != start->mapId || guidP.distance(WorldPosition(start->mapId, start->positionX, start->positionY, start->positionZ)) > 500.0f)
                 return false;
+
+    // Silvermoon: not at a hub inn that doesn't fit the bot's level or faction (the misfit-bind
+    // check moved Treehugger, 21, from Southshore to Loch Modan at 10:49 PM; he re-bound in Southshore
+    // within minutes)
+    if (!silvermoon::Hubs::InnFits(guidP.getMapId(), guidP.getX(), guidP.getY(), bot->GetTeam() == ALLIANCE, int(bot->GetLevel())))
+        return false;
 
     WorldPosition currentBind = AI_VALUE(WorldPosition, "home bind");
     WorldPosition newBind = (guidP.sqDistance2d(bot) > INTERACTION_DISTANCE * INTERACTION_DISTANCE) ? guidP : bot;

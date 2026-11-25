@@ -148,6 +148,21 @@ namespace silvermoon
         CharacterDatabase.Execute(sql.str().c_str());
     }
 
+    bool Hubs::InnFits(uint32_t map, float x, float y, bool alliance, int level)
+    {
+        for (Hub const& h : hubs)
+        {
+            if (h.map != map)
+                continue;
+            float hx = h.innkeeper ? h.innX : h.x, hy = h.innkeeper ? h.innY : h.y;
+            if ((hx - x) * (hx - x) + (hy - y) * (hy - y) > 150.0f * 150.0f)
+                continue;
+            if ((h.side != 3 && h.side != (alliance ? 1 : 2)) || level + 2 < int(h.minLevel) || level > int(h.maxLevel) + 5)
+                return false;
+        }
+        return true;
+    }
+
     Hub const* Hubs::Nearest(uint32_t map, float x, float y, float maxDistance)
     {
         Hub const* best = nullptr;

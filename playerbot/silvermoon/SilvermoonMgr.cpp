@@ -475,6 +475,8 @@ static void SilvermoonInnBind(Player* bot)
         AreaTableEntry const* zone = zoneId ? GetAreaEntryByAreaID(zoneId) : nullptr;
         if (zone && zone->area_level > 0 && int32(bot->GetLevel()) + 5 < zone->area_level)
             continue;
+        if (!silvermoon::Hubs::InnFits(npc->GetMapId(), npc->GetPositionX(), npc->GetPositionY(), bot->GetTeam() == ALLIANCE, int(bot->GetLevel())))
+            continue;
         npc->CastSpell(bot, 3286, TRIGGERED_OLD_TRIGGERED);    // "Bind", what the innkeeper's gossip does
         sLog.outBasic("Silvermoon: %s set its hearthstone at %s", bot->GetName(), npc->GetName());
         return;
