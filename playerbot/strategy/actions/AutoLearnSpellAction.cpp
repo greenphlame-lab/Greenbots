@@ -4,6 +4,7 @@
 #include "playerbot/ServerFacade.h"
 #include "Entities/Item.h"
 #include <Mails/Mail.h>
+#include "playerbot/strategy/silvermoon/Policies.h"
 
 using namespace ai;
 
@@ -52,7 +53,9 @@ void AutoLearnSpellAction::LearnSpells(std::ostringstream* out)
         LearnDroppedSpells(out);
 #endif
 
-    if (!ai->HasActivePlayerMaster()) //Hunter spells for pets.
+    // Silvermoon (S: Kojimbo had a pet without finishing his taming quest): your own characters earn
+    // the pet spells the normal way, through the level 10 hunter quests and trainers
+    if (!ai->HasActivePlayerMaster() && !SilvermoonIsOwn(bot)) //Hunter spells for pets.
     {
         if (bot->getClass() == CLASS_HUNTER && bot->GetLevel() >= 10)
         {
