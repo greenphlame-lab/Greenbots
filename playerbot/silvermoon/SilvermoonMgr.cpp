@@ -706,7 +706,7 @@ static void SilvermoonGhostRescue(Player* bot)
     if (!st.first)
         st.first = now;
     Corpse* corpse = bot->GetCorpse();
-    bool near = corpse && corpse->GetMapId() == bot->GetMapId() && bot->GetDistance2d(corpse) < 40.0f;
+    bool near = corpse && corpse->GetMapId() == bot->GetMapId() && bot->GetDistance2d(corpse->GetPositionX(), corpse->GetPositionY()) < 40.0f;
     if (near && !st.second)
         st.second = now;
     else if (!near)
