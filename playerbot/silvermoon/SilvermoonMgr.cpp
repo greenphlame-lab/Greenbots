@@ -1539,6 +1539,10 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                 Player* p = sObjectMgr.GetPlayer(ObjectGuid(HIGHGUID_PLAYER, alt.second));
                 if (!p || !p->IsInWorld() || !p->GetPlayerbotAI())
                     continue;
+                // the "while you were away" log follows your alts everywhere, not just in town (S:
+                // Guile's day left nothing in the log - it only ran while he rested in a town)
+                if (p->IsAlive())
+                    SilvermoonAwayTick(p);
                 if (SilvermoonAutoOn(alt.second) && p->IsAlive() && !p->IsInCombat() && p->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_RESTING) &&
                     !GetEventValue(alt.second, "silvermoon_alt_shop"))
                 {
@@ -1546,7 +1550,6 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                     uint32 before = p->GetMoney();
                     SilvermoonDropStaleQuests(p);
                     SilvermoonFixMisfitBind(p);
-                    SilvermoonAwayTick(p);
                     SilvermoonInnBind(p);
                     if (p->HasSkill(333) && SilvermoonPolicyFor(p->GetGUIDLow()).disenchant)
                         p->GetPlayerbotAI()->DoSpecificAction("disenchant random item", Event("silvermoon policy"), true);
