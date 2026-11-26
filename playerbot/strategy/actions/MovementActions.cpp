@@ -1652,9 +1652,9 @@ bool MovementAction::MoveTo(uint32 mapId, float x, float y, float z, bool idle, 
     // Silvermoon ground fallback (S, Nov 25: "let them path over hills or large terrain - still on
     // rendered terrain - when they can't easily find a path"; Guile re-picked an unwalkable trip for
     // 30 minutes near Sen'jin). When the navmesh finds no way forward, the bot walks straight
-    // toward the target over the ground itself: points every 10 yards, up to 50 yards ahead, each
+    // toward the target over the ground itself: points every 5 yards, up to 20 yards ahead, each
     // put on the terrain height, stopping before a wall (line of sight), deep water or a drop or
-    // climb of more than 12 yards between points. It walks those without path generation, then tries
+    // climb of more than 6 yards between points. It walks those without path generation, then tries
     // the normal path again from the new spot. Continents only, out of combat, not on a transport.
     if (navmeshFailed && sPlayerbotAIConfig.silvermoonTravel && !bot->GetTransport() && bot->GetMap() && bot->GetMap()->IsContinent() &&
         !bot->IsInCombat() && !bot->IsFlying() && movePosition.getMapId() == startPosition.getMapId())
@@ -1666,12 +1666,15 @@ bool MovementAction::MoveTo(uint32 mapId, float x, float y, float z, bool idle, 
             dx /= len; dy /= len;
             std::vector<WorldPosition> ground;
             WorldPosition prev = startPosition;
-            float reach = std::min(len, 50.0f);   // inside one move (SightDistance 60)
-            for (float d = 10.0f; d <= reach + 0.1f; d += 10.0f)
+            // short hops (S: Guile's ghost ran through a hill - a point 50 yards out is walked in a
+            // straight line, under the bumps between): 5-yard points, 20 yards per move, so the
+            // straight bit between two points stays close to the ground
+            float reach = std::min(len, 20.0f);
+            for (float d = 5.0f; d <= reach + 0.1f; d += 5.0f)
             {
-                WorldPosition p(startPosition.getMapId(), startPosition.getX() + dx * d, startPosition.getY() + dy * d, prev.getZ() + 15.0f);
+                WorldPosition p(startPosition.getMapId(), startPosition.getX() + dx * d, startPosition.getY() + dy * d, prev.getZ() + 10.0f);
                 float h = p.getHeight();
-                if (h <= INVALID_HEIGHT + 1.0f || std::fabs(h - prev.getZ()) > 12.0f)
+                if (h <= INVALID_HEIGHT + 1.0f || std::fabs(h - prev.getZ()) > 6.0f)
                     break;
                 p.setZ(h);
                 if (p.isUnderWater() || !prev.IsInLineOfSight(p, 2.0f))
@@ -1679,7 +1682,7 @@ bool MovementAction::MoveTo(uint32 mapId, float x, float y, float z, bool idle, 
                 ground.push_back(p);
                 prev = p;
             }
-            if (!ground.empty() && ground.back().distance(startPosition) >= 15.0f)
+            if (!ground.empty() && ground.back().distance(startPosition) >= 8.0f)
             {
                 movePath.clear();
                 movePath.addPath(ground);
