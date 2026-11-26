@@ -806,6 +806,38 @@ bool ChooseGoalAction::Execute(Event& event)
     if (travelTarget->GetStatus() != TravelStatus::TRAVEL_STATUS_PREPARE)
         return false;
 
+    // Gather order patrol (S, Nov 25: "idles far too long, thinks too much - point to point across
+    // the entire zone, one big loop"): straight to the next point of the zone's route, without waiting
+    // for the destination search or scoring anything. Only full bags go the normal way (to a vendor).
+    if (AI_VALUE(uint8, "bag space") < 100 && !bot->IsInCombat())
+    {
+        WorldPosition next;
+        uint32 index = 0, total = 0;
+        if (SilvermoonGatherRouteNext(bot, next, index, total))
+        {
+            travelTarget->SetStatus(TravelStatus::TRAVEL_STATUS_NONE);
+            TemporaryTravelDestination* spot = new TemporaryTravelDestination(next);
+            TravelTarget newTarget = TravelTarget(ai);
+            newTarget.SetRelevance(AI_VALUE2(int, "manual int", "future travel relevance"));
+            newTarget.SetTarget(spot, spot->GetPosition());
+            Player* requester = event.getOwner() ? event.getOwner() : (GetMaster() ? GetMaster() : bot);
+            travelTarget->SetConditions({});
+            SET_AI_VALUE2(std::string, "manual string", "future travel condition", "");
+            setNewTarget(requester, &newTarget, travelTarget);
+            travelTarget->SetExpireIn(uint32(5 * MINUTE * IN_MILLISECONDS));   // a stop it can't reach is skipped
+            travelTarget->SetForced(true);
+            SilvermoonScoredGoal g;
+            g.destination = spot;
+            g.position = spot->GetPosition();
+            g.kind = GoalKind::Gather;
+            g.score.score = 1.0f;
+            g.score.reason = "gather route " + std::to_string(index) + "/" + std::to_string(total);
+            SilvermoonLogDecision(bot, g, nullptr, nullptr);
+            SET_AI_VALUE2(int, "manual int", "silvermoon goal kind", int(GoalKind::Gather) + 1);
+            return true;
+        }
+    }
+
     FutureDestinations* futureDestinations = AI_VALUE(FutureDestinations*, "future travel destinations");
     if (!futureDestinations->valid())
     {

@@ -257,6 +257,131 @@ bool ai::SilvermoonProfessionGoal(Player* bot, PlayerbotAI* ai, SilvermoonScored
     return true;
 }
 
+namespace
+{
+    // every herb and ore spawn point on the two continents, with the node's skill and the level it
+    // needs (from the chest's lock), loaded once
+    struct NodeSpot { uint32 map; float x, y, z; uint32 skill; uint32 req; };
+    std::vector<NodeSpot>& NodeSpots()
+    {
+        static std::once_flag once;
+        static std::vector<NodeSpot> spots;
+        std::call_once(once, []()
+        {
+            if (auto r = WorldDatabase.Query("SELECT g.map, g.position_x, g.position_y, g.position_z, t.data0 FROM gameobject g "
+                "JOIN gameobject_template t ON t.entry = g.id WHERE t.type = 3 AND g.map IN (0, 1)"))
+            {
+                do
+                {
+                    Field* f = r->Fetch();
+                    LockEntry const* lock = sLockStore.LookupEntry(f[4].GetUInt32());
+                    if (!lock)
+                        continue;
+                    for (int i = 0; i < 8; ++i)
+                    {
+                        if (lock->Type[i] != LOCK_KEY_SKILL)
+                            continue;
+                        uint32 skill = SkillByLockType(LockType(lock->Index[i]));
+                        if (skill == SKILL_HERBALISM || skill == SKILL_MINING)
+                            spots.push_back({ f[0].GetUInt32(), f[1].GetFloat(), f[2].GetFloat(), f[3].GetFloat(), skill, lock->Skill[i] });
+                        break;
+                    }
+                } while (r->NextRow());
+            }
+            sLog.outBasic("Silvermoon: gather routes know %u herb and ore spawn points", uint32(spots.size()));
+        });
+        return spots;
+    }
+    struct GatherRoute { uint32 zone = 0, skill = 0, skillValue = 0; std::vector<WorldPosition> points; size_t next = 0; time_t built = 0; };
+    std::mutex routeLock;
+    std::unordered_map<uint32, GatherRoute> routes;
+}
+
+bool ai::SilvermoonGatherRouteNext(Player* bot, WorldPosition& next, uint32& index, uint32& total)
+{
+    uint32 skill = 0;
+    {
+        std::lock_guard<std::mutex> guard(orderLock);
+        auto it = orders.find(bot->GetGUIDLow());
+        if (it == orders.end() || (it->second.gather != SKILL_HERBALISM && it->second.gather != SKILL_MINING))
+            return false;
+        skill = it->second.gather;
+    }
+    uint32 value = bot->GetSkillValue(skill);
+    uint32 zone = bot->GetZoneId();
+    std::lock_guard<std::mutex> guard(routeLock);
+    GatherRoute& route = routes[bot->GetGUIDLow()];
+    // (re)build in a new zone, for another skill, every 25 skill points (new nodes open up) or hourly
+    if (route.points.empty() || route.zone != zone || route.skill != skill || value >= route.skillValue + 25 || time(nullptr) - route.built > HOUR)
+    {
+        route = GatherRoute();
+        route.zone = zone;
+        route.skill = skill;
+        route.skillValue = value;
+        route.built = time(nullptr);
+        WorldPosition here(bot);
+        std::vector<WorldPosition> pool;
+        for (NodeSpot const& s : NodeSpots())
+        {
+            if (s.skill != skill || s.req > value || s.map != bot->GetMapId())
+                continue;
+            float dx = s.x - here.getX(), dy = s.y - here.getY();
+            if (dx * dx + dy * dy > 4000.0f * 4000.0f)
+                continue;
+            if (sTerrainMgr.GetZoneId(s.map, s.x, s.y, s.z) != zone)
+                continue;
+            WorldPosition p(s.map, s.x, s.y, s.z);
+            bool dup = false;
+            for (WorldPosition const& q : pool)
+                if (q.fDist(p) < 20.0f)
+                {
+                    dup = true;
+                    break;
+                }
+            if (!dup)
+                pool.push_back(p);
+        }
+        // one loop: nearest neighbour from the bot, each point once
+        WorldPosition at = here;
+        while (!pool.empty())
+        {
+            size_t best = 0;
+            float bestD = at.fDist(pool[0]);
+            for (size_t i = 1; i < pool.size(); ++i)
+            {
+                float d = at.fDist(pool[i]);
+                if (d < bestD)
+                {
+                    best = i;
+                    bestD = d;
+                }
+            }
+            at = pool[best];
+            route.points.push_back(at);
+            pool[best] = pool.back();
+            pool.pop_back();
+        }
+        sLog.outBasic("Silvermoon: %s gather route in zone %u: %u spawn points (skill %u at %u)", bot->GetName(), zone,
+            uint32(route.points.size()), skill, value);
+        if (route.points.empty())
+            return false;
+    }
+    // the next point, passing over spots where the bot died twice in the last hour
+    for (size_t tries = 0; tries < route.points.size(); ++tries)
+    {
+        size_t at = route.next % route.points.size();
+        WorldPosition const p = route.points[at];
+        route.next = (route.next + 1) % route.points.size();
+        if (SilvermoonDeathsNearPoint(bot->GetGUIDLow(), p.getMapId(), p.getX(), p.getY(), 100.0f, HOUR) >= 2)
+            continue;
+        next = p;
+        index = uint32(at + 1);
+        total = uint32(route.points.size());
+        return true;
+    }
+    return false;
+}
+
 float ai::SilvermoonGatherOrderFactor(uint32 guid, uint32 skill)
 {
     std::lock_guard<std::mutex> guard(orderLock);

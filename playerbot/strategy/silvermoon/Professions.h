@@ -23,6 +23,11 @@ namespace ai
     bool SilvermoonProfessionGoal(Player* bot, PlayerbotAI* ai, SilvermoonScoredGoal& goal);
     // gather order for this purpose's skill: the gather goal is worth this factor (1 = none)
     float SilvermoonGatherOrderFactor(uint32 guid, uint32 skill);
+    // Gather order patrol route (S: "point to point across the entire zone, one big loop"): every
+    // herb (or ore) spawn point in the bot's current zone that its skill can gather, ordered into one
+    // loop by nearest neighbour from where the order started. Returns the next point and moves on;
+    // false when there is no gather order or no point. index/total are for the log line.
+    bool SilvermoonGatherRouteNext(Player* bot, WorldPosition& next, uint32& index, uint32& total);
     // "SMPROF\t<skill>:<value>:<max>:<state>;..." for the panel; state L = learn queued, G = gathering
     std::string SilvermoonProfPanel(Player* bot);
     // the tool a gathering profession needs (Mining Pick, Skinning Knife, Fishing Pole): bought
