@@ -1615,6 +1615,8 @@ bool MovementAction::MoveTo(uint32 mapId, float x, float y, float z, bool idle, 
         }
     }
 
+    bool groundFallback = false;
+    bool navmeshFailed = false;
     if (movePath.empty() && movePosition.distance(startPosition) > maxDist)
     {
         // DEBUG: Before VMaps pathfinder - use TellDebug for debug move
@@ -1642,9 +1644,52 @@ bool MovementAction::MoveTo(uint32 mapId, float x, float y, float z, bool idle, 
         }
 
         movePath.addPath(startPosition.fromPointsArray(points));
+        navmeshFailed = (type & PATHFIND_NOPATH) || points.size() < 2 ||
+            (!points.empty() && startPosition.fromPointsArray(points).back().distance(startPosition) < 5.0f);
     }
 
-    if (!lastMove.lastPath.empty() && !movePath.empty() && lastMove.lastPath.getBack().distance(endPosition) <= movePath.getBack().distance(endPosition)) //new path is worse than the last path. Keep going the old path.
+    // Silvermoon ground fallback (S, Nov 25: "let them path over hills or large terrain - still on
+    // rendered terrain - when they can't easily find a path"; Guile re-picked an unwalkable trip for
+    // 30 minutes near Sen'jin). When the navmesh finds no way forward, the bot walks straight
+    // toward the target over the ground itself: points every 10 yards, up to 60 yards ahead, each
+    // put on the terrain height, stopping before a wall (line of sight), deep water or a drop or
+    // climb of more than 12 yards between points. It walks those without path generation, then tries
+    // the normal path again from the new spot. Continents only, out of combat, not on a transport.
+    if (navmeshFailed && sPlayerbotAIConfig.silvermoonTravel && !bot->GetTransport() && bot->GetMap() && bot->GetMap()->IsContinent() &&
+        !bot->IsInCombat() && !bot->IsFlying() && movePosition.getMapId() == startPosition.getMapId())
+    {
+        float dx = movePosition.getX() - startPosition.getX(), dy = movePosition.getY() - startPosition.getY();
+        float len = std::sqrt(dx * dx + dy * dy);
+        if (len > 15.0f)
+        {
+            dx /= len; dy /= len;
+            std::vector<WorldPosition> ground;
+            WorldPosition prev = startPosition;
+            float reach = std::min(len, 60.0f);   // within one move (SightDistance)
+            for (float d = 10.0f; d <= reach + 0.1f; d += 10.0f)
+            {
+                WorldPosition p(startPosition.getMapId(), startPosition.getX() + dx * d, startPosition.getY() + dy * d, prev.getZ() + 15.0f);
+                float h = p.getHeight();
+                if (h <= INVALID_HEIGHT + 1.0f || std::fabs(h - prev.getZ()) > 12.0f)
+                    break;
+                p.setZ(h);
+                if (p.isUnderWater() || !prev.IsInLineOfSight(p, 2.0f))
+                    break;
+                ground.push_back(p);
+                prev = p;
+            }
+            if (!ground.empty() && ground.back().distance(startPosition) >= 15.0f)
+            {
+                movePath.clear();
+                movePath.addPath(ground);
+                groundFallback = true;
+                if (ai->HasStrategy("debug move", BotState::BOT_STATE_NON_COMBAT))
+                    ai->TellPlayerNoFacing(GetMaster(), "No navmesh path: walking over the ground for " + std::to_string(int(ground.back().distance(startPosition))) + " yards.");
+            }
+        }
+    }
+
+    if (!groundFallback && !lastMove.lastPath.empty() && !movePath.empty() && lastMove.lastPath.getBack().distance(endPosition) <= movePath.getBack().distance(endPosition)) //new path is worse than the last path. Keep going the old path.
     {
         movePath = lastMove.lastPath;
     }
@@ -2201,6 +2246,8 @@ bool MovementAction::MoveTo(uint32 mapId, float x, float y, float z, bool idle, 
         // water transition
         if (bot->HasMovementFlag(MOVEFLAG_SWIMMING) && startPosition.isInWater() && !startPosition.isUnderWater() && !movePosition.isInWater())
             generatePath = true;
+        if (groundFallback)
+            generatePath = false;   // the ground points are the path (Silvermoon fallback above)
 
         mm.MovePoint(movePosition.getMapId(), movePosition.getX(), movePosition.getY(), movePosition.getZ(), masterWalking ? FORCED_MOVEMENT_WALK : FORCED_MOVEMENT_RUN, generatePath);
     }
