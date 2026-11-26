@@ -10,6 +10,7 @@ extern thread_local int SilvermoonMoveFail; // Silvermoon: why the last move fai
 #include "MotionGenerators/MovementGenerator.h"
 #include "playerbot/FleeManager.h"
 #include "playerbot/LootObjectStack.h"
+#include "playerbot/strategy/silvermoon/Policies.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/ServerFacade.h"
 #include "playerbot/strategy/values/PositionValue.h"
@@ -3189,7 +3190,9 @@ bool MovementAction::Flee(Unit *target)
         {
             AI_VALUE(LastMovement&, "last movement").lastFlee = time(0);
 
-            if (ai->HasRealPlayerMaster() || ai->IsRealPlayer(target))
+            // (Silvermoon: your own characters on Auto use the fallback run too - S: Mommy's "flee from
+            // 2 or more mobs" never moved her, because a self-bot counts as having a real master)
+            if ((ai->HasRealPlayerMaster() || ai->IsRealPlayer(target)) && !SilvermoonIsOwn(bot))
                 return false;
 
             float distance = fullDistance ? (ai->GetRange("flee") * 2) : ai->GetRange("flee");

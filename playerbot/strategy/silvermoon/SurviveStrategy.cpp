@@ -2,6 +2,8 @@
 #include "SurviveStrategy.h"
 #include "Policies.h"
 #include <map>
+#include <mutex>
+#include <unordered_map>
 #include <vector>
 #include "playerbot/RandomPlayerbotMgr.h"
 
@@ -117,16 +119,25 @@ bool FleeOutmatchedAction::isUseful()
         SilvermoonPolicy p = SilvermoonPolicyFor(bot->GetGUIDLow());
         if (!p.fleeHealth) p.fleeHealth = 30;
         if (!p.fleeMobs) p.fleeMobs = 2;
-        if (bot->GetHealthPercent() < float(p.fleeHealth))
-            return true;
+        uint32 n = 0;
+        for (ObjectGuid const& guid : AI_VALUE(std::list<ObjectGuid>, "attackers"))
+            if (Unit* u = ai->GetUnit(guid))
+                if (u->IsAlive() && u->GetTypeId() == TYPEID_UNIT)
+                    ++n;
+        if (bot->GetHealthPercent() < float(p.fleeHealth) || n >= p.fleeMobs)
         {
-            uint32 n = 0;
-            for (ObjectGuid const& guid : AI_VALUE(std::list<ObjectGuid>, "attackers"))
-                if (Unit* u = ai->GetUnit(guid))
-                    if (u->IsAlive() && u->GetTypeId() == TYPEID_UNIT)
-                        ++n;
-            if (n >= p.fleeMobs)
-                return true;
+            // logged at most every 30 seconds, so the policy can be checked (S: "not firing")
+            static std::mutex logLock;
+            static std::unordered_map<uint32, time_t> lastLog;
+            std::lock_guard<std::mutex> guard(logLock);
+            time_t& last = lastLog[bot->GetGUIDLow()];
+            if (time(nullptr) - last >= 30)
+            {
+                last = time(nullptr);
+                sLog.outBasic("Silvermoon: %s flee policy: %u mobs on it, %.0f%% health (flee from %u, below %u%%)",
+                    bot->GetName(), n, bot->GetHealthPercent(), uint32(p.fleeMobs), uint32(p.fleeHealth));
+            }
+            return true;
         }
     }
     for (ObjectGuid const& guid : AI_VALUE(std::list<ObjectGuid>, "attackers"))
