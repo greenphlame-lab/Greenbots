@@ -70,6 +70,11 @@ namespace
         uint32 maxMoveRetries = 0;
         float startX = 0, startY = 0;
         uint16 startMap = 0xFFFF;
+        // resumes (S: Guile, near Sen'jin, re-picked his Crossroads trip every 5-8 seconds for 30
+        // minutes without moving - the walk was dropped at once each time)
+        uint32 resumes = 0;
+        time_t resumeWindow = 0;
+        float resumeX = 0, resumeY = 0;
     };
     std::mutex tripLock;
     std::unordered_map<uint32, Trip> trips;
@@ -415,7 +420,37 @@ bool ai::SilvermoonResumeTrip(Player* bot, SilvermoonScoredGoal& goal, uint16& h
         auto it = trips.find(bot->GetGUIDLow());
         if (it == trips.end())
             return false;
-        trip = it->second;
+        // a trip resumed 4 times within 2 minutes while the bot moved less than 40 yards can't be
+        // walked from here: it fails (the hub is skipped for 30 minutes) and the bot does local work
+        Trip& t = it->second;
+        time_t now = time(nullptr);
+        float dx = bot->GetPositionX() - t.resumeX, dy = bot->GetPositionY() - t.resumeY;
+        if (!t.resumeWindow || now - t.resumeWindow > 2 * MINUTE || dx * dx + dy * dy > 40.0f * 40.0f)
+        {
+            t.resumeWindow = now;
+            t.resumes = 0;
+            t.resumeX = bot->GetPositionX();
+            t.resumeY = bot->GetPositionY();
+        }
+        if (++t.resumes >= 4)
+        {
+            DecisionRow row;
+            row.ts = uint32(now);
+            row.guid = bot->GetGUIDLow();
+            row.goal = "relocate";
+            if (Hub const* h = Hubs::Get(t.hub))
+                row.target = h->name;
+            row.reason = "relocate abandoned: can't walk there from here";
+            row.map = bot->GetMapId();
+            row.x = bot->GetPositionX();
+            row.y = bot->GetPositionY();
+            DecisionLog::Add(row);
+            uint16 hub = t.hub;
+            trips.erase(it);
+            FailTrip(bot->GetGUIDLow(), hub);
+            return false;
+        }
+        trip = t;
     }
     Hub const* h = Hubs::Get(trip.hub);
     if (!h)
