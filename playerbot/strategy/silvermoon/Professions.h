@@ -44,6 +44,8 @@ namespace ai
     // Command: ".bot go inn|flight|ah|bank|vendor|stop"
     bool SilvermoonGoCommand(Player* bot, std::string const& param, std::string& reply);
     bool SilvermoonGoGoal(Player* bot, SilvermoonScoredGoal& goal);
+    // "Buy bigger bags" (S, 1.6.21): a go order to the nearest vendor that sells this bag
+    bool SilvermoonGoBagVendor(Player* bot, uint32 itemId);
 
     // at the trainer the learn order points at: learn it (paying the trainer's fee)
     class ProfessionLearnAction : public Action

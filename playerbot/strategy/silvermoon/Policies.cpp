@@ -5,6 +5,8 @@
 #include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/TravelNode.h"
 #include <cstdio>
+#include <cstring>
+#include <set>
 #include <cstdlib>
 #include <mutex>
 #include <sstream>
@@ -182,6 +184,9 @@ std::vector<std::string> ai::SilvermoonSpellListMessages(Player* bot)
 {
     // every ability the class trainers teach this class and race: first rank id -> (lowest level, name)
     std::map<uint32, std::pair<uint32, std::string>> abilities;
+    // first rank id -> every rank the trainers teach (S, 1.6.21: an ability with nothing left to
+    // train - Parry, or the top rank of a spell - is marked 2 and the panel leaves it out)
+    std::map<uint32, std::set<uint32>> ranks;
     for (uint32 id = 0; id < sCreatureStorage.GetMaxEntry(); ++id)
     {
         CreatureInfo const* co = sCreatureStorage.LookupEntry<CreatureInfo>(id);
@@ -206,6 +211,10 @@ std::vector<std::string> ai::SilvermoonSpellListMessages(Player* bot)
                 uint32 first = sSpellMgr.GetFirstSpellInChain(learned);
                 if (!first)
                     first = learned;
+                // obsolete trainer entries ("zzOLDHip Shot III") are left out
+                if (spell->SpellName[0] && (strncmp(spell->SpellName[0], "zz", 2) == 0 || strncmp(spell->SpellName[0], "ZZ", 2) == 0))
+                    continue;
+                ranks[first].insert(learned);
                 auto it = abilities.find(first);
                 if (it == abilities.end())
                     abilities[first] = std::make_pair(entry.second.reqLevel, std::string(spell->SpellName[0]));
@@ -228,7 +237,13 @@ std::vector<std::string> ai::SilvermoonSpellListMessages(Player* bot)
         for (char& c : clean)
             if (c == '^' || c == ';' || c == '|' || c == '\t')
                 c = ' ';
-        std::string item = std::to_string(first) + ":" + std::to_string(level) + ":" + (bot->HasSpell(first) ? "1" : "0") + ":" + clean;
+        // 0 not learned, 1 learned with ranks still to train, 2 everything the trainers teach is known
+        bool all = true;
+        for (uint32 r : ranks[first])
+            if (!bot->HasSpell(r))
+                all = false;
+        std::string known = !bot->HasSpell(first) ? "0" : (all ? "2" : "1");
+        std::string item = std::to_string(first) + ":" + std::to_string(level) + ":" + known + ":" + clean;
         if (cur.size() + item.size() + 1 > 230)
         {
             out.push_back("SMSPELL\t" + cur);
@@ -352,7 +367,7 @@ bool ai::SilvermoonPolicyCommand(Player* bot, std::string const& param, std::str
         uint8 bit = v1 == "buy" ? 1 : v1 == "bigger" ? 2 : 0;
         if (!bit)
             return false;
-        if (bit == 1)   // "bags buy on|off": the bit means "don't buy"
+        if (bit == 1)   // "bags buy on|off": the bit means "don't buy" (1.6.21: buying includes bigger bags)
             p.bags = v2 == "off" ? (p.bags | 1) : (p.bags & ~1);
         else
             p.bags = v2 == "on" ? (p.bags | 2) : (p.bags & ~2);

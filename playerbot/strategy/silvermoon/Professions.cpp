@@ -649,6 +649,23 @@ void ai::SilvermoonLevelPass(Player* bot)
     }
 }
 
+bool ai::SilvermoonGoBagVendor(Player* bot, uint32 itemId)
+{
+    std::set<uint32> const& sellers = VendorsSelling(itemId);
+    if (sellers.empty())
+        return false;
+    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+    std::lock_guard<std::mutex> guard(orderLock);
+    if (goOrders.count(bot->GetGUIDLow()))
+        return false;                                   // already going somewhere
+    GoOrder& order = goOrders[bot->GetGUIDLow()];
+    order.flag = UNIT_NPC_FLAG_VENDOR;
+    order.what = std::string("a bag vendor for a ") + (proto ? proto->Name1 : "bigger bag");
+    order.entries = sellers;
+    order.at = time(nullptr);
+    return true;
+}
+
 bool ai::SilvermoonGoGoal(Player* bot, SilvermoonScoredGoal& goal)
 {
     GoOrder order;
@@ -681,6 +698,8 @@ bool ai::SilvermoonGoGoal(Player* bot, SilvermoonScoredGoal& goal)
     bool there = best && bestDist < 15.0f;
     if (there && (order.flag & UNIT_NPC_FLAG_REPAIR))
         SilvermoonRepairNearby(bot);           // Go to > Repair (S): repair on arrival
+    if (there && order.what.rfind("a bag vendor", 0) == 0)
+        SilvermoonBuyBag(bot);                 // "Buy bigger bags": buy on arrival
     std::lock_guard<std::mutex> guard(orderLock);
     if (!best || there || (order.at && time(nullptr) - order.at > 20 * MINUTE))
     {

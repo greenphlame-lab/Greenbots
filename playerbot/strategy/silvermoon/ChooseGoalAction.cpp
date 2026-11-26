@@ -866,6 +866,47 @@ bool ChooseGoalAction::Execute(Event& event)
         }
     }
 
+    // "Buy bigger bags" (S, 1.6.21): a bigger bag it can afford and no vendor selling it nearby - a
+    // trip to the nearest one (at most once an hour); the Go to step below takes it from there
+    if (!bot->IsInCombat() && !SilvermoonCashOut(bot) && !bot->HasAura(15007))
+    {
+        static std::mutex bagLock;
+        static std::unordered_map<uint32, time_t> lastBagTrip;
+        bool due = false;
+        {
+            std::lock_guard<std::mutex> guard(bagLock);
+            time_t& last = lastBagTrip[bot->GetGUIDLow()];
+            if (time(nullptr) - last >= HOUR)
+            {
+                last = time(nullptr);
+                due = true;
+            }
+        }
+        if (due && !SilvermoonBuyBag(bot))
+            if (uint32 bag = SilvermoonBagWanted(bot))
+                if (SilvermoonGoBagVendor(bot, bag))
+                {
+                    SilvermoonScoredGoal go;
+                    if (SilvermoonGoGoal(bot, go) && go.destination && go.position)
+                    {
+                        travelTarget->SetStatus(TravelStatus::TRAVEL_STATUS_NONE);
+                        TravelTarget newTarget = TravelTarget(ai);
+                        newTarget.SetRelevance(AI_VALUE2(int, "manual int", "future travel relevance"));
+                        newTarget.SetTarget(go.destination, go.position);
+                        Player* requester = event.getOwner() ? event.getOwner() : (GetMaster() ? GetMaster() : bot);
+                        travelTarget->SetConditions({});
+                        SET_AI_VALUE2(std::string, "manual string", "future travel condition", "");
+                        setNewTarget(requester, &newTarget, travelTarget);
+                        travelTarget->SetExpireIn(uint32(20 * MINUTE * IN_MILLISECONDS));
+                        travelTarget->SetForced(true);
+                        go.score.reason = "bags: buy a bigger bag at " + go.score.reason.substr(go.score.reason.find("go to ") == std::string::npos ? 0 : go.score.reason.find("go to ") + 6);
+                        SilvermoonLogDecision(bot, go, nullptr, nullptr);
+                        SET_AI_VALUE2(int, "manual int", "silvermoon goal kind", int(go.kind) + 1);
+                        return true;
+                    }
+                }
+    }
+
     // Resurrection Sickness (S, 1.6.20): no fighting, questing or gathering until it wears off. The
     // bot walks to the nearest friendly inn when it gets there before the sickness ends (within 1,200
     // yards, running about 7 yards a second) and waits there; otherwise it sits down where it is. It

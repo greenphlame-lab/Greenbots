@@ -1026,73 +1026,139 @@ static void SilvermoonLearnGathering(Player* bot)
     sLog.outBasic("Silvermoon: bot %s (level %u) learned gathering skill %u for %u copper (fee and tool)", bot->GetName(), bot->GetLevel(), g.skill, cost);
 }
 
-// Silvermoon patch: bags. Full bags leave loot on corpses and force extra vendor trips. A random
-// bot resting in town with an empty bag slot buys the biggest plain vendor bag it can afford with
-// at most a quarter of its money (6, 8 or 10 slots), paying the vendor price.
-static void SilvermoonBuyBag(Player* bot)
+// Silvermoon patch: bags. Full bags leave loot on corpses and force extra vendor trips.
+// "Buy bigger bags" (S, 1.6.21; your characters can turn it off in Policies, random bots always):
+// the biggest plain vendor bag (10, 8 or 6 slots) the bot can afford with half its spending money
+// (never the repair fund) that beats an empty bag slot or its smallest bag. It is bought from a
+// vendor that sells it within 30 yards, at the vendor price; the old bag is sold to the vendor and
+// its contents moved to the other bags first. With no such vendor in reach, the brain sends the bot
+// to one (SilvermoonBagWanted, at most one trip an hour).
+static const uint32 silvermoonBags[] = { 4497, 4498, 4496 };   // Heavy Brown Bag 10, Brown Leather Satchel 8, Small Brown Pouch 6
+
+uint32 SilvermoonBagWanted(Player* bot)
 {
-    // policies (S): your characters can be told not to buy bags, or to replace small bags with
-    // bigger ones
     uint8 rules = SilvermoonIsOwn(bot) ? SilvermoonPolicyFor(bot->GetGUIDLow()).bags : 0;
     if (rules & 1)
-        return;
-    uint8 freeSlot = 0;
+        return 0;
+    uint32 smallestSize = 0;
+    bool freeSlot = false;
+    for (uint8 slot = INVENTORY_SLOT_BAG_START; slot < INVENTORY_SLOT_BAG_END; ++slot)
+    {
+        Item* item = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
+        if (!item)
+        {
+            freeSlot = true;
+            continue;
+        }
+        Bag* bag = dynamic_cast<Bag*>(item);
+        if (!bag || bag->GetProto()->Class != ITEM_CLASS_CONTAINER || bag->GetProto()->SubClass != ITEM_SUBCLASS_CONTAINER)
+            continue;
+        if (!smallestSize || bag->GetBagSize() < smallestSize)
+            smallestSize = bag->GetBagSize();
+    }
+    uint32 budget = SilvermoonUpgradeBudget(bot, 50);
+    for (uint32 entry : silvermoonBags)
+    {
+        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(entry);
+        if (!proto || proto->BuyPrice > budget)
+            continue;
+        if (freeSlot || proto->ContainerSlots > smallestSize)
+            return entry;
+    }
+    return 0;
+}
+
+static Creature* SilvermoonVendorSelling(Player* bot, uint32 itemId, float range)
+{
+    std::list<Unit*> near;
+    MaNGOS::AnyUnitInObjectRangeCheck check(bot, range);
+    MaNGOS::UnitListSearcher<MaNGOS::AnyUnitInObjectRangeCheck> searcher(near, check);
+    Cell::VisitAllObjects(bot, searcher, range);
+    for (Unit* u : near)
+    {
+        if (u->GetTypeId() != TYPEID_UNIT || !u->IsAlive() || !u->HasFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_VENDOR) || bot->CanAttack(u))
+            continue;
+        Creature* c = (Creature*)u;
+        VendorItemData const* a = c->GetVendorItems();
+        VendorItemData const* b = c->GetVendorTemplateItems();
+        if ((a && a->FindItem(itemId)) || (b && b->FindItem(itemId)))
+            return c;
+    }
+    return nullptr;
+}
+
+bool SilvermoonBuyBag(Player* bot)
+{
+    uint32 entry = SilvermoonBagWanted(bot);
+    if (!entry)
+        return false;
+    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(entry);
+    Creature* vendor = proto ? SilvermoonVendorSelling(bot, entry, 30.0f) : nullptr;
+    if (!vendor)
+        return false;
+    uint32 price = std::max<uint32>(1, uint32(proto->BuyPrice * bot->GetReputationPriceDiscount(vendor)));
+    if (bot->GetMoney() < price)
+        return false;
+    // an empty bag slot first
     for (uint8 slot = INVENTORY_SLOT_BAG_START; slot < INVENTORY_SLOT_BAG_END; ++slot)
         if (!bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
         {
-            freeSlot = slot;
-            break;
-        }
-    if (!freeSlot && (rules & 2))
-    {
-        // the smallest equipped bag, if it is empty and a bigger vendor bag fits the budget: sold
-        // (vendor price) and replaced in its slot
-        Bag* smallest = nullptr;
-        uint8 smallSlot = 0;
-        for (uint8 slot = INVENTORY_SLOT_BAG_START; slot < INVENTORY_SLOT_BAG_END; ++slot)
-            if (Bag* bag = (Bag*)bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
-                if (bag->GetProto()->Class == ITEM_CLASS_CONTAINER && bag->GetProto()->SubClass == ITEM_SUBCLASS_CONTAINER &&
-                    (!smallest || bag->GetBagSize() < smallest->GetBagSize()))
-                {
-                    smallest = bag;
-                    smallSlot = slot;
-                }
-        if (!smallest || !smallest->IsEmpty())
-            return;
-        for (uint32 entry : { 4497u, 4498u })    // Heavy Brown Bag 10, Brown Leather Satchel 8
-        {
-            ItemPrototype const* proto = sObjectMgr.GetItemPrototype(entry);
-            if (!proto || proto->ContainerSlots <= smallest->GetBagSize() || proto->BuyPrice > SilvermoonUpgradeBudget(bot, 50))
-                continue;
-            uint32 refund = smallest->GetProto()->SellPrice;
-            std::string old = smallest->GetProto()->Name1;
-            bot->DestroyItem(INVENTORY_SLOT_BAG_0, smallSlot, true);
             uint16 dest;
-            if (bot->CanEquipNewItem(smallSlot, dest, entry, false) != EQUIP_ERR_OK)
-                return;
+            if (bot->CanEquipNewItem(slot, dest, entry, false) != EQUIP_ERR_OK)
+                return false;
             bot->EquipNewItem(dest, entry, true);
-            bot->ModifyMoney(int32(refund) - int32(proto->BuyPrice));
-            sLog.outBasic("Silvermoon: %s replaced a %s with a %s (policy)", bot->GetName(), old.c_str(), proto->Name1);
-            return;
+            bot->ModifyMoney(-int32(price));
+            sLog.outBasic("Silvermoon: bot %s bought a %s from %s for %u copper", bot->GetName(), proto->Name1, vendor->GetName(), price);
+            return true;
         }
-        return;
-    }
-    if (!freeSlot)
-        return;
-    for (uint32 entry : { 4497u, 4498u, 4496u })    // Heavy Brown Bag 10, Brown Leather Satchel 8, Small Brown Pouch 6
+    // otherwise replace the smallest bag: its contents go to free slots in the backpack and the
+    // other bags, then it is sold to the vendor
+    Bag* smallest = nullptr;
+    uint8 smallSlot = 0;
+    for (uint8 slot = INVENTORY_SLOT_BAG_START; slot < INVENTORY_SLOT_BAG_END; ++slot)
+        if (Bag* bag = dynamic_cast<Bag*>(bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot)))
+            if (bag->GetProto()->Class == ITEM_CLASS_CONTAINER && bag->GetProto()->SubClass == ITEM_SUBCLASS_CONTAINER &&
+                (!smallest || bag->GetBagSize() < smallest->GetBagSize()))
+            {
+                smallest = bag;
+                smallSlot = slot;
+            }
+    if (!smallest || proto->ContainerSlots <= smallest->GetBagSize())
+        return false;
+    std::vector<uint16> freePos;
+    for (uint8 slot = INVENTORY_SLOT_ITEM_START; slot < INVENTORY_SLOT_ITEM_END; ++slot)
+        if (!bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
+            freePos.push_back((INVENTORY_SLOT_BAG_0 << 8) | slot);
+    for (uint8 slot = INVENTORY_SLOT_BAG_START; slot < INVENTORY_SLOT_BAG_END; ++slot)
     {
-        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(entry);
-        // S: bags are a priority - up to half the bot's money (was a quarter)
-        if (!proto || proto->BuyPrice > SilvermoonUpgradeBudget(bot, 50))
+        if (slot == smallSlot)
             continue;
-        uint16 dest;
-        if (bot->CanEquipNewItem(freeSlot, dest, entry, false) != EQUIP_ERR_OK)
-            continue;
-        bot->EquipNewItem(dest, entry, true);
-        bot->ModifyMoney(-int32(proto->BuyPrice));
-        sLog.outBasic("Silvermoon: bot %s bought a %s for %u copper", bot->GetName(), proto->Name1, proto->BuyPrice);
-        return;
+        if (Bag* bag = dynamic_cast<Bag*>(bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot)))
+            if (bag->GetProto()->SubClass == ITEM_SUBCLASS_CONTAINER)
+                for (uint32 i = 0; i < bag->GetBagSize(); ++i)
+                    if (!bag->GetItemByPos(uint8(i)))
+                        freePos.push_back((uint16(slot) << 8) | uint16(i));
     }
+    std::vector<uint16> items;
+    for (uint32 i = 0; i < smallest->GetBagSize(); ++i)
+        if (smallest->GetItemByPos(uint8(i)))
+            items.push_back((uint16(smallSlot) << 8) | uint16(i));
+    if (items.size() > freePos.size())
+        return false;                                   // nowhere to put what's in it
+    for (size_t i = 0; i < items.size(); ++i)
+        bot->SwapItem(items[i], freePos[i]);
+    if (!smallest->IsEmpty())
+        return false;
+    uint32 refund = smallest->GetProto()->SellPrice;
+    std::string old = smallest->GetProto()->Name1;
+    bot->DestroyItem(INVENTORY_SLOT_BAG_0, smallSlot, true);
+    uint16 dest;
+    if (bot->CanEquipNewItem(smallSlot, dest, entry, false) != EQUIP_ERR_OK)
+        return false;
+    bot->EquipNewItem(dest, entry, true);
+    bot->ModifyMoney(int32(refund) - int32(price));
+    sLog.outBasic("Silvermoon: bot %s replaced a %s with a %s from %s (%u copper)", bot->GetName(), old.c_str(), proto->Name1, vendor->GetName(), price);
+    return true;
 }
 
 // Silvermoon patch: repairs. 42 online bots had gear at 0 durability (useless) although most

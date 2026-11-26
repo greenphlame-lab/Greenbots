@@ -473,6 +473,10 @@ bool SilvermoonRepairNearby(Player* bot);
 void SilvermoonAwayNote(Player* bot, std::string const& text);
 // "1g 2s 3c"
 std::string SilvermoonMoneyText(uint32 copper);
+// "Buy bigger bags" (S, 1.6.21): the bag worth buying now (0 = none), and the purchase itself (a
+// vendor selling it within 30 yards); true when it bought one
+uint32 SilvermoonBagWanted(Player* bot);
+bool SilvermoonBuyBag(Player* bot);
 // Silvermoon auto mode (layer 1): which of S's own always-online characters play on the brain.
 // Rows in characters.silvermoon_auto; re-read every 30 s; "auto on/off" whispers write them.
 bool SilvermoonAutoOn(uint32 guid);
