@@ -32,6 +32,16 @@ namespace ai
     // "struggling" the bot hearths out if home is safe and elsewhere, or asks for a relocation
     void SilvermoonRecoveryTick(Player* bot);
 
+    // food and water (S, 1.6.21): what the bot carries and wants. Mana users want 2 stacks of water and
+    // 1 of food, everyone else 2 stacks of food (a stack counted as 20).
+    struct SilvermoonSupplyNeed { uint32_t food = 0, water = 0, foodWanted = 0, waterWanted = 0; bool low = false, veryLow = false; };
+    SilvermoonSupplyNeed SilvermoonSupplies(Player* bot);
+    // what a shopping trip may spend: 20% of its money, and never the repair fund
+    uint32_t SilvermoonSupplyBudget(Player* bot);
+    // buys food and water from a friendly vendor within 30 yards that sells them (paid at the vendor
+    // price, level-appropriate items, up to what the bot wants and the budget allows); true if it bought
+    bool SilvermoonBuySupplies(Player* bot);
+
     // a zone that is safe to send a struggling bot to (under 40 deaths to players in the last
     // hour, and not the zone it is avoiding)
     bool SilvermoonZoneSafeFor(uint32_t guid, uint32_t zoneId);

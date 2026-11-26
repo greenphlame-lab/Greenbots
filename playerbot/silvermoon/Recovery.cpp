@@ -7,6 +7,14 @@
 #include "Entities/Bag.h"
 #include "Maps/GridMap.h"
 #include "playerbot/TravelMgr.h"
+#include "playerbot/silvermoon/BrainTimer.h"
+#include "Grids/GridNotifiers.h"
+#include "Grids/GridNotifiersImpl.h"
+#include "Grids/CellImpl.h"
+#include "Entities/Creature.h"
+#include <list>
+#include <string>
+#include <vector>
 #include <deque>
 #include <mutex>
 #include <unordered_map>
@@ -121,6 +129,24 @@ void ai::SilvermoonRecoveryTick(Player* bot)
     uint32 reserve = SilvermoonRepairReserve(bot);
     bool cashOut = broken >= 3 && bot->GetMoney() < reserve;
 
+    // food and water (S, 1.6.21): at most once a minute, when a vendor is in reach and it's running low
+    {
+        static std::mutex buyLock;
+        static std::unordered_map<uint32, time_t> lastBuy;
+        bool due = false;
+        {
+            std::lock_guard<std::mutex> guard(buyLock);
+            time_t& last = lastBuy[guid];
+            if (now - last >= MINUTE)
+            {
+                last = now;
+                due = true;
+            }
+        }
+        if (due && alive && !cashOut && !bot->GetGroup())
+            SilvermoonBuySupplies(bot);
+    }
+
     bool startStruggling = false;
     uint32 deathsHour = 0;
     int64 moneyDelta = 0;
@@ -185,4 +211,136 @@ void ai::SilvermoonRecoveryTick(Player* bot)
     SilvermoonWantRelocate(guid);
     if (TravelTarget* target = ai->GetAiObjectContext()->GetValue<TravelTarget*>("travel target")->Get())
         target->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Food and water (S, 1.6.21): only 174 of 798 online bots at level 10+ carried any food and 110 of
+// 527 mana users any water - they bought only when they happened to be at a vendor, and the stock
+// budget put consumables behind the gear money (level^3). Bots now restock with their own money.
+
+namespace
+{
+    const uint32 STACK = 20;
+
+    bool IsFood(ItemPrototype const* proto)
+    {
+        return proto && proto->Class == ITEM_CLASS_CONSUMABLE && proto->Spells[0].SpellCategory == 11;
+    }
+    bool IsWater(ItemPrototype const* proto)
+    {
+        return proto && proto->Class == ITEM_CLASS_CONSUMABLE && proto->Spells[0].SpellCategory == 59;
+    }
+    bool UsesMana(Player* bot)
+    {
+        uint8 cls = bot->getClass();
+        return cls != CLASS_WARRIOR && cls != CLASS_ROGUE;
+    }
+}
+
+SilvermoonSupplyNeed ai::SilvermoonSupplies(Player* bot)
+{
+    SilvermoonSupplyNeed n;
+    ForEachBagItem(bot, [&](Item* item)
+    {
+        ItemPrototype const* proto = item->GetProto();
+        if (IsFood(proto))
+            n.food += item->GetCount();
+        else if (IsWater(proto))
+            n.water += item->GetCount();
+    });
+    bool mana = UsesMana(bot);
+    n.waterWanted = mana ? 2 * STACK : 0;
+    n.foodWanted = mana ? STACK : 2 * STACK;
+    // shopping when below half of what it wants; a trip when nearly out (under 5)
+    n.low = n.food * 2 < n.foodWanted || (mana && n.water * 2 < n.waterWanted);
+    n.veryLow = n.food < 5 || (mana && n.water < 5);
+    return n;
+}
+
+uint32_t ai::SilvermoonSupplyBudget(Player* bot)
+{
+    uint32 share = bot->GetMoney() / 5;
+    return std::min(share, SilvermoonSpendable(bot));
+}
+
+bool ai::SilvermoonBuySupplies(Player* bot)
+{
+    if (!bot->IsAlive() || bot->IsInCombat() || bot->IsTaxiFlying())
+        return false;
+    SilvermoonSupplyNeed need = SilvermoonSupplies(bot);
+    if (!need.low)
+        return false;
+    uint32 budget = SilvermoonSupplyBudget(bot);
+    if (!budget)
+        return false;
+
+    std::list<Unit*> near;
+    MaNGOS::AnyUnitInObjectRangeCheck check(bot, 30.0f);
+    MaNGOS::UnitListSearcher<MaNGOS::AnyUnitInObjectRangeCheck> searcher(near, check);
+    Cell::VisitAllObjects(bot, searcher, 30.0f);
+    for (Unit* u : near)
+    {
+        if (u->GetTypeId() != TYPEID_UNIT || !u->IsAlive() || !u->HasFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_VENDOR) || bot->CanAttack(u))
+            continue;
+        Creature* vendor = (Creature*)u;
+        // the best food and the best water it can use from this vendor (highest required level,
+        // then cheapest); limited-stock items are left alone
+        ItemPrototype const* bestFood = nullptr;
+        ItemPrototype const* bestWater = nullptr;
+        for (VendorItemData const* list : { vendor->GetVendorItems(), vendor->GetVendorTemplateItems() })
+        {
+            if (!list)
+                continue;
+            for (VendorItem const* vi : list->m_items)
+            {
+                if (!vi || vi->maxcount)
+                    continue;
+                ItemPrototype const* proto = sObjectMgr.GetItemPrototype(vi->item);
+                if (!proto || !proto->BuyPrice || proto->RequiredLevel > bot->GetLevel())
+                    continue;
+                if (!IsFood(proto) && !IsWater(proto))
+                    continue;
+                ItemPrototype const*& best = IsFood(proto) ? bestFood : bestWater;
+                if (!best || proto->RequiredLevel > best->RequiredLevel ||
+                    (proto->RequiredLevel == best->RequiredLevel && proto->BuyPrice < best->BuyPrice))
+                    best = proto;
+            }
+        }
+        if (!bestFood && !bestWater)
+            continue;
+        float discount = bot->GetReputationPriceDiscount(vendor);
+        uint32 spent = 0;
+        std::string bought;
+        // mana users: water first
+        std::vector<std::pair<ItemPrototype const*, uint32>> order;
+        if (UsesMana(bot) && bestWater)
+            order.push_back({ bestWater, need.waterWanted > need.water ? need.waterWanted - need.water : 0 });
+        if (bestFood)
+            order.push_back({ bestFood, need.foodWanted > need.food ? need.foodWanted - need.food : 0 });
+        for (auto const& o : order)
+        {
+            ItemPrototype const* proto = o.first;
+            uint32 lot = std::max<uint32>(1, proto->BuyCount);
+            uint32 price = std::max<uint32>(1, uint32(proto->BuyPrice * discount));
+            uint32 lots = (o.second + lot - 1) / lot;
+            lots = std::min(lots, (budget - spent) / price);
+            if (!lots)
+                continue;
+            uint32 count = lots * lot;
+            ItemPosCountVec dest;
+            if (bot->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, proto->ItemId, count) != EQUIP_ERR_OK)
+                continue;
+            bot->ModifyMoney(-int32(lots * price));
+            spent += lots * price;
+            bot->StoreNewItem(dest, proto->ItemId, true);
+            bought += (bought.empty() ? "" : ", ") + std::to_string(count) + " x " + proto->Name1;
+        }
+        if (!spent)
+            return false;
+        silvermoon::Ledger(silvermoon::LG_BUY) += spent;
+        sLog.outBasic("Silvermoon: bot %s (level %u) bought %s from %s for %u copper (had %u food, %u water)", bot->GetName(), bot->GetLevel(),
+            bought.c_str(), vendor->GetName(), spent, need.food, need.water);
+        return true;
+    }
+    return false;
 }

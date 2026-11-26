@@ -919,6 +919,71 @@ bool ChooseGoalAction::Execute(Event& event)
         return false;
     }
 
+    // Food and water (S, 1.6.21): nearly out (under 5 food, or 5 water for a mana user) and able to pay
+    // from its shopping budget (20% of its money, never the repair fund): a trip to the nearest friendly
+    // inn within 800 yards - innkeepers sell both, and the buy step runs when a vendor is in reach. At
+    // most one trip every 30 minutes.
+    if (!bot->IsInCombat() && !SilvermoonCashOut(bot) && !SilvermoonIsOwn(bot))   // random bots (your characters: their Policies)
+    {
+        SilvermoonSupplyNeed need = SilvermoonSupplies(bot);
+        uint32 lvl = bot->GetLevel();
+        if (need.veryLow && SilvermoonSupplyBudget(bot) >= std::max<uint32>(100, lvl * lvl))
+        {
+            static std::mutex shopLock;
+            static std::unordered_map<uint32, time_t> lastShop;
+            bool due = false;
+            {
+                std::lock_guard<std::mutex> guard(shopLock);
+                time_t& last = lastShop[bot->GetGUIDLow()];
+                if (time(nullptr) - last >= 30 * MINUTE)
+                    due = true;
+            }
+            bool alliance = bot->GetTeam() == ALLIANCE;
+            Hub const* inn = nullptr;
+            float innDist = 0.0f;
+            if (due)
+                for (Hub const& h : Hubs::All())
+                {
+                    if (!h.innkeeper || h.map != bot->GetMapId() || !(h.side == 3 || h.side == (alliance ? 1 : 2)))
+                        continue;
+                    float d = bot->GetDistance2d(h.innX, h.innY);
+                    if (!inn || d < innDist)
+                    {
+                        inn = &h;
+                        innDist = d;
+                    }
+                }
+            if (inn && innDist > 25.0f && innDist < 800.0f)
+            {
+                {
+                    std::lock_guard<std::mutex> guard(shopLock);
+                    lastShop[bot->GetGUIDLow()] = time(nullptr);
+                }
+                travelTarget->SetStatus(TravelStatus::TRAVEL_STATUS_NONE);
+                TemporaryTravelDestination* spot = new TemporaryTravelDestination(WorldPosition(inn->map, inn->innX, inn->innY, inn->innZ));
+                TravelTarget newTarget = TravelTarget(ai);
+                newTarget.SetRelevance(AI_VALUE2(int, "manual int", "future travel relevance"));
+                newTarget.SetTarget(spot, spot->GetPosition());
+                Player* requester = event.getOwner() ? event.getOwner() : (GetMaster() ? GetMaster() : bot);
+                travelTarget->SetConditions({});
+                SET_AI_VALUE2(std::string, "manual string", "future travel condition", "");
+                setNewTarget(requester, &newTarget, travelTarget);
+                travelTarget->SetExpireIn(uint32(10 * MINUTE * IN_MILLISECONDS));
+                travelTarget->SetForced(true);
+                SilvermoonScoredGoal g;
+                g.destination = spot;
+                g.position = spot->GetPosition();
+                g.kind = GoalKind::Vendor;
+                g.score.score = 1.0f;
+                g.score.reason = std::string("supplies: buy food and water at the inn, ") + inn->name + " (" +
+                    std::to_string(need.food) + " food, " + std::to_string(need.water) + " water)";
+                SilvermoonLogDecision(bot, g, nullptr, nullptr);
+                SET_AI_VALUE2(int, "manual int", "silvermoon goal kind", int(GoalKind::Vendor) + 1);
+                return true;
+            }
+        }
+    }
+
     // Gather order patrol (S, Nov 25: "idles far too long, thinks too much - point to point across
     // the entire zone, one big loop"): straight to the next point of the zone's route, without waiting
     // for the destination search or scoring anything. Only full bags go the normal way (to a vendor).

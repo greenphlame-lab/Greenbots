@@ -62,7 +62,7 @@ namespace ai
         TotalMoneyNeededForValue(PlayerbotAI* ai) : Uint32CalculatedValue(ai, "total money needed for", 60), Qualified() {}
         virtual uint32 Calculate() override;
     private:
-        std::vector<NeedMoneyFor> saveMoneyFor = { NeedMoneyFor::repair, NeedMoneyFor::spells, NeedMoneyFor::ammo, NeedMoneyFor::ah, NeedMoneyFor::guild, NeedMoneyFor::travel, NeedMoneyFor::gear }; // Silvermoon patch: spells right after repairs (were behind the auction house and guild); gear money is kept back before buying consumables or trade goods
+        std::vector<NeedMoneyFor> saveMoneyFor = { NeedMoneyFor::repair, NeedMoneyFor::consumables, NeedMoneyFor::spells, NeedMoneyFor::ammo, NeedMoneyFor::ah, NeedMoneyFor::guild, NeedMoneyFor::travel, NeedMoneyFor::gear }; // Silvermoon patch: food and water (S, 1.6.21), then spells, right after repairs (were behind the auction house and guild); gear money is kept back before buying consumables or trade goods
     };
 
     class FreeMoneyForValue : public Uint32CalculatedValue, public Qualified
