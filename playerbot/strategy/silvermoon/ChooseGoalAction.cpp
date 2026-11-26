@@ -14,6 +14,8 @@
 #include "playerbot/strategy/values/ItemUsageValue.h"
 #include "Mails/Mail.h"
 #include "playerbot/PlayerbotAIConfig.h"
+#include "playerbot/silvermoon/Hubs.h"
+#include "Spells/SpellAuras.h"
 #include <deque>
 #include <set>
 #include <algorithm>
@@ -809,12 +811,108 @@ void ai::SilvermoonLogDecision(Player* bot, SilvermoonScoredGoal const& chosen, 
     DecisionLog::Add(std::move(row));
 }
 
+namespace
+{
+    std::mutex restLock;
+    std::unordered_map<uint32, TravelDestination*> restTrip;   // bot -> its inn trip (compared only)
+    std::unordered_map<uint32, time_t> restLogged;             // bot -> last "waiting it out" log row
+}
+
+bool ai::SilvermoonResSickRestApplies(Player* bot)
+{
+    return bot && bot->IsAlive() && bot->HasAura(15007) && !bot->InBattleGround() && !bot->GetMap()->IsDungeon() &&
+        !bot->IsTaxiFlying() && !bot->GetTransport() && (!bot->GetGroup() || bot->GetGroup()->GetMembersCount() < 2);
+}
+
+bool ai::SilvermoonIsResSickTrip(uint32 guid, TravelDestination* destination)
+{
+    std::lock_guard<std::mutex> guard(restLock);
+    auto it = restTrip.find(guid);
+    return it != restTrip.end() && it->second == destination;
+}
+
 bool ChooseGoalAction::Execute(Event& event)
 {
     silvermoon::BrainTimer brainTimer(silvermoon::BrainMicros());
     TravelTarget* travelTarget = AI_VALUE(TravelTarget*, "travel target");
     if (travelTarget->GetStatus() != TravelStatus::TRAVEL_STATUS_PREPARE)
         return false;
+
+    // Resurrection Sickness (S, 1.6.20): no fighting, questing or gathering until it wears off. The
+    // bot walks to the nearest friendly inn when it gets there before the sickness ends (within 1,200
+    // yards, running about 7 yards a second) and waits there; otherwise it sits down where it is. It
+    // asks again every 30 seconds, so it goes back to its normal goals as soon as the sickness is gone.
+    if (SilvermoonResSickRestApplies(bot) && !bot->IsInCombat())
+    {
+        uint32 guid = bot->GetGUIDLow();
+        SpellAuraHolder* holder = bot->GetSpellAuraHolder(15007);
+        float leftSeconds = holder ? holder->GetAuraDuration() / 1000.0f : 0.0f;
+        bool alliance = bot->GetTeam() == ALLIANCE;
+        Hub const* inn = nullptr;
+        float innDist = 0.0f;
+        for (Hub const& h : Hubs::All())
+        {
+            if (!h.innkeeper || h.map != bot->GetMapId() || !(h.side == 3 || h.side == (alliance ? 1 : 2)))
+                continue;
+            float d = bot->GetDistance2d(h.innX, h.innY);
+            if (!inn || d < innDist)
+            {
+                inn = &h;
+                innDist = d;
+            }
+        }
+        travelTarget->SetStatus(TravelStatus::TRAVEL_STATUS_NONE);
+        if (inn && innDist > 25.0f && innDist < 1200.0f && innDist / 7.0f < leftSeconds)
+        {
+            TemporaryTravelDestination* spot = new TemporaryTravelDestination(WorldPosition(inn->map, inn->innX, inn->innY, inn->innZ));
+            TravelTarget newTarget = TravelTarget(ai);
+            newTarget.SetRelevance(AI_VALUE2(int, "manual int", "future travel relevance"));
+            newTarget.SetTarget(spot, spot->GetPosition());
+            Player* requester = event.getOwner() ? event.getOwner() : (GetMaster() ? GetMaster() : bot);
+            travelTarget->SetConditions({});
+            SET_AI_VALUE2(std::string, "manual string", "future travel condition", "");
+            setNewTarget(requester, &newTarget, travelTarget);
+            travelTarget->SetExpireIn(uint32((leftSeconds + 120.0f) * IN_MILLISECONDS));
+            travelTarget->SetForced(true);
+            {
+                std::lock_guard<std::mutex> guard(restLock);
+                restTrip[guid] = spot;
+            }
+            SilvermoonScoredGoal g;
+            g.destination = spot;
+            g.position = spot->GetPosition();
+            g.kind = GoalKind::Other;
+            g.score.score = 1.0f;
+            g.score.reason = std::string("res sickness: rest at the inn, ") + inn->name;
+            SilvermoonLogDecision(bot, g, nullptr, nullptr);
+            SET_AI_VALUE2(int, "manual int", "silvermoon goal kind", int(GoalKind::Other) + 1);
+            return true;
+        }
+        // at the inn, or no inn worth the walk: sit and wait it out
+        if (!bot->IsSitState() && !bot->IsMoving())
+            bot->SetStandState(UNIT_STAND_STATE_SIT);
+        bool log = false;
+        {
+            std::lock_guard<std::mutex> guard(restLock);
+            time_t& last = restLogged[guid];
+            if (time(nullptr) - last > 10 * MINUTE)
+            {
+                last = time(nullptr);
+                log = true;
+            }
+        }
+        if (log)
+        {
+            SilvermoonScoredGoal g;
+            g.kind = GoalKind::Other;
+            g.score.score = 1.0f;
+            g.score.reason = (inn && innDist <= 25.0f) ? std::string("res sickness: waiting at the inn, ") + inn->name :
+                "res sickness: waiting it out here (no inn in reach)";
+            SilvermoonLogDecision(bot, g, nullptr, nullptr);
+        }
+        SET_AI_VALUE2(int, "manual int", "silvermoon goal retry at", int(time(nullptr) + 30));
+        return false;
+    }
 
     // Gather order patrol (S, Nov 25: "idles far too long, thinks too much - point to point across
     // the entire zone, one big loop"): straight to the next point of the zone's route, without waiting

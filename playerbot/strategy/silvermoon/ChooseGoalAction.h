@@ -33,6 +33,13 @@ namespace ai
     // a quest the bot just took (follow-up priority: its nearby objectives score higher for a while)
     void SilvermoonNoteNewQuest(uint32 guid, uint32 questId);
 
+    // resurrection sickness (S, 1.6.20): a solo bot doesn't fight, quest or gather until it wears off.
+    // It walks to the nearest friendly inn (when it can get there in time) and waits there, or sits
+    // where it is. True when the rule applies to this bot now.
+    bool SilvermoonResSickRestApplies(Player* bot);
+    // the inn trip chosen for it (pointer compared only, never read)
+    bool SilvermoonIsResSickTrip(uint32 guid, TravelDestination* destination);
+
     // "choose goal": picks the best-scoring destination from the goal list (brain step 5).
     class ChooseGoalAction : public ChooseTravelTargetAction
     {

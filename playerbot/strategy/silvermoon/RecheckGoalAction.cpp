@@ -97,6 +97,15 @@ bool RecheckGoalAction::Execute(Event& event)
 bool RecheckGoalAction::isUseful()
 {
     silvermoon::BrainTimer brainTimer(silvermoon::BrainMicros());
+    // Resurrection Sickness (S, 1.6.20): whatever goal the bot had (a quest objective it went back to
+    // after the spirit healer, a grind spot...) ends, so "choose goal" sends it to an inn to wait
+    if (SilvermoonResSickRestApplies(bot) && !bot->IsInCombat())
+    {
+        TravelTarget* target = AI_VALUE(TravelTarget*, "travel target");
+        if (target && target->IsActive() && !SilvermoonIsResSickTrip(bot->GetGUIDLow(), target->GetDestination()))
+            target->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
+        return false;
+    }
     // Gather order patrol (S: "if nothing at a spawn point, continue on; if a herb is visible, gather
     // it"): at the spot (12 yards) with nothing to gather in the 60-yard scan, out of combat and not
     // casting, the stop is over - the trip ends and the brain picks the next unvisited spot at once.
