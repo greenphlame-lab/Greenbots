@@ -739,6 +739,16 @@ std::list<std::string> PlayerbotHolder::HandlePlayerbotCommand(const std::string
         }
         return messages;
     }
+    // the Policies window asks for the saved state when it opens (S: ticked zones looked forgotten
+    // after a restart - the panel showed nothing until the next 30-second push)
+    if (master && command == "pol" && param == "show" && master->GetSession())
+    {
+        std::string pol = ai::SilvermoonPolicyPanel(master);
+        WorldPacket polPacket;
+        ChatHandler::BuildChatPacket(polPacket, CHAT_MSG_PARTY, pol.c_str(), LANG_ADDON, CHAT_TAG_NONE, master->GetObjectGuid(), master->GetName());
+        master->GetSession()->SendPacket(polPacket);
+        return messages;
+    }
     if (master && command == "pol" && param == "spells" && master->GetSession())
     {
         for (std::string const& msg : ai::SilvermoonSpellListMessages(master))
