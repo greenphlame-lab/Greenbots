@@ -27,6 +27,15 @@ namespace ai
             if (AI_VALUE2(bool, "trigger active", "castnc"))
                 return false;
 
+            // Silvermoon (S, 1.6.21: Mommy sat down to eat on her herb route, the route walked her
+            // on, she stood up, sat to eat again...): sitting with food or drink running and not
+            // yet full, stay put until it's done (food and drink last at most 30 seconds)
+            if (bot->IsSitState() && !bot->IsInCombat() &&
+                ((bot->HasAuraType(SPELL_AURA_MOD_REGEN) && bot->GetHealthPercent() < 100.0f) ||
+                 (bot->HasAuraType(SPELL_AURA_MOD_POWER_REGEN) && bot->GetPowerType() == POWER_MANA &&
+                  bot->GetPower(POWER_MANA) < bot->GetMaxPower(POWER_MANA))))
+                return false;
+
             if (ai->HasStrategy("wander", BotState::BOT_STATE_NON_COMBAT))
             {
                 float dist = AI_VALUE2(float, "distance", "master target");
