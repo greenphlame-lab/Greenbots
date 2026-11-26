@@ -6,6 +6,8 @@
 #include "Professions.h"
 #include "playerbot/strategy/values/TravelValues.h"
 #include <mutex>
+#include <unordered_map>
+#include <cmath>
 
 using namespace ai;
 using namespace silvermoon;
@@ -104,9 +106,32 @@ bool RecheckGoalAction::isUseful()
         TravelTarget* target = AI_VALUE(TravelTarget*, "travel target");
         if (target && target->GetPosition() && dynamic_cast<TemporaryTravelDestination*>(target->GetDestination()) &&
             target->GetStatus() != TravelStatus::TRAVEL_STATUS_EXPIRED && target->GetStatus() != TravelStatus::TRAVEL_STATUS_NONE &&
-            target->GetPosition()->getMapId() == bot->GetMapId() && target->GetPosition()->fDist(WorldPosition(bot)) < 12.0f &&
+            target->GetPosition()->getMapId() == bot->GetMapId() &&
             !bot->IsInCombat() && !bot->IsNonMeleeSpellCasted(false) && !bot->GetLootGuid() && !AI_VALUE(bool, "has available loot"))
-            target->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
+        {
+            // at the stop: 20 yards on the map (S, 1.6.15: Mommy stood 5 yards below a spawn point on
+            // a hilltop - 3D distance kept her "not there" until the 5-minute timer), or 45 seconds
+            // within 60 yards of it without getting there (a slope she can't climb). Nodes in sight
+            // are picked by the 60-yard gathering scan either way.
+            static std::mutex stopLock;
+            static std::unordered_map<uint32, std::pair<TravelDestination*, time_t>> stopSince;
+            WorldPosition here(bot);
+            float dx = target->GetPosition()->getX() - here.getX(), dy = target->GetPosition()->getY() - here.getY();
+            float flat = std::sqrt(dx * dx + dy * dy);
+            bool done = flat < 20.0f;
+            {
+                std::lock_guard<std::mutex> guard(stopLock);
+                auto& since = stopSince[bot->GetGUIDLow()];
+                if (since.first != target->GetDestination() || flat >= 60.0f)
+                    since = { target->GetDestination(), 0 };
+                if (!since.second && flat < 60.0f)
+                    since.second = time(nullptr);
+                if (!done && since.second && time(nullptr) - since.second > 45)
+                    done = true;
+            }
+            if (done)
+                target->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
+        }
     }
     if (!ai->AllowActivity(TRAVEL_ACTIVITY) || bot->IsInCombat())
         return false;
