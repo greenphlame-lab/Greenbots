@@ -71,6 +71,30 @@ namespace
             objectiveChoice.erase(guid);
     }
 
+    // trainer trips (S, Nov 25: Grashnak walked to Kaplak in Razor Hill four times in an hour): a bot
+    // that chose a trainer trip at this level waits an hour before choosing another, and after two
+    // at the same level waits for its next level
+    std::mutex trainerLock;
+    struct TrainerTrips { uint32 level = 0; uint32 count = 0; time_t last = 0; };
+    std::unordered_map<uint32, TrainerTrips> trainerTrips;
+    bool TrainerTripAllowed(Player* bot)
+    {
+        std::lock_guard<std::mutex> guard(trainerLock);
+        auto it = trainerTrips.find(bot->GetGUIDLow());
+        if (it == trainerTrips.end() || it->second.level != bot->GetLevel())
+            return true;
+        return it->second.count < 2 && time(nullptr) - it->second.last >= HOUR;
+    }
+    void NoteTrainerTrip(Player* bot)
+    {
+        std::lock_guard<std::mutex> guard(trainerLock);
+        TrainerTrips& t = trainerTrips[bot->GetGUIDLow()];
+        if (t.level != bot->GetLevel())
+            t = TrainerTrips{ bot->GetLevel(), 0, 0 };
+        ++t.count;
+        t.last = time(nullptr);
+    }
+
     std::mutex goalLock;
     std::map<uint32, std::pair<TravelDestination*, time_t>> lastGoal;   // bot -> last chosen, when
     std::map<uint32, WorldPosition> lastGoalAt;                          // bot -> where that goal was
@@ -442,11 +466,20 @@ static SilvermoonScoredGoal ScoreWith(Player* bot, BotSnapshot const& snapshot, 
         std::list<Item*> ahItems = bot->GetPlayerbotAI()->GetAiObjectContext()->GetValue<std::list<Item*>>("inventory items", "usage " + std::to_string((uint8)ItemUsage::ITEM_USAGE_AH))->Get();
         uint32 stacks = (uint32)ahItems.size();
         float minutes = float(std::min<uint32>(25, stacks));
-        if (SilvermoonPolicyFor(bot->GetGUIDLow()).ahGold && SilvermoonAhTripDue(bot, ahItems))
+        bool policyTrip = SilvermoonPolicyFor(bot->GetGUIDLow()).ahGold && SilvermoonAhTripDue(bot, ahItems);
+        if (policyTrip)
             minutes = 25.0f;      // your "AH trip when worth" is reached: worth the trip
         goal.score.value = GoalScorer::XpPerMinute(snapshot) * minutes;
         goal.score.score = goal.score.minutes > 0.0f ? goal.score.value / goal.score.minutes : 0.0f;
         goal.score.reason = "auction house";
+        // only when already in or near a town with an auction house (600 yards) - S, Nov 25:
+        // Grashnak picked three Orgrimmar auctioneers in a row from the Crossroads. Your "AH trip at
+        // X gold" policy still sends your character from anywhere.
+        if (!policyTrip && distance > 600.0f)
+        {
+            goal.score.score = 0.0f;
+            goal.score.reason = "auction house: too far";
+        }
     }
     // doable quests close by come before grinding (S: Mommy ground Kobold Workers with quest
     // objectives 200-250 yards away): quest objectives within 250 yards that aren't elite or 3+
@@ -486,6 +519,11 @@ static SilvermoonScoredGoal ScoreWith(Player* bot, BotSnapshot const& snapshot, 
     // The spell waits until the bot outgrows the valley anyway.
     if (c.kind == GoalKind::Trainer && bot->GetLevel() < 6 && distance > 300.0f)
         goal.score.score = 0.0f;
+    if (c.kind == GoalKind::Trainer && !TrainerTripAllowed(bot))
+    {
+        goal.score.score = 0.0f;
+        goal.score.reason = "trainer: visited at this level";
+    }
     if (c.kind == GoalKind::QuestTurnIn)
     {
         uint32 finished = 0;
@@ -501,6 +539,25 @@ static SilvermoonScoredGoal ScoreWith(Player* bot, BotSnapshot const& snapshot, 
             goal.score.reason = "hand-in (" + std::to_string(finished) + " done): " + goal.score.reason;
         }
     }
+    // a quest objective on a herb or ore node needs the gathering skill for that node (S, Nov 25:
+    // Grashnak, Herbalism 13, walked to Mageroyal (50) and Briarthorn (70) for Root Samples, could
+    // not pick them, and died twice out there)
+    if (c.kind == GoalKind::QuestObjective && destination->GetEntry() < 0)
+        if (GameObjectInfo const* go = ObjectMgr::GetGameObjectInfo(uint32(-destination->GetEntry())))
+            if (LockEntry const* lock = sLockStore.LookupEntry(go->GetLockId()))
+                for (int i = 0; i < 8; ++i)
+                {
+                    if (lock->Type[i] != LOCK_KEY_SKILL)
+                        continue;
+                    uint32 skill = SkillByLockType(LockType(lock->Index[i]));
+                    if (skill != SKILL_HERBALISM && skill != SKILL_MINING)
+                        skill = 0;
+                    if (skill && bot->GetSkillValue(skill) < lock->Skill[i])
+                    {
+                        goal.score.score = 0.0f;
+                        goal.score.reason = "needs more gathering skill";
+                    }
+                }
     // a quest objective on a creature with only a few spawns waits behind one with many (Kron's
     // Amulet drops from 49 Dreadmaw Crocolisks and 2 Corrupted ones; the bot kept walking to the
     // 2, found them dead or camped and gave up after 3 minutes)
@@ -905,6 +962,8 @@ bool ChooseGoalAction::Execute(Event& event)
         std::lock_guard<std::mutex> guard(goalLock);
         lastGoal[bot->GetGUIDLow()] = { best.destination, time(nullptr) };
         lastGoalGather[bot->GetGUIDLow()] = best.kind == GoalKind::Gather;
+        if (best.kind == GoalKind::Trainer)
+            NoteTrainerTrip(bot);
         lastGoalObject[bot->GetGUIDLow()] = best.kind == GoalKind::QuestObjective && best.destination && best.destination->GetEntry() < 0;
         uint32 objectiveKey = 0;
         if (best.kind == GoalKind::QuestObjective)
