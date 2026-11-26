@@ -1574,6 +1574,11 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                         }
                         if (me->GetPlayerbotAI())
                             SilvermoonGhostRescue(me);
+                        // relocation trips end here for your characters too (S: Guile reached the
+                        // Crossroads, set his hearthstone and stood in the inn - the arrival check only
+                        // ran for random bots, so the trip never ended)
+                        if (me->GetPlayerbotAI() && me->GetMap() && me->GetMap()->IsContinent())
+                            SilvermoonRelocateTick(me, me->GetPlayerbotAI());
                         if (me->GetPlayerbotAI() && me->IsAlive())
                         {
                             SilvermoonFillEmptyWeapon(me);
@@ -1618,6 +1623,8 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                     SilvermoonNamePet(p);
                 }
                 SilvermoonGhostRescue(p);
+                if (p->GetMap() && p->GetMap()->IsContinent())
+                    SilvermoonRelocateTick(p, p->GetPlayerbotAI());   // trip arrival for alts (Guile)
                 if (SilvermoonAutoOn(alt.second) && p->IsAlive() && !p->IsInCombat() && p->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_RESTING) &&
                     !GetEventValue(alt.second, "silvermoon_alt_shop"))
                 {
