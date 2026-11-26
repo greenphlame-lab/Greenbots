@@ -1,6 +1,7 @@
 
 #include "playerbot/playerbot.h"
 #include "playerbot/strategy/silvermoon/Policies.h"
+#include "playerbot/silvermoon/Recovery.h"
 #include "ItemUsageValue.h"
 #include "AuctionHouse/AuctionHouseMgr.h"
 #include "CraftValues.h"
@@ -96,7 +97,31 @@ uint32 ItemQualifier::GemId(Item* item, uint8 gemSlot)
 #endif
 }
 
+// Silvermoon 1.6.20 (S): cash-out. A random bot with broken gear and less money than a full repair
+// sells what it would otherwise auction, craft with, disenchant or bank (below rare; quest items,
+// tools and the Hearthstone stay). Cavol, all gear at 0 and 2 silver, carried 1g 23s of gems, a
+// Gold Bar and wool marked for the auction house - from a zone with no auction house.
 ItemUsage ItemUsageValue::Calculate()
+{
+    ItemUsage usage = CalculateStock();
+    if (usage != ItemUsage::ITEM_USAGE_AH && usage != ItemUsage::ITEM_USAGE_BROKEN_AH && usage != ItemUsage::ITEM_USAGE_SKILL &&
+        usage != ItemUsage::ITEM_USAGE_DISENCHANT && usage != ItemUsage::ITEM_USAGE_BANK)
+        return usage;
+    if (SilvermoonIsOwn(bot) || !sRandomPlayerbotMgr.IsRandomBot(bot) || !SilvermoonCashOut(bot))
+        return usage;
+    ItemQualifier itemQualifier(qualifier, false);
+    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemQualifier.GetId());
+    if (!proto || !proto->SellPrice || proto->Quality >= ITEM_QUALITY_RARE || proto->Class == ITEM_CLASS_QUEST ||
+        proto->Bonding == BIND_QUEST_ITEM)
+        return usage;
+    uint32 id = proto->ItemId;
+    if (id == 6948 || id == 2901 || id == 7005 || id == 5956 || id == 6219 || id == 6218 ||
+        (proto->Class == ITEM_CLASS_WEAPON && proto->SubClass == ITEM_SUBCLASS_WEAPON_FISHING_POLE))
+        return usage;
+    return ItemUsage::ITEM_USAGE_VENDOR;
+}
+
+ItemUsage ItemUsageValue::CalculateStock()
 {
     ItemQualifier itemQualifier(qualifier, false);
     uint32 itemId = itemQualifier.GetId();

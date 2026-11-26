@@ -74,6 +74,15 @@
 #endif
 
 #include "playerbot/TravelMgr.h"
+#include "playerbot/silvermoon/Recovery.h"
+
+// Silvermoon (S, 1.6.20): what a random bot may spend on upgrades, bags, Dual Wield, professions and
+// training - its money above a full repair of its gear (the repair reserve); your characters keep
+// their whole purse for these (their Policies decide)
+static uint32 SilvermoonSpendMoney(Player* bot)
+{
+    return sRandomPlayerbotMgr.IsRandomBot(bot) ? ai::SilvermoonSpendable(bot) : bot->GetMoney();
+}
 #include <iomanip>
 #include <float.h>
 
@@ -322,7 +331,7 @@ static void SilvermoonFixProfessions(Player* bot)
         { ALCH, 2259 }, { TAIL, 3908 }, { ENG, 4036 }, { ENCH, 7411 } };
     static const std::vector<std::pair<uint32, uint32>> pairs = { { BS, MIN }, { ENG, MIN }, { LW, SKIN }, { ALCH, HERB },
         { TAIL, ENCH }, { MIN, HERB }, { SKIN, HERB }, { MIN, SKIN } };
-    if (bot->GetMoney() < 2000)
+    if (SilvermoonSpendMoney(bot) < 2000)
         return; // try again when it can afford both apprentice fees
     std::string dropped;
     for (uint32 skill : primaries)
@@ -360,7 +369,8 @@ static bool SilvermoonHubTeleport(Player* bot)
     if (sPlayerbotAIConfig.IsFreeAltBot(bot) || (bot->GetPlayerbotAI() && bot->GetPlayerbotAI()->IsRealPlayer()))
         return true;   // "handled": the caller doesn't fall back to a random teleport either
     bool alliance = bot->GetTeam() == ALLIANCE;
-    int32 level = int32(bot->GetLevel());
+    // a struggling bot (S, 1.6.20) is fitted 4 levels down
+    int32 level = int32(bot->GetLevel()) - SilvermoonStruggleLevelDrop(bot->GetGUIDLow());
     WorldPosition here(bot);
     silvermoon::Hub const* best = nullptr;
     float bestDist = 0.0f;
@@ -371,6 +381,19 @@ static bool SilvermoonHubTeleport(Player* bot)
         if (level < int32(h.minLevel) + 2 || level > int32(h.maxLevel) - 2)
             continue;
         float dist = h.map == here.getMapId() ? here.fDist(WorldPosition(h.map, h.x, h.y, h.z)) : 1000000.0f;
+        // a safe hub (S, 1.6.20: the death-loop rescue sent Cavol, dying to players in Ashenvale, to
+        // another Ashenvale hub): never the zone the bot is avoiding, nor (struggling) the zone it is
+        // in; a zone where bots died to players 40+ times in the last hour only when no quieter one
+        // fits (counted as far away)
+        {
+            uint32 zoneId = 0, areaId = 0;
+            sTerrainMgr.GetZoneAndAreaId(zoneId, areaId, h.map, h.x, h.y, h.z);
+            if (zoneId == SilvermoonAvoidedZone(bot->GetGUIDLow()) ||
+                (SilvermoonStruggling(bot->GetGUIDLow()) && zoneId == bot->GetZoneId()))
+                continue;
+            if (!SilvermoonZoneSafeFor(bot->GetGUIDLow(), zoneId))
+                dist += 5000000.0f;
+        }
         if (!best || dist < bestDist)
         {
             best = &h;
@@ -899,7 +922,7 @@ static void SilvermoonDualWield(Player* bot)
         return;
     if (!bot->HasSpell(674))
     {
-        if (bot->GetMoney() < fee)
+        if (SilvermoonSpendMoney(bot) < fee)
             return;
         bot->learnSpell(674, false);
         bot->ModifyMoney(-int32(fee));
@@ -935,7 +958,7 @@ static void SilvermoonLearnGathering(Player* bot)
     for (auto const& need : { std::make_pair(uint32(MIN), 2901u), std::make_pair(uint32(SKIN), 7005u) })
         if (bot->HasSkill(need.first) && !bot->HasItemCount(need.second, 1))
             if (ItemPrototype const* proto = sObjectMgr.GetItemPrototype(need.second))
-                if (bot->GetMoney() >= proto->BuyPrice * 2)
+                if (SilvermoonSpendMoney(bot) >= proto->BuyPrice * 2)
                 {
                     ItemPosCountVec dest;
                     if (bot->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, need.second, 1) == EQUIP_ERR_OK)
@@ -979,7 +1002,7 @@ static void SilvermoonLearnGathering(Player* bot)
     // the trainers' real apprentice fee is 10 copper (was charged as 10 silver, which kept most
     // broke bots from ever learning a way to earn without fighting)
     uint32 cost = 10 + toolPrice;
-    if (bot->GetMoney() < cost + 50)
+    if (SilvermoonSpendMoney(bot) < cost + 50)
         return;
     if (toolPrice)
     {
@@ -1085,7 +1108,11 @@ bool SilvermoonRepairNearby(Player* bot)
             continue;
         float discount = bot->GetReputationPriceDiscount((Creature*)u);
         uint32 before = bot->GetMoney();
-        for (uint8 slot : { uint8(EQUIPMENT_SLOT_MAINHAND), uint8(EQUIPMENT_SLOT_RANGED), uint8(EQUIPMENT_SLOT_OFFHAND) })
+        // weapons, then (S, 1.6.20) chest, legs, head, shoulders, hands and feet: a partial repair
+        // when it can't pay for everything
+        for (uint8 slot : { uint8(EQUIPMENT_SLOT_MAINHAND), uint8(EQUIPMENT_SLOT_RANGED), uint8(EQUIPMENT_SLOT_OFFHAND),
+                            uint8(EQUIPMENT_SLOT_CHEST), uint8(EQUIPMENT_SLOT_LEGS), uint8(EQUIPMENT_SLOT_HEAD),
+                            uint8(EQUIPMENT_SLOT_SHOULDERS), uint8(EQUIPMENT_SLOT_HANDS), uint8(EQUIPMENT_SLOT_FEET) })
             bot->DurabilityRepair((INVENTORY_SLOT_BAG_0 << 8) | slot, true, discount);
         bot->DurabilityRepairAll(true, discount);
         if (bot->GetMoney() < before)
@@ -1201,7 +1228,7 @@ static bool SilvermoonCraftPass(Player* bot, bool allowBuying)
                 break;
             if (!bot->HasSkill(t.skill) || bot->GetSkillValuePure(t.skill) < t.skillValue || bot->GetLevel() < t.level || bot->HasSpell(t.spell))
                 continue;
-            if (t.rank ? uint64(t.cost) * 2 > bot->GetMoney() : (!inCapital || uint64(t.cost) * 20 >= bot->GetMoney()))
+            if (t.rank ? uint64(t.cost) * 2 > SilvermoonSpendMoney(bot) : (!inCapital || uint64(t.cost) * 20 >= SilvermoonSpendMoney(bot)))
                 continue; // rank: at most half its money; recipe: in a capital, under 5% of its money
             bot->ModifyMoney(-int32(t.cost));
             bot->learnSpell(t.spell, false);
@@ -1287,7 +1314,7 @@ static bool SilvermoonCraftPass(Player* bot, bool allowBuying)
         AuctionHouseObject* house = houseEntry ? sAuctionMgr.GetAuctionsMap(houseEntry) : nullptr;
         if (!house)
             continue;
-        uint32 budget = uint32(bot->GetMoney() * (upgrade ? 0.20f : 0.03f));
+        uint32 budget = uint32(SilvermoonSpendMoney(bot) * (upgrade ? 0.20f : 0.03f));
         if (!budget)
             continue;
         // cheapest buyouts first, per missing material
@@ -1319,7 +1346,7 @@ static bool SilvermoonCraftPass(Player* bot, bool allowBuying)
             if (got < need.second)
                 covered = false;
         }
-        if (!covered || total > budget || total > bot->GetMoney())
+        if (!covered || total > budget || total > SilvermoonSpendMoney(bot))
             continue;
         for (AuctionEntry* a : picks)
             a->UpdateBid(a->buyout, bot); // buys it out; the auction entry is gone afterwards
@@ -3349,6 +3376,8 @@ void RandomPlayerbotMgr::SilvermoonFastProcessBot(Player* player, PlayerbotAI* a
     static std::unordered_map<uint32, std::pair<time_t, time_t>> nextCheck;   // stuck, progress
     time_t fastNow = time(nullptr);
     bool stuckDue = false, progressDue = false;
+    // recovery (S, 1.6.20): cash-out and struggling flags, the safe way out (Recovery.cpp)
+    SilvermoonRecoveryTick(player);
     // gold watch: a bot whose money jumps by 5 gold or more within one 10-second check is logged
     // with what it is doing (5 Horde casters gained 50-96 gold in one hour on 2026-11-22 and the
     // cause could not be traced afterwards)
@@ -3478,6 +3507,8 @@ void RandomPlayerbotMgr::SilvermoonFastProcessBot(Player* player, PlayerbotAI* a
                 player->GetName(), player->GetLevel());
             SilvermoonClearDeaths(bot);
             ++silvermoon::Tp(silvermoon::TP_TOO_DANGEROUS);
+            // struggling (S, 1.6.20): the hub it is sent to is 4 levels easier, safe, and not in this zone
+            SilvermoonMarkStruggling(bot);
             if (!SilvermoonHubTeleport(player)) RandomTeleportForLevel(player, false);
             // crash 2026-11-23 (x3): after a teleport to another map the rest of this function
             // called GetMap() on a bot that had no map yet (assert in WorldObject::GetMap)

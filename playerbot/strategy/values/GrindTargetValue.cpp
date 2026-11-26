@@ -11,6 +11,7 @@
 #include "Tools/Formulas.h"
 #include "playerbot/TravelNode.h"
 #include "playerbot/strategy/silvermoon/RelocateGoal.h"
+#include "playerbot/silvermoon/Recovery.h"
 
 using namespace ai;
 // Silvermoon (S): grey mobs (no XP) are only worth it for a destitute bot - weapon at 0 durability -
@@ -196,7 +197,8 @@ Unit* GrindTargetValue::FindTargetForGrinding(int assistCount)
                 if (Item* item = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
                     if (item->GetUInt32Value(ITEM_FIELD_MAXDURABILITY) && !item->GetUInt32Value(ITEM_FIELD_DURABILITY))
                         broken += slot == EQUIPMENT_SLOT_MAINHAND ? 4 : 1;
-            careful = (broken >= 3 || SilvermoonRecentDeaths(bot->GetGUIDLow(), 30 * MINUTE) >= 3) ? 1 : 0;
+            // ...or struggling (S, 1.6.20: dying and losing money over the last hour)
+            careful = (broken >= 3 || SilvermoonRecentDeaths(bot->GetGUIDLow(), 30 * MINUTE) >= 3 || SilvermoonStruggling(bot->GetGUIDLow())) ? 1 : 0;
             if (bot->HasAura(15007))
                 careful = 2;    // Resurrection Sickness: no new fights until it wears off
             else if (SilvermoonOnRelocateTrip(bot->GetGUIDLow()))

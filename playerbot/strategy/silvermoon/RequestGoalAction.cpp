@@ -7,6 +7,7 @@
 #include "playerbot/strategy/actions/ChooseTravelTargetAction.h"
 #include "ChooseGoalAction.h"
 #include "Professions.h"
+#include "playerbot/silvermoon/Recovery.h"
 
 using namespace ai;
 
@@ -50,7 +51,8 @@ std::vector<SilvermoonGoalFetch> ai::SilvermoonBuildGoalFetches(PlayerbotAI* ai,
     // chores when due
     // only with something a vendor will actually buy: Zugzug's bags were 65%+ full of things it
     // keeps, so "should sell" stayed true and it walked from vendor to vendor in Tarren Mill
-    if (context->GetValue<bool>("should sell")->Get() && context->GetValue<bool>("can sell")->Get())
+    // ...or cashing out (S, 1.6.20): broken gear and no money for a full repair, whatever the bag fill
+    if ((context->GetValue<bool>("should sell")->Get() || SilvermoonCashOut(bot)) && context->GetValue<bool>("can sell")->Get())
         fetches.push_back({ (uint32)TravelDestinationPurpose::Vendor, {}, 10000.0f });
     // only when it can pay: Taxes (level 28, 43 copper) walked between Razor Hill's repairers for an
     // hour ("can repair" checks the cheapest repair against the money it may spend on repairs)

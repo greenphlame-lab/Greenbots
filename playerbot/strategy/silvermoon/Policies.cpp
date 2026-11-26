@@ -1,5 +1,6 @@
 #include "playerbot/playerbot.h"
 #include "Policies.h"
+#include "playerbot/silvermoon/Recovery.h"
 #include "playerbot/TravelMgr.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/TravelNode.h"
@@ -265,7 +266,9 @@ uint32 ai::SilvermoonUpgradeBudget(Player* bot, uint32 defaultPct)
         if (uint8 up = Get(bot->GetGUIDLow()).upgradePct)
             pct = up;
     }
-    return uint32(uint64(bot->GetMoney()) * pct / 100);
+    // a random bot spends only what is above a full repair of its gear (S, 1.6.20: repair reserve)
+    uint64 money = SilvermoonIsOwn(bot) ? bot->GetMoney() : SilvermoonSpendable(bot);
+    return uint32(money * pct / 100);
 }
 
 bool ai::SilvermoonWeaponAvoided(uint32 guid, uint32 skill)

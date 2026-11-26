@@ -82,6 +82,7 @@ namespace ai
     public:
         ItemUsageValue(PlayerbotAI* ai, std::string name = "item usage") : CalculatedValue<ItemUsage>(ai, name), Qualified() {}
         virtual ItemUsage Calculate() override;
+        ItemUsage CalculateStock();   // Silvermoon 1.6.20: Calculate() adds the cash-out rule on top
 
         static ItemUsage QueryItemUsageForEquip(ItemQualifier& itemQualifier, Player* bot);
         static uint32 GetSmallestBagSize(Player* bot);

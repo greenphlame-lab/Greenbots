@@ -40,6 +40,10 @@ namespace silvermoon
         bool repairCooldown = false;   // a repair visit in the last 30 min left gear damaged
         bool destitute = false;        // weapon broken and no money to fix it
         bool resSick = false;          // Resurrection Sickness
+        bool cashOut = false;          // 1.6.20: broken gear, can't pay a full repair: sell the bags
+        uint32_t sellValue = 0;        // 1.6.20: vendor value of the bags (copper)
+        bool struggling = false;       // 1.6.20: dying and losing money (Recovery.h)
+        bool canGather = false;        // 1.6.20: has Mining or Herbalism
     };
 
     struct GoalCandidate

@@ -15,6 +15,7 @@
 #include "Mails/Mail.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/silvermoon/Hubs.h"
+#include "playerbot/silvermoon/Recovery.h"
 #include "Spells/SpellAuras.h"
 #include <deque>
 #include <set>
@@ -178,6 +179,10 @@ namespace
         s.recentDeaths = SilvermoonRecentDeaths(bot->GetGUIDLow(), 30 * MINUTE);
         s.greyLevel = int32(MaNGOS::XP::GetGrayLevel(bot->GetLevel()));
         s.repairCooldown = silvermoon::RepairOnCooldown(bot->GetGUIDLow(), bot->GetMoney());
+        s.cashOut = SilvermoonCashOut(bot);
+        s.sellValue = s.cashOut ? SilvermoonBagSellValue(bot) : 0;
+        s.struggling = SilvermoonStruggling(bot->GetGUIDLow());
+        s.canGather = bot->GetSkillValue(SKILL_MINING) > 0 || bot->GetSkillValue(SKILL_HERBALISM) > 0;
         return s;
     }
 

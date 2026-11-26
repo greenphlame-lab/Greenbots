@@ -8,6 +8,7 @@
 #include "playerbot/silvermoon/Hubs.h"
 #include "playerbot/silvermoon/DecisionLog.h"
 #include "playerbot/silvermoon/BrainTimer.h"
+#include "playerbot/silvermoon/Recovery.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -244,12 +245,22 @@ bool ai::SilvermoonBestRelocate(Player* bot, PlayerbotAI* ai, float bestLocalSco
     WorldPosition here(bot);
     struct Option { Hub const* hub; float distance; bool visited; float score; float minutes; float pvp; };
     std::vector<Option> options;
+    // struggling (S, 1.6.20): hubs 4 levels easier, and only zones where players aren't killing bots
+    bool struggling = SilvermoonStruggling(guid);
+    int32 fitLevel = int32(level) - SilvermoonStruggleLevelDrop(guid);
     for (Hub const& h : Hubs::All())
     {
         if (!Hubs::Knows(guid, h, alliance))
             continue;
-        if (int32(level) < int32(h.minLevel) + 2 || int32(level) > int32(h.maxLevel) - 2)
+        if (fitLevel < int32(h.minLevel) + 2 || fitLevel > int32(h.maxLevel) - 2)
             continue;
+        if (struggling)
+        {
+            uint32 zoneId = 0, areaId = 0;
+            sTerrainMgr.GetZoneAndAreaId(zoneId, areaId, h.map, h.x, h.y, h.z);
+            if (!SilvermoonZoneSafeFor(guid, zoneId) || zoneId == bot->GetZoneId())
+                continue;
+        }
         if (Skipped(guid, h.id) && !outsideAllowed)
             continue;                                   // failed to get there recently
         if (SilvermoonIsOwn(bot))
@@ -540,7 +551,7 @@ bool ai::SilvermoonRelocateTick(Player* bot, PlayerbotAI* ai)
         abandon = "over twice the route time";
     else if (trip.deaths >= 2)
         abandon = "died twice on the way";
-    else if (int32(bot->GetLevel()) > int32(hub->maxLevel))
+    else if (int32(bot->GetLevel()) - SilvermoonStruggleLevelDrop(guid) > int32(hub->maxLevel))
         abandon = "out-levelled the hub";
     if (!abandon.empty())
     {

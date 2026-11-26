@@ -56,6 +56,17 @@ bool RepairAllAction::Execute(Event& event)
 #endif
         );
 
+        // Silvermoon (S, 1.6.20): with too little money for everything, the pieces that matter most
+        // next - chest, legs, head, shoulders, hands, feet - before the rest (each piece is only
+        // repaired when the bot can pay for it, so a broke bot gets a partial repair)
+        for (uint8 slot : { uint8(EQUIPMENT_SLOT_CHEST), uint8(EQUIPMENT_SLOT_LEGS), uint8(EQUIPMENT_SLOT_HEAD), uint8(EQUIPMENT_SLOT_SHOULDERS),
+                            uint8(EQUIPMENT_SLOT_HANDS), uint8(EQUIPMENT_SLOT_FEET) })
+            totalCost += bot->DurabilityRepair((INVENTORY_SLOT_BAG_0 << 8) | slot, true, discountMod
+#ifndef MANGOSBOT_ZERO
+                , false
+#endif
+            );
+
         totalCost += bot->DurabilityRepairAll(true, discountMod
 #ifndef MANGOSBOT_ZERO
             , false

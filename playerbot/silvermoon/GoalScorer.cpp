@@ -113,6 +113,13 @@ namespace silvermoon
             s.value = xpm * minutes;
             s.minutes = travel + CHORE_MINUTES;
             s.reason = bot.urgentVendor ? "bags full" : "sell loot";
+            // cash-out (S, 1.6.20): broken gear and no money for a full repair, with loot worth
+            // selling - straight to a vendor, whatever the bag fill (Cavol carried 1g 23s of it)
+            if (bot.cashOut && bot.sellValue >= std::max<uint32_t>(200, bot.level * bot.level * 2))
+            {
+                s.value = xpm * CHORE_URGENT_MINUTES * 2.0f;
+                s.reason = "broke: sell loot for repairs";
+            }
             break;
         }
         case GoalKind::Repair:
@@ -135,6 +142,13 @@ namespace silvermoon
             s.value = xpm * (bot.broke || bot.brokenGear ? 2.0f : 1.0f);
             s.minutes = travel + CHORE_MINUTES;
             s.reason = bot.broke || bot.brokenGear ? "broke: gather to sell" : "gather";
+            // can't fix its weapon, or cashing out (S, 1.6.20): gathering is money with no fighting,
+            // worth as much as the safe grey-mob grind (the materials go to the vendor while cashing out)
+            if ((bot.destitute || bot.cashOut) && bot.canGather)
+            {
+                s.value = std::max(s.value, xpm * 4.0f);
+                s.reason = "broke: gather to sell (no fighting)";
+            }
             break;
         case GoalKind::Mail:
             // a gift or delivery from a real player is fetched soon; other mail is a small chore
@@ -176,7 +190,7 @@ namespace silvermoon
         }
         if (bot.resSick && (c.kind == GoalKind::Vendor || c.kind == GoalKind::Repair || c.kind == GoalKind::Trainer || c.kind == GoalKind::Mail))
             s.value *= 2.0f;
-        bool careful = bot.broke || bot.brokenGear || bot.recentDeaths >= 3;
+        bool careful = bot.broke || bot.brokenGear || bot.recentDeaths >= 3 || bot.struggling;
         if (careful && c.mobLevel > 0 && (c.kind == GoalKind::Grind || c.kind == GoalKind::QuestObjective))
         {
             int32_t gap = int32_t(bot.level) - c.mobLevel;
