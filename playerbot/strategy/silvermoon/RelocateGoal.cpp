@@ -1,6 +1,7 @@
 #include "playerbot/playerbot.h"
 #include "RelocateGoal.h"
 #include "Policies.h"
+#include "Professions.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/TravelMgr.h"
 #include "playerbot/TravelNode.h"
@@ -183,6 +184,10 @@ bool ai::SilvermoonBestRelocate(Player* bot, PlayerbotAI* ai, float bestLocalSco
     bool outsideAllowed = SilvermoonIsOwn(bot) && SilvermoonZoneBlocked(guid, bot->GetZoneId());
     if (outsideAllowed)
         want = true;
+    // a Gather order keeps the bot on its zone route (S: Mommy left her herb loop for a Westfall
+    // relocation at 8:53 PM)
+    if (!outsideAllowed && (SilvermoonGatherOrderFactor(guid, 182) > 1.0f || SilvermoonGatherOrderFactor(guid, 186) > 1.0f))
+        return false;
     // outgrown: the bot is well above its area's level (a level 21-28 crowd stayed in Durotar with
     // no relocation at all: grinding grey mobs still scored above the "thin" line)
     bool outgrown = false;

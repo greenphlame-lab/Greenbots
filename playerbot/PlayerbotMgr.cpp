@@ -1218,6 +1218,16 @@ void PlayerbotMgr::OnPlayerLogin(Player* player)
     sPlayerbotTextMgr.AddLocalePriority(player->GetSession()->GetSessionDbLocaleIndex());
     sLog.outDetail("Player %s logged in, localeDbc %i, localeDb %i", player->GetName(), (uint32)(player->GetSession()->GetSessionDbcLocale()), player->GetSession()->GetSessionDbLocaleIndex());
 
+    // Silvermoon (S: "I load in and my character is full sprint moving"): an always-online alt was
+    // walking somewhere as a bot when you took it over; its server-side movement (and the moving
+    // flags your client is sent) carried on into your session. Stop it before handing over.
+    if (sPlayerbotAIConfig.IsFreeAltBot(player) && player->IsInWorld())
+    {
+        player->GetMotionMaster()->Clear(false, true);
+        player->GetMotionMaster()->MoveIdle();
+        player->StopMoving(true);
+    }
+
     if (sPlayerbotAIConfig.IsFreeAltBot(player))
     {
         sLog.outDetail("Enabling selfbot on login for %s", player->GetName());
