@@ -427,6 +427,9 @@ static float SilvermoonWeaponDps(ItemPrototype const* proto)
 // goes to the bags and is sold on the next vendor visit. Runs before Dual Wield.
 static void SilvermoonWeaponUpgrade(Player* bot)
 {
+    // "Ask before equipping upgrades" (S, 1.6.21): no buying and wearing new weapons unasked
+    if (SilvermoonIsOwn(bot) && SilvermoonPolicyFor(bot->GetGUIDLow()).askEquip)
+        return;
     uint8 cls = bot->getClass();
     if (cls != CLASS_ROGUE && cls != CLASS_WARRIOR && cls != CLASS_HUNTER && cls != CLASS_PALADIN && cls != CLASS_SHAMAN)
         return;
@@ -925,6 +928,9 @@ static void SilvermoonDropStaleQuests(Player* bot)
 
 static void SilvermoonDualWield(Player* bot)
 {
+    // "Ask before equipping upgrades" (S, 1.6.21): no buying and wearing new weapons unasked
+    if (SilvermoonIsOwn(bot) && SilvermoonPolicyFor(bot->GetGUIDLow()).askEquip)
+        return;
     uint8 cls = bot->getClass();
     uint32 level = bot->GetLevel();
     uint32 fee = cls == CLASS_ROGUE ? 300 : 2200;

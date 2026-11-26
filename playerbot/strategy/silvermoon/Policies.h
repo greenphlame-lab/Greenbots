@@ -46,10 +46,11 @@ namespace ai
         uint8 upgradePct = 0;        // 0 = the bot's defaults
         std::map<uint32, uint8> weapons;   // skill -> 1 train, 2 avoid
         uint8 bags = 0;              // bit 1: don't buy bags; bit 2: replace small bags with bigger ones
+        bool askEquip = false;       // 1.6.21 (S): ask before equipping upgrades (1 hour, then it decides)
         // item rules (S): item id -> (action, always). action 1 sell, 2 auction, 3 destroy, 4 keep;
         // "once" rules end when none of the item is left
         std::map<uint32, std::pair<uint8, bool>> items;
-        bool Any() const { return potionAt || disenchant || tradeGoods != 2 || !allowedZones.empty() || eatTo || drinkTo || travel || !blockedSpells.empty() || fleeMobs || fleeHealth || ahGold || upgradePct || !weapons.empty() || bags || !items.empty(); }
+        bool Any() const { return askEquip || potionAt || disenchant || tradeGoods != 2 || !allowedZones.empty() || eatTo || drinkTo || travel || !blockedSpells.empty() || fleeMobs || fleeHealth || ahGold || upgradePct || !weapons.empty() || bags || !items.empty(); }
     };
 
     // your own character playing on its own: Auto (self-bot) or an always-online alt with auto on
@@ -72,6 +73,11 @@ namespace ai
     uint32 SilvermoonUpgradeBudget(Player* bot, uint32 defaultPct);
     bool SilvermoonWeaponAvoided(uint32 guid, uint32 skill);
     bool SilvermoonPolicyCommand(Player* bot, std::string const& param, std::string& reply);
+    // "Ask before equipping upgrades" (S, 1.6.21): false while the question is open (the panel is
+    // asked, an hour to answer), true once you said Equip or the hour passed (it then decides
+    // itself and leaves a notification in the away log). Your characters only; others always true.
+    bool SilvermoonEquipAllowed(Player* bot, Item* item);
+    bool SilvermoonEquipAnswer(Player* bot, uint32 itemGuid, bool equip, std::string& reply);
     std::string SilvermoonPolicyPanel(Player* bot);
     // weapon master training (S): in a capital, a weapon skill that is ticked (not "avoid"), that
     // the class can use and doesn't know yet, is learned for the weapon masters' 10 silver when it

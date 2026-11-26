@@ -38,7 +38,7 @@ namespace
         out << ";it=";
         first = true;
         for (auto const& [item, rule] : p.items) { out << (first ? "" : ",") << item << ":" << uint32(rule.first) << ":" << (rule.second ? 1 : 0); first = false; }
-        out << ";bg=" << uint32(p.bags) << ";fm=" << uint32(p.fleeMobs) << ";fh=" << uint32(p.fleeHealth) << ";ah=" << p.ahGold << ";up=" << uint32(p.upgradePct) << ";ws=";
+        out << ";ae=" << (p.askEquip ? 1 : 0) << ";bg=" << uint32(p.bags) << ";fm=" << uint32(p.fleeMobs) << ";fh=" << uint32(p.fleeHealth) << ";ah=" << p.ahGold << ";up=" << uint32(p.upgradePct) << ";ws=";
         first = true;
         for (auto const& [skill, mode] : p.weapons) { out << (first ? "" : ",") << skill << ":" << uint32(mode); first = false; }
         return out.str();
@@ -57,6 +57,7 @@ namespace
             std::string key = part.substr(0, eq), value = part.substr(eq + 1);
             if (key == "fm") p.fleeMobs = uint8(atoi(value.c_str()));
             else if (key == "bg") p.bags = uint8(atoi(value.c_str()));
+            else if (key == "ae") p.askEquip = atoi(value.c_str()) != 0;
             else if (key == "fh") p.fleeHealth = uint8(atoi(value.c_str()));
             else if (key == "et") p.eatTo = uint8(atoi(value.c_str()));
             else if (key == "tv") p.travel = uint8(atoi(value.c_str()));
@@ -362,6 +363,13 @@ bool ai::SilvermoonPolicyCommand(Player* bot, std::string const& param, std::str
         else p.weapons.erase(skill);
         reply = "Weapon skills updated.";
     }
+    else if (k == "askequip" && n == 2)
+        p.askEquip = v1 == "on", reply = p.askEquip ? "I'll ask before equipping upgrades (an hour, then I decide)." : "I'll equip upgrades myself.";
+    else if (k == "equip" && n == 3 && (v1 == "yes" || v1 == "no"))
+    {
+        // the answer to an upgrade question (see SilvermoonEquipAllowed; its own lock)
+        return SilvermoonEquipAnswer(bot, uint32(strtoul(v2.c_str(), nullptr, 10)), v1 == "yes", reply);
+    }
     else if (k == "bags" && n == 3)
     {
         uint8 bit = v1 == "buy" ? 1 : v1 == "bigger" ? 2 : 0;
@@ -483,5 +491,95 @@ bool SilvermoonPolicyAction::Execute(Event& event)
             target->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);   // re-choose with the new rules
     if (requester != bot)
         ai->TellPlayerNoFacing(requester, reply);
+    return true;
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Ask before equipping upgrades (S, 1.6.21). An upgrade the character would put on waits for your
+// answer: the panel shows Equip / Keep current (addon message "SMASK", repeated every minute while
+// you are on that character). No answer in an hour: it decides itself and leaves a "Notification:"
+// line in the away log. Keep current is remembered for that item until the server restarts.
+namespace
+{
+    struct EquipAsk { time_t at = 0; time_t sent = 0; uint8 answer = 0; std::string name, old; uint32 itemId = 0; };
+    std::mutex askLock;
+    std::unordered_map<uint32, std::map<uint32, EquipAsk>> equipAsks;   // character -> item (low guid) -> question
+
+    void SendAsk(Player* bot, uint32 itemGuid, EquipAsk const& q)
+    {
+        if (!bot->GetSession() || !bot->GetPlayerbotAI() || !bot->GetPlayerbotAI()->IsRealPlayer())
+            return;                                     // you are not on this character right now
+        int32 left = int32(HOUR) - int32(time(nullptr) - q.at);
+        std::string msg = "SMASK\t" + std::to_string(itemGuid) + "^" + std::to_string(q.itemId) + "^" + q.name + "^" + q.old + "^" +
+            std::to_string(std::max(0, left / 60));
+        WorldPacket packet;
+        ChatHandler::BuildChatPacket(packet, CHAT_MSG_PARTY, msg.c_str(), LANG_ADDON, CHAT_TAG_NONE, bot->GetObjectGuid(), bot->GetName());
+        bot->GetSession()->SendPacket(packet);
+    }
+}
+
+bool ai::SilvermoonEquipAllowed(Player* bot, Item* item)
+{
+    if (!bot || !item || !SilvermoonIsOwn(bot) || !SilvermoonPolicyFor(bot->GetGUIDLow()).askEquip)
+        return true;
+    uint32 itemGuid = item->GetGUIDLow();
+    time_t now = time(nullptr);
+    std::string note;
+    bool allowed = false;
+    {
+        std::lock_guard<std::mutex> guard(askLock);
+        auto& asks = equipAsks[bot->GetGUIDLow()];
+        auto it = asks.find(itemGuid);
+        if (it == asks.end())
+        {
+            EquipAsk q;
+            q.at = now;
+            q.itemId = item->GetEntry();
+            q.name = item->GetProto()->Name1;
+            uint16 dest = 0;
+            if (bot->CanEquipItem(NULL_SLOT, dest, item, true) == EQUIP_ERR_OK)
+                if (Item* cur = bot->GetItemByPos(dest))
+                    q.old = cur->GetProto()->Name1;
+            for (char& c : q.name) if (c == '^' || c == '\t') c = ' ';
+            for (char& c : q.old) if (c == '^' || c == '\t') c = ' ';
+            it = asks.emplace(itemGuid, q).first;
+        }
+        EquipAsk& q = it->second;
+        if (q.answer == 1)
+        {
+            asks.erase(it);
+            return true;
+        }
+        if (q.answer == 2)
+            return false;                               // you said keep current
+        if (now - q.at >= HOUR)
+        {
+            note = "Notification: equipped " + q.name + (q.old.empty() ? "" : " instead of " + q.old) + " - no answer within an hour, so I decided";
+            asks.erase(it);
+            allowed = true;
+        }
+        else if (now - q.sent >= MINUTE)
+        {
+            q.sent = now;
+            SendAsk(bot, itemGuid, q);
+        }
+    }
+    if (!note.empty())
+        SilvermoonAwayNote(bot, note);
+    return allowed;
+}
+
+bool ai::SilvermoonEquipAnswer(Player* bot, uint32 itemGuid, bool equip, std::string& reply)
+{
+    std::lock_guard<std::mutex> guard(askLock);
+    auto& asks = equipAsks[bot->GetGUIDLow()];
+    auto it = asks.find(itemGuid);
+    if (it == asks.end())
+    {
+        reply = "That question has already been settled.";
+        return true;
+    }
+    it->second.answer = equip ? 1 : 2;
+    reply = equip ? "Equipping " + it->second.name + "." : "Keeping my current gear instead of " + it->second.name + ".";
     return true;
 }

@@ -6,6 +6,7 @@
 #include "playerbot/strategy/values/ItemCountValue.h"
 #include "playerbot/strategy/values/ItemUsageValue.h"
 #include "UnequipAction.h"
+#include "playerbot/strategy/silvermoon/Policies.h"
 
 using namespace ai;
 
@@ -457,6 +458,9 @@ bool EquipUpgradesAction::Execute(Event& event)
         ItemUsage usage = AI_VALUE2(ItemUsage, "item usage", ItemQualifier(item).GetQualifier());
         if (usage == ItemUsage::ITEM_USAGE_EQUIP || usage == ItemUsage::ITEM_USAGE_BAD_EQUIP)
         {
+            // Silvermoon (S, 1.6.21): "Ask before equipping upgrades" - waits for your answer
+            if (!SilvermoonEquipAllowed(bot, item))
+                continue;
             sLog.outDetail("Bot #%d <%s> auto equips item %d (%s)", bot->GetGUIDLow(), bot->GetName(), item->GetProto()->ItemId, usage == ItemUsage::ITEM_USAGE_EQUIP ? "better than current" : usage == ItemUsage::ITEM_USAGE_BAD_EQUIP ? "wrong item but empty slot" : "");
             ai->TellDebug(ai->GetMaster(), "Equipping: " + chat->formatItem(item) + " - " + ItemUsageValue::ReasonForNeed(usage, item, 1, bot), "debug equip");
 
