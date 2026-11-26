@@ -624,6 +624,14 @@ static SilvermoonScoredGoal ScoreWith(Player* bot, BotSnapshot const& snapshot, 
                 goal.score.score *= FOLLOW_UP_BOOST;
                 goal.score.reason = "follow-up: " + goal.score.reason;
             }
+    // quests first (S, Nov 25: "bump up quest priority across the board"): plain grinding, exploring
+    // and gathering without an order count two thirds, so quest pick-ups, objectives and hand-ins win
+    // more often. Grinding a quest's own mobs ("quest mob") and gather orders keep their value. Done
+    // by lowering the others, not raising quests, so a zone with only grinding left still looks thin
+    // enough to relocate from.
+    if ((c.kind == GoalKind::Grind && goal.score.reason != "quest mob") || c.kind == GoalKind::Explore ||
+        (c.kind == GoalKind::Gather && goal.score.reason.rfind("gather order", 0) != 0))
+        goal.score.score *= 0.67f;
     return goal;
 }
 
