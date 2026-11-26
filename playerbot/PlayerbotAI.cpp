@@ -2655,7 +2655,11 @@ void PlayerbotAI::DoNextAction(bool min)
             if (!sServerFacade.isMoving(bot) && sServerFacade.GetDistance2d(bot, master) < 10.0f)
                 bot->SetStandState(UNIT_STAND_STATE_SIT);
         }
-        else if (aiInternalUpdateDelay < 1000)
+        // Silvermoon (S, 1.6.21: Mommy, an always-online alt with you as her master, stood still and sat
+        // down over and over - every time she sat to eat, this stood her straight back up): only a bot
+        // near its master copies its standing up, and never while eating or drinking
+        else if (aiInternalUpdateDelay < 1000 && sServerFacade.GetDistance2d(bot, master) < 10.0f &&
+                 !bot->HasAuraType(SPELL_AURA_MOD_REGEN) && !bot->HasAuraType(SPELL_AURA_MOD_POWER_REGEN))
             bot->SetStandState(UNIT_STAND_STATE_STAND);
 
         if (!group && sRandomPlayerbotMgr.IsFreeBot(bot) && !IsRealPlayer())
