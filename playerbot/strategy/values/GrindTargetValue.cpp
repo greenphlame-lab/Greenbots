@@ -16,7 +16,7 @@ using namespace ai;
 // Silvermoon (S): grey mobs (no XP) are only worth it for a destitute bot - weapon at 0 durability -
 // which farms them for coin; everyone else leaves them alone unless a quest needs them. (Stock let 1
 // in 50 through and, on long trips, bots spent their time killing grey mobs.)
-namespace ai { uint8 SilvermoonTravelRules(Player* bot); bool SilvermoonIsOwn(Player* bot); float SilvermoonGatherOrderFactor(uint32 guid, uint32 skill); }
+namespace ai { uint8 SilvermoonTravelRules(Player* bot); bool SilvermoonIsOwn(Player* bot); float SilvermoonGatherOrderFactor(uint32 guid, uint32 skill); uint8 SilvermoonFactionNpcKind(Player* bot, Unit* unit); }
 
 static bool SilvermoonGreyAllowed(Player* bot)
 {
@@ -61,6 +61,10 @@ Unit* GrindTargetValue::FindTargetForGrinding(int assistCount)
     {
         Unit* unit = ai->GetUnit(*i);
         if (!unit || !sServerFacade.IsAlive(unit))
+            continue;
+
+        // S (1.6.20): a guard on the bot is run from (silvermoon flee guard), never picked to fight
+        if (!bot->InBattleGround() && SilvermoonFactionNpcKind(bot, unit) == 1)
             continue;
 
         if (!bot->InBattleGround() && !CanFreeMoveValue::CanFreeTarget(ai, GuidPosition(unit)))
@@ -114,6 +118,20 @@ Unit* GrindTargetValue::FindTargetForGrinding(int assistCount)
         Unit* unit = ai->GetUnit(*tIter);
         if (!unit)
             continue;
+
+        // S (1.6.20): leave the other faction's NPCs alone. A guard (either side, or a neutral town's)
+        // is never pulled; another opposite-faction NPC (quest giver, vendor, farmer...) only when an
+        // active quest needs it killed.
+        if (!bot->InBattleGround())
+        {
+            uint8 kind = SilvermoonFactionNpcKind(bot, unit);
+            if (kind == 1 || (kind == 2 && !AI_VALUE2(bool, "need for quest", std::to_string(unit->GetEntry()))))
+            {
+                if (ai->HasStrategy("debug grind", BotState::BOT_STATE_NON_COMBAT))
+                    ai->TellPlayer(GetMaster(), chat->formatWorldobject(unit) + " ignored (guard or other faction's NPC).");
+                continue;
+            }
+        }
 
 #ifdef MANGOSBOT_TWO 
         if (bot->GetMapId() == 609)

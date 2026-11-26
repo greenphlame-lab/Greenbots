@@ -8,6 +8,9 @@
 #include "playerbot/RandomPlayerbotMgr.h"
 #include "Tools/Formulas.h"
 #include "playerbot/TravelMgr.h"
+#include "Entities/Creature.h"
+#include "Entities/Pet.h"
+#include "Server/DBCStores.h"
 
 using namespace ai;
 
@@ -16,6 +19,11 @@ void SurviveStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
     triggers.push_back(new TriggerNode(
         "very often",
         NextAction::array(0, new NextAction("silvermoon flee outmatched", ACTION_EMERGENCY + 5), NULL)));
+    // guards (S, 1.6.20): always run from a guard, above walking past greys, below the lifesavers
+    // (Vanish, Blink, Ice Block... still go first when low)
+    triggers.push_back(new TriggerNode(
+        "very often",
+        NextAction::array(0, new NextAction("silvermoon flee guard", ACTION_EMERGENCY + 5.8f), NULL)));
     // gathering past grey mobs (S): above the flee step, below the lifesavers
     triggers.push_back(new TriggerNode(
         "very often",
@@ -194,4 +202,69 @@ bool FleeOutmatchedAction::isUseful()
             return true;
     }
     return false;
+}
+
+// guards and the other faction's NPCs (S, 1.6.20): 458 bot deaths in a day were to guards
+// (Astranaar Sentinels 241, Hillsbrad Footmen 51, Ghost Walker Braves 46...), and more to enemy
+// quest givers and town NPCs the bots had pulled
+uint8 ai::SilvermoonFactionNpcKind(Player* bot, Unit* unit)
+{
+    if (!bot || !unit || unit->GetTypeId() != TYPEID_UNIT || !unit->GetOwnerGuid().IsEmpty())
+        return 0;
+    Creature* creature = (Creature*)unit;
+    if (creature->IsGuard())
+        return 1;
+    FactionTemplateEntry const* ft = unit->GetFactionTemplateEntry();
+    if (!ft)
+        return 0;
+    uint32 own = bot->GetTeam() == ALLIANCE ? FACTION_GROUP_MASK_ALLIANCE : FACTION_GROUP_MASK_HORDE;
+    uint32 other = bot->GetTeam() == ALLIANCE ? FACTION_GROUP_MASK_HORDE : FACTION_GROUP_MASK_ALLIANCE;
+    uint32 sides = ft->factionGroupMask | ft->friendGroupMask;
+    return ((sides & other) && !(sides & own)) ? 2 : 0;
+}
+
+Unit* FleeGuardAction::GuardOnBot()
+{
+    for (Unit* attacker : bot->getAttackers())
+        if (attacker && attacker->IsAlive() && SilvermoonFactionNpcKind(bot, attacker) == 1)
+            return attacker;
+    return nullptr;
+}
+
+bool FleeGuardAction::isUseful()
+{
+    if (!bot->IsAlive() || !bot->IsInCombat() || bot->InBattleGround())
+        return false;
+    return GuardOnBot() != nullptr;
+}
+
+bool FleeGuardAction::Execute(Event& event)
+{
+    Unit* guard = GuardOnBot();
+    if (!guard)
+        return false;
+    {
+        // logged at most every 30 seconds per bot
+        static std::mutex logLock;
+        static std::unordered_map<uint32, time_t> lastLog;
+        std::lock_guard<std::mutex> lock(logLock);
+        time_t& last = lastLog[bot->GetGUIDLow()];
+        if (time(nullptr) - last >= 30)
+        {
+            last = time(nullptr);
+            sLog.outBasic("Silvermoon: %s (level %u) runs from guard %s (entry %u) at %.0f%% health", bot->GetName(), bot->GetLevel(),
+                guard->GetName(), guard->GetEntry(), bot->GetHealthPercent());
+        }
+    }
+    bot->AttackStop();
+    if (Pet* pet = bot->GetPet())
+        pet->AttackStop();
+    SET_AI_VALUE(ObjectGuid, "current target", ObjectGuid());
+    if (Flee(guard))
+        return true;
+    // no flee point found: run straight away from the guard
+    float angle = guard->GetAngle(bot);
+    float x = bot->GetPositionX() + cos(angle) * 30.0f;
+    float y = bot->GetPositionY() + sin(angle) * 30.0f;
+    return MoveTo(bot->GetMapId(), x, y, bot->GetPositionZ(), false, false, false, true);
 }

@@ -42,6 +42,20 @@ namespace ai
         virtual bool Execute(Event& event) override;
     };
 
+    // 1 = a guard (any side), 2 = an NPC of the bot's opposite faction, 0 = anything else
+    uint8 SilvermoonFactionNpcKind(Player* bot, Unit* unit);
+
+    // S (1.6.20): a bot a guard is fighting always runs - it never fights it out
+    class FleeGuardAction : public FleeAction
+    {
+    public:
+        FleeGuardAction(PlayerbotAI* ai) : FleeAction(ai, 40.0f) { name = "silvermoon flee guard"; }
+        virtual bool isUseful() override;
+        virtual bool Execute(Event& event) override;
+    private:
+        Unit* GuardOnBot();
+    };
+
     class FleeOutmatchedAction : public FleeAction
     {
     public:
