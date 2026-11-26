@@ -1066,7 +1066,10 @@ bool ChooseGoalAction::Execute(Event& event)
             travelTarget->SetConditions({});
             SET_AI_VALUE2(std::string, "manual string", "future travel condition", "");
             setNewTarget(requester, &newTarget, travelTarget);
-            travelTarget->SetExpireIn(uint32(5 * MINUTE * IN_MILLISECONDS));   // a stop it can't reach is skipped
+            // a stop it can't reach is skipped after 5 minutes; a stop in another zone (1.6.21: a zone with
+            // nodes that still raise the skill) gets the walk there at about 6 yards a second, plus 2 minutes
+            float far = next.getMapId() == bot->GetMapId() ? next.fDist(WorldPosition(bot)) : 0.0f;
+            travelTarget->SetExpireIn(uint32(std::max(5.0f * MINUTE, far / 6.0f + 2.0f * MINUTE) * IN_MILLISECONDS));
             travelTarget->SetForced(true);
             SilvermoonScoredGoal g;
             g.destination = spot;

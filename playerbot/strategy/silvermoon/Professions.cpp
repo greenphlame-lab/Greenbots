@@ -7,6 +7,8 @@
 #include "playerbot/silvermoon/GoalScorer.h"
 #include "playerbot/strategy/values/CraftValues.h"
 #include "Spells/SpellMgr.h"
+#include "playerbot/silvermoon/Hubs.h"
+#include "playerbot/silvermoon/Recovery.h"
 #include <set>
 #include <algorithm>
 #include <cstdio>
@@ -292,7 +294,10 @@ namespace
         });
         return spots;
     }
-    struct GatherRoute { uint32 zone = 0, skill = 0, skillValue = 0; std::vector<WorldPosition> points; size_t next = 0; time_t built = 0; };
+    struct GatherRoute { uint32 zone = 0, skill = 0, skillValue = 0; std::vector<WorldPosition> points; size_t next = 0; time_t built = 0; bool remote = false; };
+    // a node still raises the skill until the skill is 100 over the node's requirement (grey)
+    bool GivesSkill(NodeSpot const& s, uint32 value) { return s.req <= value && value < s.req + 100; }
+
     std::mutex routeLock;
     std::unordered_map<uint32, GatherRoute> routes;
 }
@@ -345,24 +350,87 @@ bool ai::SilvermoonGatherRouteNext(Player* bot, WorldPosition& next, uint32& ind
     uint32 zone = bot->GetZoneId();
     std::lock_guard<std::mutex> guard(routeLock);
     GatherRoute& route = routes[bot->GetGUIDLow()];
-    // (re)build in a new zone, for another skill, every 25 skill points (new nodes open up) or hourly
-    if (route.points.empty() || route.zone != zone || route.skill != skill || value >= route.skillValue + 25 || time(nullptr) - route.built > HOUR)
+    if (route.remote && route.zone == zone)
+        route.remote = false;                           // arrived in the zone it was sent to
+    // (re)build in a new zone (unless on the way to the one it chose), for another skill, every 25
+    // skill points (new nodes open up) or hourly
+    if (route.points.empty() || (route.zone != zone && !route.remote) || route.skill != skill || value >= route.skillValue + 25 ||
+        time(nullptr) - route.built > HOUR)
     {
+        // where (S, 1.6.21: "go to the zone with level-appropriate gather nodes"): here, when 8+ nodes
+        // within 1,200 yards still raise the skill; otherwise around the friendly quest hub on this
+        // continent with the most such nodes within 1,200 yards (a hub the bot isn't under-levelled for,
+        // in a zone under 40 player kills an hour), nearer hubs counting more. Distances only - no
+        // terrain lookups for the thousands of spawn points.
+        bool alliance = bot->GetTeam() == ALLIANCE;
+        WorldPosition here(bot);
+        auto countNear = [&](float x, float y) -> uint32
+        {
+            uint32 n = 0;
+            for (NodeSpot const& s : NodeSpots())
+                if (s.skill == skill && s.map == bot->GetMapId() && GivesSkill(s, value) &&
+                    (s.x - x) * (s.x - x) + (s.y - y) * (s.y - y) < 1200.0f * 1200.0f)
+                    ++n;
+            return n;
+        };
+        uint32 usefulHere = countNear(here.getX(), here.getY());
+        float centerX = here.getX(), centerY = here.getY();
+        bool remote = false;
+        bool onlyUseful = usefulHere >= 8;
+        if (!onlyUseful)
+        {
+            float bestScore = 0.0f;
+            silvermoon::Hub const* best = nullptr;
+            uint32 bestCount = 0;
+            for (silvermoon::Hub const& h : silvermoon::Hubs::All())
+            {
+                if (h.map != bot->GetMapId() || !(h.side == 3 || h.side == (alliance ? 1 : 2)))
+                    continue;
+                if (int32(h.minLevel) > int32(bot->GetLevel()) + 2)
+                    continue;                           // mobs there are too strong for it
+                if (!SilvermoonZoneSafeFor(bot->GetGUIDLow(), sTerrainMgr.GetZoneId(h.map, h.x, h.y, h.z)))
+                    continue;
+                uint32 n = countNear(h.x, h.y);
+                if (n < 8)
+                    continue;
+                float d = here.fDist(WorldPosition(h.map, h.x, h.y, h.z));
+                float score = float(n) / (1.0f + d / 2000.0f);
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    best = &h;
+                    bestCount = n;
+                }
+            }
+            if (best)
+            {
+                centerX = best->x;
+                centerY = best->y;
+                remote = true;
+                onlyUseful = true;
+                zone = sTerrainMgr.GetZoneId(best->map, best->x, best->y, best->z);
+                sLog.outBasic("Silvermoon: %s gathers skill %u (%u) around %s: %u nodes there still raise it, %u here",
+                    bot->GetName(), skill, value, best->name, bestCount, usefulHere);
+            }
+        }
         route = GatherRoute();
         route.zone = zone;
         route.skill = skill;
         route.skillValue = value;
         route.built = time(nullptr);
-        WorldPosition here(bot);
+        route.remote = remote && zone != bot->GetZoneId();
         std::vector<WorldPosition> pool;
         for (NodeSpot const& s : NodeSpots())
         {
+            // only nodes its skill can gather (and, where there are enough, only ones that still raise it)
             if (s.skill != skill || s.req > value || s.map != bot->GetMapId())
                 continue;
-            float dx = s.x - here.getX(), dy = s.y - here.getY();
-            if (dx * dx + dy * dy > 4000.0f * 4000.0f)
+            if (onlyUseful && !GivesSkill(s, value))
                 continue;
-            if (sTerrainMgr.GetZoneId(s.map, s.x, s.y, s.z) != zone)
+            float dx = s.x - centerX, dy = s.y - centerY;
+            if (remote ? dx * dx + dy * dy > 1200.0f * 1200.0f : dx * dx + dy * dy > 4000.0f * 4000.0f)
+                continue;
+            if (!remote && sTerrainMgr.GetZoneId(s.map, s.x, s.y, s.z) != zone)
                 continue;
             WorldPosition p(s.map, s.x, s.y, s.z);
             bool dup = false;
