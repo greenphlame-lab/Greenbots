@@ -114,6 +114,12 @@ ItemUsage ItemUsageValue::Calculate()
     if (!proto || !proto->SellPrice || proto->Quality >= ITEM_QUALITY_RARE || proto->Class == ITEM_CLASS_QUEST ||
         proto->Bonding == BIND_QUEST_ITEM)
         return usage;
+    // gathered materials going to the AH stay there while the deposit is payable (S, 1.6.21)
+    if (usage == ItemUsage::ITEM_USAGE_AH && proto->Class == ITEM_CLASS_TRADE_GOODS &&
+        (proto->SubClass == ITEM_SUBCLASS_HERB || proto->SubClass == ITEM_SUBCLASS_METAL_STONE ||
+         proto->SubClass == ITEM_SUBCLASS_LEATHER || proto->SubClass == ITEM_SUBCLASS_CLOTH) &&
+        GetAhDepositCost(proto, 1) <= bot->GetMoney())
+        return usage;
     uint32 id = proto->ItemId;
     if (id == 6948 || id == 2901 || id == 7005 || id == 5956 || id == 6219 || id == 6218 ||
         (proto->Class == ITEM_CLASS_WEAPON && proto->SubClass == ITEM_SUBCLASS_WEAPON_FISHING_POLE))
@@ -660,6 +666,25 @@ if ((proto->Class == ITEM_CLASS_PROJECTILE ||
         // (bots carried hundreds of herbs while the AH saw about 30 material listings a day)
         bool spareMaterials = proto->Class == ITEM_CLASS_TRADE_GOODS && proto->Stackable > 1 &&
             bot->GetItemCount(proto->ItemId) >= 2 && sRandomPlayerbotMgr.IsRandomBot(bot);
+
+        // Silvermoon (S, 1.6.21): gathered materials (herbs, ore and stone, leather, cloth) the bot's own
+        // professions don't use - those were kept above - go to the auction house at its next visit,
+        // whatever its bag fill or how small the markup, even a single one. Only a deposit it can't
+        // pay, or an AH price that wouldn't beat the vendor after the deposit, sends them to a vendor.
+        if (sRandomPlayerbotMgr.IsRandomBot(bot) && proto->Class == ITEM_CLASS_TRADE_GOODS &&
+            (proto->SubClass == ITEM_SUBCLASS_HERB || proto->SubClass == ITEM_SUBCLASS_METAL_STONE ||
+             proto->SubClass == ITEM_SUBCLASS_LEATHER || proto->SubClass == ITEM_SUBCLASS_CLOTH) &&
+            !SilvermoonSoldByVendor(itemId))
+        {
+            Item* mat = CurrentItem(proto, bot);
+            uint32 matCount = mat ? mat->GetCount() : 1;
+            uint32 deposit = GetAhDepositCost(proto, matCount);
+            uint32 ah = ItemUsageValue::GetBotSellPrice(proto, bot) * matCount;
+            uint32 vendor = proto->SellPrice * matCount;
+            if (deposit <= bot->GetMoney() && ah >= deposit && ah - deposit >= vendor)
+                return ItemUsage::ITEM_USAGE_AH;
+            return sellUsage;
+        }
 
         if (!ahMoney && AI_VALUE(uint8, "bag space") > 80 && !spareMaterials)
             return sellUsage;
