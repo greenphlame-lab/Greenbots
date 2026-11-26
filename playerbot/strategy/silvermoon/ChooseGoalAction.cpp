@@ -466,7 +466,9 @@ static SilvermoonScoredGoal ScoreWith(Player* bot, BotSnapshot const& snapshot, 
         std::list<Item*> ahItems = bot->GetPlayerbotAI()->GetAiObjectContext()->GetValue<std::list<Item*>>("inventory items", "usage " + std::to_string((uint8)ItemUsage::ITEM_USAGE_AH))->Get();
         uint32 stacks = (uint32)ahItems.size();
         float minutes = float(std::min<uint32>(25, stacks));
-        bool policyTrip = SilvermoonPolicyFor(bot->GetGUIDLow()).ahGold && SilvermoonAhTripDue(bot, ahItems);
+        // your characters: due at your "AH trip at" gold, or with any marked item when it isn't set
+        // (Guile, no setting, carried 45 herbs marked AH and never went)
+        bool policyTrip = SilvermoonIsOwn(bot) && SilvermoonAhTripDue(bot, ahItems);
         if (policyTrip)
             minutes = 25.0f;      // your "AH trip when worth" is reached: worth the trip
         goal.score.value = GoalScorer::XpPerMinute(snapshot) * minutes;

@@ -1621,6 +1621,13 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                             me->GetPlayerbotAI()->ChangeStrategy("+travel,+rpg,+grind,+silvermoon brain", BotState::BOT_STATE_NON_COMBAT);
                             sLog.outBasic("Silvermoon: %s on Auto had no brain, added it", me->GetName());
                         }
+                        // S (Nov 26): "AH this" item rules never listed anything - posting at the
+                        // auctioneer lives in the "rpg vendor" strategy, which characters on Auto lacked
+                        // (Kojimbo went to the AH 10 times and posted nothing). Buying there stays off.
+                        if (me->GetPlayerbotAI() && !me->GetGroup() &&
+                            me->GetPlayerbotAI()->HasStrategy("silvermoon brain", BotState::BOT_STATE_NON_COMBAT) &&
+                            !me->GetPlayerbotAI()->HasStrategy("rpg vendor", BotState::BOT_STATE_NON_COMBAT))
+                            me->GetPlayerbotAI()->ChangeStrategy("+rpg vendor", BotState::BOT_STATE_NON_COMBAT);
                         if (me->GetPlayerbotAI())
                             SilvermoonGhostRescue(me);
                         // relocation trips end here for your characters too (S: Guile reached the
@@ -1674,6 +1681,9 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                 SilvermoonGhostRescue(p);
                 if (p->GetMap() && p->GetMap()->IsContinent())
                     SilvermoonRelocateTick(p, p->GetPlayerbotAI());   // trip arrival for alts (Guile)
+                if (SilvermoonAutoOn(alt.second) && !p->GetGroup() &&
+                    !p->GetPlayerbotAI()->HasStrategy("rpg vendor", BotState::BOT_STATE_NON_COMBAT))
+                    p->GetPlayerbotAI()->ChangeStrategy("+rpg vendor", BotState::BOT_STATE_NON_COMBAT);   // AH posting (see above)
                 if (SilvermoonAutoOn(alt.second) && p->IsAlive() && !p->IsInCombat() && p->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_RESTING) &&
                     !GetEventValue(alt.second, "silvermoon_alt_shop"))
                 {

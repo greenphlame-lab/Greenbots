@@ -7,6 +7,7 @@ namespace ai
 {
     // Silvermoon policies (S): eat / drink until X% for your own characters, 0 = default (full)
     uint8 SilvermoonRestTarget(Player* bot, bool mana);
+    bool SilvermoonIsOwn(Player* bot);
 }
 
 namespace ai
@@ -121,7 +122,8 @@ namespace ai
     {
     public:
         CanAHBuyValue(PlayerbotAI* ai) : BoolCalculatedValue(ai, "can ah buy", 2) {}
-        virtual bool Calculate() override { return ai->HasStrategy("rpg vendor", BotState::BOT_STATE_NON_COMBAT) && !AI_VALUE(bool, "should repair") && !AI_VALUE(bool, "should sell") && !AI_VALUE(bool, "can get mail") && AI_VALUE2(uint32, "free money for", (uint32)NeedMoneyFor::ah) > 0; };
+        // (Silvermoon: never for your own characters - they post at the AH but don't spend your money there)
+        virtual bool Calculate() override { return !SilvermoonIsOwn(bot) && ai->HasStrategy("rpg vendor", BotState::BOT_STATE_NON_COMBAT) && !AI_VALUE(bool, "should repair") && !AI_VALUE(bool, "should sell") && !AI_VALUE(bool, "can get mail") && AI_VALUE2(uint32, "free money for", (uint32)NeedMoneyFor::ah) > 0; };
     };
 
 
