@@ -96,7 +96,9 @@ namespace silvermoon
                 s.value = 0.0f;
             // destitute (S: can't even fix its weapon - find some way to make money): grey mobs give
             // no XP but drop coin and vendor loot, and are safe with a broken weapon
-            else if (bot.destitute && c.mobLevel > 0 && c.mobLevel <= bot.greyLevel && int32_t(bot.level) - c.mobLevel <= 12)
+            // (close by only - 300 yards: Cavol kept choosing harpies and Venture Co. across the map and
+            // gave up on the walk after 3 minutes, S Nov 26)
+            else if (bot.destitute && c.mobLevel > 0 && c.mobLevel <= bot.greyLevel && int32_t(bot.level) - c.mobLevel <= 12 && c.distance <= 300.0f)
             {
                 s.value = xpm * 4.0f;
                 s.reason = "destitute: safe money";

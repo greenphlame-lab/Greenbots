@@ -3195,6 +3195,26 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                         SetEventValue(guid, "silvermoon_broken", 0, 0);
                         if (p->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_RESTING) && SilvermoonRepairNearby(p))
                             return;
+                        // ...but only when it can pay for the repair and home is safe (S, Nov 26: Cavol,
+                        // 2 silver, was sent home to Splintertree Post again and again - in Ashenvale,
+                        // where players and guards killed him 153 times a day). Otherwise it goes looking
+                        // for a quieter zone (relocation weighs recent PvP deaths).
+                        {
+                            float hx = 0, hy = 0, hz = 0;
+                            uint32 hmap = 0;
+                            p->GetHomebindLocation(hx, hy, hz, hmap);
+                            uint32 homeZone = sTerrainMgr.GetZoneId(hmap, hx, hy, hz);
+                            uint32 lvl = p->GetLevel();
+                            bool canPay = p->GetMoney() >= 25u * lvl * lvl;   // a full repair at this level, roughly
+                            bool homeSafe = SilvermoonZonePvpDeaths(homeZone) < 40 && homeZone != SilvermoonAvoidedZone(guid);
+                            if (!canPay || !homeSafe)
+                            {
+                                sLog.outBasic("Silvermoon: bot %s has %u broken items but %s - looking for a quieter zone instead of going home",
+                                    p->GetName(), broken, !canPay ? "can't pay for a repair" : "home is a PvP hotspot");
+                                SilvermoonWantRelocate(guid);
+                                return;
+                            }
+                        }
                         sLog.outBasic("Silvermoon: bot %s has had %u broken items for 20 minutes, going home to repair", p->GetName(), broken);
                         if (TravelTarget* t = p->GetPlayerbotAI()->GetAiObjectContext()->GetValue<TravelTarget*>("travel target")->Get())
                             t->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
@@ -3398,6 +3418,29 @@ void RandomPlayerbotMgr::SilvermoonFastProcessBot(Player* player, PlayerbotAI* a
                         if (TravelTarget* target = ai->GetAiObjectContext()->GetValue<TravelTarget*>("travel target")->Get())
                             target->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
                     }
+        }
+        // death spiral (S, Nov 26: Cavol died 153 times in a day in Ashenvale): 10 or more deaths in
+        // 2 hours and the bot looks for another hub (relocation weighs recent PvP deaths, so a
+        // contested zone loses), at most every 30 minutes
+        if (player->IsAlive() && SilvermoonRecentDeaths(bot, 2 * HOUR) >= 10)
+        {
+            static std::mutex spiralLock;
+            static std::unordered_map<uint32, time_t> spiralAt;
+            bool fire = false;
+            {
+                std::lock_guard<std::mutex> guard(spiralLock);
+                time_t& at = spiralAt[bot];
+                if (time(nullptr) - at >= 30 * MINUTE)
+                {
+                    at = time(nullptr);
+                    fire = true;
+                }
+            }
+            if (fire)
+            {
+                sLog.outBasic("Silvermoon: bot %s died %u times in 2 hours, looking for another zone", player->GetName(), SilvermoonRecentDeaths(bot, 2 * HOUR));
+                SilvermoonWantRelocate(bot);
+            }
         }
         // still standing in the zone it should avoid (graveyard and corpse runs keep it there; one bot
         // died 14 times to players in Stonetalon after the rule fired): hearthstone out when ready,
