@@ -843,6 +843,29 @@ bool ChooseGoalAction::Execute(Event& event)
     if (travelTarget->GetStatus() != TravelStatus::TRAVEL_STATUS_PREPARE)
         return false;
 
+    // Go to order (S, 1.6.21: "should immediately override whatever task the bot is on"): ahead of
+    // everything - gather routes, resting, shopping - and without waiting for the destination search
+    {
+        SilvermoonScoredGoal go;
+        if (SilvermoonGoGoal(bot, go) && go.destination && go.position)
+        {
+            travelTarget->SetStatus(TravelStatus::TRAVEL_STATUS_NONE);
+            TravelTarget newTarget = TravelTarget(ai);
+            newTarget.SetRelevance(AI_VALUE2(int, "manual int", "future travel relevance"));
+            newTarget.SetTarget(go.destination, go.position);
+            Player* requester = event.getOwner() ? event.getOwner() : (GetMaster() ? GetMaster() : bot);
+            travelTarget->SetConditions({});
+            SET_AI_VALUE2(std::string, "manual string", "future travel condition", "");
+            setNewTarget(requester, &newTarget, travelTarget);
+            travelTarget->SetExpireIn(uint32(30 * MINUTE * IN_MILLISECONDS));
+            travelTarget->SetForced(true);
+            SilvermoonLogDecision(bot, go, nullptr, nullptr);
+            SET_AI_VALUE2(int, "manual int", "silvermoon goal kind", int(go.kind) + 1);
+            SET_AI_VALUE2(int, "manual int", "silvermoon goal check at", int(time(nullptr) + 5 * MINUTE));
+            return true;
+        }
+    }
+
     // Resurrection Sickness (S, 1.6.20): no fighting, questing or gathering until it wears off. The
     // bot walks to the nearest friendly inn when it gets there before the sickness ends (within 1,200
     // yards, running about 7 yards a second) and waits there; otherwise it sits down where it is. It

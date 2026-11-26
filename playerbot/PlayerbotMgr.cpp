@@ -778,6 +778,13 @@ std::list<std::string> PlayerbotHolder::HandlePlayerbotCommand(const std::string
             if (TravelTarget* target = master->GetPlayerbotAI()->GetAiObjectContext()->GetValue<TravelTarget*>("travel target")->Get())
                 if (target->IsActive())
                     target->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);   // re-choose with the new order
+        // a Go to order (S, 1.6.21): no waiting on a "try again in 30 seconds"; stop walking the old way
+        if (ok && command == "go" && master->GetPlayerbotAI())
+        {
+            master->GetPlayerbotAI()->GetAiObjectContext()->GetValue<int>("manual int", "silvermoon goal retry at")->Set(0);
+            if (!master->IsInCombat())
+                master->GetPlayerbotAI()->StopMoving();
+        }
         // Silvermoon (S): the panel used to wait for the 30-second push to show a change (a
         // profession took up to half a minute to show as queued); send the new state right away
         // a changed item rule or keep policy must count at the next vendor visit (S: Tigerseye set to
