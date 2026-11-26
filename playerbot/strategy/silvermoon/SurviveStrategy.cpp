@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <vector>
 #include "playerbot/RandomPlayerbotMgr.h"
+#include "Tools/Formulas.h"
 
 using namespace ai;
 
@@ -14,6 +15,10 @@ void SurviveStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
     triggers.push_back(new TriggerNode(
         "very often",
         NextAction::array(0, new NextAction("silvermoon flee outmatched", ACTION_EMERGENCY + 5), NULL)));
+    // gathering past grey mobs (S): above the flee step, below the lifesavers
+    triggers.push_back(new TriggerNode(
+        "very often",
+        NextAction::array(0, new NextAction("silvermoon walk past greys", ACTION_EMERGENCY + 5.5f), NULL)));
     // lifesavers for every class (S: Mommy, a paladin, died to a level 6 Kobold Miner with Divine
     // Protection, Blessing of Protection and Lay on Hands all ready) - above the flee step
     triggers.push_back(new TriggerNode(
@@ -99,6 +104,46 @@ bool PolicyPotionAction::isUseful()
 bool PolicyPotionAction::Execute(Event& event)
 {
     return ai->DoSpecificAction("healing potion", Event("silvermoon policy potion"), true);
+}
+
+namespace ai { uint8 SilvermoonTravelRules(Player* bot); float SilvermoonGatherOrderFactor(uint32 guid, uint32 skill); }
+
+bool WalkPastGreysAction::isUseful()
+{
+    if (!bot->IsAlive() || !bot->IsInCombat() || !SilvermoonIsOwn(bot))
+        return false;
+    // gathering, with "ignore grey mobs" on (travel bit 2 clear = greys ignored)
+    if (!(SilvermoonGatherOrderFactor(bot->GetGUIDLow(), 182) > 1.0f || SilvermoonGatherOrderFactor(bot->GetGUIDLow(), 186) > 1.0f))
+        return false;
+    if (SilvermoonTravelRules(bot) & 2)
+        return false;
+    if (bot->GetHealthPercent() < 40.0f)
+        return false;                     // hurt: fight it out (the flee and lifesaver steps decide)
+    TravelTarget* target = AI_VALUE(TravelTarget*, "travel target");
+    if (!target || !target->GetPosition() || target->GetPosition()->getMapId() != bot->GetMapId())
+        return false;
+    uint32 attackers = 0;
+    for (ObjectGuid const& guid : AI_VALUE(std::list<ObjectGuid>, "attackers"))
+    {
+        Unit* u = ai->GetUnit(guid);
+        if (!u || !u->IsAlive())
+            continue;
+        if (u->GetTypeId() != TYPEID_UNIT || MaNGOS::XP::Gain(bot, (Creature*)u))
+            return false;                 // a player, or a mob that still gives XP: the normal fight
+        ++attackers;
+    }
+    return attackers > 0;
+}
+
+bool WalkPastGreysAction::Execute(Event& event)
+{
+    TravelTarget* target = AI_VALUE(TravelTarget*, "travel target");
+    WorldPosition* to = target ? target->GetPosition() : nullptr;
+    if (!to)
+        return false;
+    bot->AttackStop();
+    SET_AI_VALUE(ObjectGuid, "current target", ObjectGuid());
+    return MoveTo(to->getMapId(), to->getX(), to->getY(), to->getZ(), false, false, false, true);
 }
 
 bool FleeOutmatchedAction::isUseful()

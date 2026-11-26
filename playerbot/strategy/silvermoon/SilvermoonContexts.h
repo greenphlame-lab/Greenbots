@@ -33,6 +33,7 @@ namespace ai
             creators["recheck goal"] = [](PlayerbotAI* ai) { return new RecheckGoalAction(ai); };
             creators["silvermoon take quests"] = [](PlayerbotAI* ai) { return new TakeQuestsAction(ai); };
             creators["silvermoon flee outmatched"] = [](PlayerbotAI* ai) { return new FleeOutmatchedAction(ai); };
+            creators["silvermoon walk past greys"] = [](PlayerbotAI* ai) { return new WalkPastGreysAction(ai); };
             creators["silvermoon policy potion"] = [](PlayerbotAI* ai) { return new PolicyPotionAction(ai); };
             creators["silvermoon lifesaver"] = [](PlayerbotAI* ai) { return new LifesaverAction(ai); };
             creators["silvermoon travel speed"] = [](PlayerbotAI* ai) { return new TravelSpeedAction(ai); };

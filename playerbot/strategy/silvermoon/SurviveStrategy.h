@@ -32,6 +32,16 @@ namespace ai
         virtual bool Execute(Event& event) override;
     };
 
+    // your character on a Gather order with "ignore grey mobs" (S): when only grey mobs are on it, it
+    // doesn't fight - it keeps walking its route and lets them give up
+    class WalkPastGreysAction : public MovementAction
+    {
+    public:
+        WalkPastGreysAction(PlayerbotAI* ai) : MovementAction(ai, "silvermoon walk past greys") {}
+        virtual bool isUseful() override;
+        virtual bool Execute(Event& event) override;
+    };
+
     class FleeOutmatchedAction : public FleeAction
     {
     public:
