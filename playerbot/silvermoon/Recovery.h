@@ -42,6 +42,9 @@ namespace ai
     // price, level-appropriate items, up to what the bot wants and the budget allows); true if it bought
     bool SilvermoonBuySupplies(Player* bot);
 
+    // gathering milestone for a level (S, 1.6.21): 150 at 25, 200 at 35 ... 300 at 60 (0 below 10)
+    uint32_t SilvermoonGatherMilestone(uint32_t level);
+
     // a zone that is safe to send a struggling bot to (under 40 deaths to players in the last
     // hour, and not the zone it is avoiding)
     bool SilvermoonZoneSafeFor(uint32_t guid, uint32_t zoneId);

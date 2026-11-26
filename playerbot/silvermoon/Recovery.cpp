@@ -3,6 +3,7 @@
 #include "playerbot/TravelNode.h"
 #include "playerbot/strategy/values/BudgetValues.h"
 #include "playerbot/strategy/silvermoon/RelocateGoal.h"
+#include "playerbot/strategy/silvermoon/Professions.h"
 #include "Entities/Player.h"
 #include "Entities/Bag.h"
 #include "Maps/GridMap.h"
@@ -109,6 +110,19 @@ int32_t ai::SilvermoonStruggleLevelDrop(uint32_t guid)
     return SilvermoonStruggling(guid) ? 4 : 0;
 }
 
+uint32_t ai::SilvermoonGatherMilestone(uint32_t level)
+{
+    // level -> gathering skill it should have by then (S: 150 at 25, 200 at 35), straight lines between
+    static const uint32 table[][2] = { { 10, 50 }, { 15, 75 }, { 20, 110 }, { 25, 150 }, { 30, 175 }, { 35, 200 },
+                                       { 40, 225 }, { 45, 250 }, { 50, 275 }, { 55, 290 }, { 60, 300 } };
+    if (level < 10)
+        return 0;
+    for (size_t i = 1; i < sizeof(table) / sizeof(table[0]); ++i)
+        if (level <= table[i][0])
+            return table[i - 1][1] + (table[i][1] - table[i - 1][1]) * (level - table[i - 1][0]) / (table[i][0] - table[i - 1][0]);
+    return 300;
+}
+
 bool ai::SilvermoonZoneSafeFor(uint32_t guid, uint32_t zoneId)
 {
     return SilvermoonZonePvpDeaths(zoneId) < 40 && zoneId != SilvermoonAvoidedZone(guid);
@@ -145,6 +159,54 @@ void ai::SilvermoonRecoveryTick(Player* bot)
         }
         if (due && alive && !cashOut && !bot->GetGroup())
             SilvermoonBuySupplies(bot);
+    }
+
+    // gathering milestones (S, 1.6.21: "level 25 at least 150 in a gathering skill, 200 by 35"): at
+    // most every 15 minutes, a bot whose Mining or Herbalism is 25+ points behind the milestone for
+    // its level, and not capped by its rank, gets a 25-minute gather session (its zone's node route,
+    // as a Gather order does), then an hour before the next one. A capped skill is trained at the
+    // next rest in town (the craft pass; ranks may now use all the spending money).
+    {
+        static std::mutex profLock;
+        static std::unordered_map<uint32, time_t> nextProfCheck;
+        bool due = false;
+        {
+            std::lock_guard<std::mutex> guard(profLock);
+            time_t& at = nextProfCheck[guid];
+            if (now >= at)
+            {
+                at = now + 15 * MINUTE;
+                due = true;
+            }
+        }
+        // ...also a bot cashing out with nothing left to sell (S: the stuck few - Olmoh, Ninmenno,
+        // Kelyia - grinding grey mobs with broken gear): gathering is money without fighting
+        bool brokeNoLoot = due && cashOut && SilvermoonBagSellValue(bot) < 200;
+        if (due && alive && (!cashOut || brokeNoLoot) && !bot->GetGroup() && !bot->IsInCombat() && !bot->HasAura(15007) && !SilvermoonCatchUpSkill(guid))
+        {
+            uint32 target = brokeNoLoot ? 300 : SilvermoonGatherMilestone(bot->GetLevel());
+            uint32 best = 0, bestValue = 0;
+            for (uint32 skill : { uint32(SKILL_MINING), uint32(SKILL_HERBALISM) })
+                if (bot->HasSkill(skill) && bot->GetSkillValuePure(skill) >= bestValue)
+                {
+                    best = skill;
+                    bestValue = bot->GetSkillValuePure(skill);
+                }
+            bool capped = best && bestValue >= bot->GetSkillMaxPure(best);
+            if (best && target && bestValue + 25 <= target && (!capped || brokeNoLoot))   // broke: capped or not, the materials sell
+            {
+                SilvermoonStartCatchUp(guid, best, 25 * MINUTE);
+                {
+                    std::lock_guard<std::mutex> guard(profLock);
+                    nextProfCheck[guid] = now + 85 * MINUTE;   // 25 minutes of gathering, then an hour
+                }
+                sLog.outBasic("Silvermoon: bot %s (level %u) %s skill %u (%u, milestone %u) - gather session",
+                    bot->GetName(), bot->GetLevel(), brokeNoLoot ? "is broke with nothing to sell, gathers with" : "is behind on", best, bestValue, target);
+                if (PlayerbotAI* pai = bot->GetPlayerbotAI())
+                    if (TravelTarget* t = pai->GetAiObjectContext()->GetValue<TravelTarget*>("travel target")->Get())
+                        t->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
+            }
+        }
     }
 
     bool startStruggling = false;

@@ -297,15 +297,49 @@ namespace
     std::unordered_map<uint32, GatherRoute> routes;
 }
 
+// profession catch-up (S, 1.6.21): a random bot whose gathering skill is far behind its level gets a
+// gather session of its own, the same as a Gather order from the panel, until a set time
+namespace
+{
+    std::unordered_map<uint32, std::pair<uint32, time_t>> catchUp;   // guid -> (skill, until); orderLock
+    uint32 CatchUpSkillLocked(uint32 guid)
+    {
+        auto it = catchUp.find(guid);
+        if (it == catchUp.end())
+            return 0;
+        if (time(nullptr) >= it->second.second)
+        {
+            catchUp.erase(it);
+            return 0;
+        }
+        return it->second.first;
+    }
+}
+
+void ai::SilvermoonStartCatchUp(uint32 guid, uint32 skill, uint32 seconds)
+{
+    std::lock_guard<std::mutex> guard(orderLock);
+    catchUp[guid] = { skill, time(nullptr) + seconds };
+}
+
+uint32 ai::SilvermoonCatchUpSkill(uint32 guid)
+{
+    std::lock_guard<std::mutex> guard(orderLock);
+    return CatchUpSkillLocked(guid);
+}
+
 bool ai::SilvermoonGatherRouteNext(Player* bot, WorldPosition& next, uint32& index, uint32& total)
 {
     uint32 skill = 0;
     {
         std::lock_guard<std::mutex> guard(orderLock);
         auto it = orders.find(bot->GetGUIDLow());
-        if (it == orders.end() || (it->second.gather != SKILL_HERBALISM && it->second.gather != SKILL_MINING))
+        if (it != orders.end() && (it->second.gather == SKILL_HERBALISM || it->second.gather == SKILL_MINING))
+            skill = it->second.gather;
+        else
+            skill = CatchUpSkillLocked(bot->GetGUIDLow());
+        if (skill != SKILL_HERBALISM && skill != SKILL_MINING)
             return false;
-        skill = it->second.gather;
     }
     uint32 value = bot->GetSkillValue(skill);
     uint32 zone = bot->GetZoneId();
@@ -387,7 +421,7 @@ float ai::SilvermoonGatherOrderFactor(uint32 guid, uint32 skill)
     std::lock_guard<std::mutex> guard(orderLock);
     auto it = orders.find(guid);
     if (it == orders.end() || !it->second.gather)
-        return 1.0f;
+        return CatchUpSkillLocked(guid) == skill ? 20.0f : 1.0f;
     return it->second.gather == skill ? 20.0f : 1.0f;
 }
 

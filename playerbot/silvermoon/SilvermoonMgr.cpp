@@ -1310,8 +1310,8 @@ static bool SilvermoonCraftPass(Player* bot, bool allowBuying)
                 break;
             if (!bot->HasSkill(t.skill) || bot->GetSkillValuePure(t.skill) < t.skillValue || bot->GetLevel() < t.level || bot->HasSpell(t.spell))
                 continue;
-            if (t.rank ? uint64(t.cost) * 2 > SilvermoonSpendMoney(bot) : (!inCapital || uint64(t.cost) * 20 >= SilvermoonSpendMoney(bot)))
-                continue; // rank: at most half its money; recipe: in a capital, under 5% of its money
+            if (t.rank ? uint64(t.cost) > SilvermoonSpendMoney(bot) : (!inCapital || uint64(t.cost) * 20 >= SilvermoonSpendMoney(bot)))
+                continue; // rank (1.6.21): any spending money above the repair fund; recipe: in a capital, under 5% of its money
             bot->ModifyMoney(-int32(t.cost));
             bot->learnSpell(t.spell, false);
             ++learnedNow;
