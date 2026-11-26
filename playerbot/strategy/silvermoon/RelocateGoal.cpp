@@ -177,6 +177,12 @@ bool ai::SilvermoonBestRelocate(Player* bot, PlayerbotAI* ai, float bestLocalSco
         std::lock_guard<std::mutex> guard(tripLock);
         want = wanted.erase(guid) > 0;
     }
+    // your character outside every zone ticked in Policies (S: Guile, Barrens and Stonetalon ticked,
+    // stood still in Durotar - every local goal there is filtered out): getting to an allowed zone
+    // is the goal, at once, and a hub skipped after a failed trip is tried again
+    bool outsideAllowed = SilvermoonIsOwn(bot) && SilvermoonZoneBlocked(guid, bot->GetZoneId());
+    if (outsideAllowed)
+        want = true;
     // outgrown: the bot is well above its area's level (a level 21-28 crowd stayed in Durotar with
     // no relocation at all: grinding grey mobs still scored above the "thin" line)
     bool outgrown = false;
@@ -239,7 +245,7 @@ bool ai::SilvermoonBestRelocate(Player* bot, PlayerbotAI* ai, float bestLocalSco
             continue;
         if (int32(level) < int32(h.minLevel) + 2 || int32(level) > int32(h.maxLevel) - 2)
             continue;
-        if (Skipped(guid, h.id))
+        if (Skipped(guid, h.id) && !outsideAllowed)
             continue;                                   // failed to get there recently
         if (SilvermoonIsOwn(bot))
         {
