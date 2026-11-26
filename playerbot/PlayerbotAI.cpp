@@ -1397,6 +1397,32 @@ void PlayerbotAI::UpdateAIInternal(uint32 elapsed, bool minimal)
 
     aiTick++;
 
+    // Silvermoon (S: "I log into a character and it's below ground, then suddenly dead in the
+    // graveyard" - Mommy fell to z -528 a minute after the 8:13 AM restart, before the ground under
+    // her had loaded): every 2 seconds, a bot that dropped more than 10 yards since the last check
+    // and is now more than 20 yards under the ground at its spot is put back on the ground. Only
+    // when falling, so caves and mines don't count.
+    if (bot->IsAlive() && !bot->IsTaxiFlying() && !bot->GetTransport() && bot->GetMap() && bot->GetMap()->IsContinent() &&
+        time(nullptr) >= silvermoonGroundCheckAt)
+    {
+        silvermoonGroundCheckAt = time(nullptr) + 2;
+        float z = bot->GetPositionZ();
+        bool falling = silvermoonLastZ != 0.0f && z < silvermoonLastZ - 10.0f;
+        silvermoonLastZ = z;
+        if (falling && !bot->IsInWater())
+        {
+            float ground = bot->GetMap()->GetHeight(bot->GetPositionX(), bot->GetPositionY(), z + 600.0f);
+            if (ground > INVALID_HEIGHT + 1.0f && z < ground - 20.0f)
+            {
+                sLog.outBasic("Silvermoon: %s fell through the ground at %.0f %.0f (z %.0f, ground %.0f), put back on it",
+                    bot->GetName(), bot->GetPositionX(), bot->GetPositionY(), z, ground);
+                bot->TeleportTo(bot->GetMapId(), bot->GetPositionX(), bot->GetPositionY(), ground + 1.0f, bot->GetOrientation());
+                silvermoonLastZ = 0.0f;
+                return;
+            }
+        }
+    }
+
     std::string mapString = WorldPosition(bot).isInstance() ? "I" : std::to_string(bot->GetMapId());
     auto pmo = sPerformanceMonitor.start(PERF_MON_TOTAL, "PlayerbotAI::UpdateAIInternal " + mapString, nullptr, bot->GetMapId(), bot->GetInstanceId());
 

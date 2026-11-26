@@ -792,6 +792,9 @@ protected:
     // Silvermoon: chat packets arrive on the speaker's thread (a channel message reaches every bot in
     // the channel, on any map); they're queued here and read on this bot's own update
     std::deque<WorldPacket> deferredChat;
+    // Silvermoon: falling through the world (see UpdateAIInternal)
+    time_t silvermoonGroundCheckAt = 0;
+    float silvermoonLastZ = 0.0f;
     std::mutex deferredChatMutex;
     PacketHandlingHelper botOutgoingPacketHandlers;
     PacketHandlingHelper masterIncomingPacketHandlers;
