@@ -124,6 +124,24 @@ bool BuyAction::Execute(Event& event)
                     if ((proto->Class == ITEM_CLASS_QUIVER || proto->Class == ITEM_CLASS_CONTAINER) && bot->HasItemCount(proto->ItemId, 1))
                         break;
 
+                    // Silvermoon (S, 1.6.21: Anmo, level 35, paid 5 gold for a Cubic Zirconia Ring): gear with
+                    // nothing on it - no stats, armor, resistances, block or effect (vanity rings, shirts,
+                    // tabards) - only "upgrades" an empty slot; never bought
+                    if (usage == ItemUsage::ITEM_USAGE_EQUIP && proto->Class != ITEM_CLASS_WEAPON && proto->Class != ITEM_CLASS_CONTAINER &&
+                        proto->Class != ITEM_CLASS_QUIVER && proto->Class != ITEM_CLASS_PROJECTILE)
+                    {
+                        bool anything = proto->Armor || proto->Block || proto->HolyRes || proto->FireRes || proto->NatureRes ||
+                            proto->FrostRes || proto->ShadowRes || proto->ArcaneRes || proto->RandomProperty;
+                        for (int i = 0; i < MAX_ITEM_PROTO_STATS && !anything; ++i)
+                            if (proto->ItemStat[i].ItemStatValue)
+                                anything = true;
+                        for (int i = 0; i < MAX_ITEM_PROTO_SPELLS && !anything; ++i)
+                            if (proto->Spells[i].SpellId)
+                                anything = true;
+                        if (!anything)
+                            break;
+                    }
+
                     // Gold affordability 
                     RESET_AI_VALUE2(uint32, "free money for", moneyKey);
                     uint32 money = AI_VALUE2(uint32, "free money for", moneyKey);
