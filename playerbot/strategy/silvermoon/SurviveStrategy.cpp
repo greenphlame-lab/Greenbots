@@ -7,6 +7,7 @@
 #include <vector>
 #include "playerbot/RandomPlayerbotMgr.h"
 #include "Tools/Formulas.h"
+#include "playerbot/TravelMgr.h"
 
 using namespace ai;
 
