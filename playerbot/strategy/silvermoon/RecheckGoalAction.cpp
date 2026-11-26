@@ -116,8 +116,12 @@ bool RecheckGoalAction::isUseful()
         if (target && target->GetPosition() && dynamic_cast<TemporaryTravelDestination*>(target->GetDestination()) &&
             target->GetStatus() != TravelStatus::TRAVEL_STATUS_EXPIRED && target->GetStatus() != TravelStatus::TRAVEL_STATUS_NONE &&
             target->GetPosition()->getMapId() == bot->GetMapId() &&
-            !bot->IsInCombat() && !bot->IsNonMeleeSpellCasted(false) && !bot->GetLootGuid() && !AI_VALUE(bool, "has available loot"))
+            !bot->IsInCombat() && !bot->IsNonMeleeSpellCasted(false) && !bot->GetLootGuid())
         {
+            // something to loot or gather in sight holds the stop - for 45 seconds at most (S, 1.6.21:
+            // Mommy stood 4 yards from stop 38 for the full 5 minutes, below a herb on a slope she
+            // couldn't climb to)
+            bool lootWaiting = AI_VALUE(bool, "has available loot");
             // at the stop: 20 yards on the map (S, 1.6.15: Mommy stood 5 yards below a spawn point on
             // a hilltop - 3D distance kept her "not there" until the 5-minute timer), or 45 seconds
             // within 60 yards of it without getting there (a slope she can't climb). Nodes in sight
@@ -137,6 +141,13 @@ bool RecheckGoalAction::isUseful()
                     since.second = time(nullptr);
                 if (!done && since.second && time(nullptr) - since.second > 45)
                     done = true;
+            }
+            if (done && lootWaiting)
+            {
+                std::lock_guard<std::mutex> guard(stopLock);
+                auto& since = stopSince[bot->GetGUIDLow()];
+                if (!since.second || time(nullptr) - since.second <= 45)
+                    done = false;
             }
             if (done)
                 target->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
