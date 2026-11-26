@@ -469,6 +469,10 @@ uint32 SilvermoonAvoidedZone(uint32 guid);
 uint32 SilvermoonZonePvpDeaths(uint32 zone);
 // repairs at a friendly repair npc within 60 yards (SilvermoonMgr.cpp); true when it paid for any
 bool SilvermoonRepairNearby(Player* bot);
+// a line for your character's "While you were away" log (S, 1.6.21: vendor sales and repairs)
+void SilvermoonAwayNote(Player* bot, std::string const& text);
+// "1g 2s 3c"
+std::string SilvermoonMoneyText(uint32 copper);
 // Silvermoon auto mode (layer 1): which of S's own always-online characters play on the brain.
 // Rows in characters.silvermoon_auto; re-read every 30 s; "auto on/off" whispers write them.
 bool SilvermoonAutoOn(uint32 guid);

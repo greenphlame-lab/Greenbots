@@ -3,6 +3,8 @@
 #include "playerbot/RandomPlayerbotMgr.h"
 #include "playerbot/silvermoon/BrainTimer.h"
 #include "RepairAllAction.h"
+#include "playerbot/strategy/silvermoon/Policies.h"
+#include "playerbot/TravelNode.h"
 
 #include "playerbot/ServerFacade.h"
 
@@ -86,6 +88,8 @@ bool RepairAllAction::Execute(Event& event)
         if (sRandomPlayerbotMgr.IsRandomBot(bot))
             silvermoon::NoteRepairVisit(bot->GetGUIDLow(), bot->GetMoney());
 
+        if (totalCost > 0 && SilvermoonIsOwn(bot))
+            SilvermoonAwayNote(bot, std::string("Repaired gear at ") + unit->GetName() + " for " + SilvermoonMoneyText(totalCost));
         if (totalCost > 0)
         {
             std::ostringstream out;

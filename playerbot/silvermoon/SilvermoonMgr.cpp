@@ -588,6 +588,16 @@ namespace
     }
 }
 
+void SilvermoonAwayNote(Player* bot, std::string const& text)
+{
+    AwayWrite(bot, text);
+}
+
+std::string SilvermoonMoneyText(uint32 copper)
+{
+    return std::to_string(copper / 10000) + "g " + std::to_string((copper / 100) % 100) + "s " + std::to_string(copper % 100) + "c";
+}
+
 static void SilvermoonAwayTick(Player* bot)
 {
     static const uint32 profSkills[] = { 129, 164, 165, 171, 182, 185, 186, 197, 202, 333, 356, 393 };

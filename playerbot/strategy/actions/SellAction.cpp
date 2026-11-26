@@ -5,6 +5,8 @@
 #include "playerbot/silvermoon/BrainTimer.h"
 #include "playerbot/strategy/ItemVisitors.h"
 #include "playerbot/strategy/values/ItemUsageValue.h"
+#include "playerbot/strategy/silvermoon/Policies.h"
+#include "playerbot/TravelNode.h"
 
 using namespace ai;
 
@@ -128,6 +130,10 @@ bool SellAction::Execute(Event& event)
 
     if (sRandomPlayerbotMgr.IsRandomBot(bot) && bot->GetMoney() > moneyBefore)
         silvermoon::Ledger(silvermoon::LG_SELL) += bot->GetMoney() - moneyBefore;
+    // your character's away log (S, 1.6.21)
+    if (soldItems && bot->GetMoney() > moneyBefore && SilvermoonIsOwn(bot))
+        SilvermoonAwayNote(bot, "Sold " + std::to_string(soldItems) + (soldItems == 1 ? " item" : " items") + " at a vendor for " +
+            SilvermoonMoneyText(bot->GetMoney() - moneyBefore));
 
     return soldItems;
 }
