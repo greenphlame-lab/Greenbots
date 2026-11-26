@@ -651,6 +651,55 @@ static void SilvermoonAwayTick(Player* bot)
         AwayWrite(bot, line);
 }
 
+// the panel's Market window (S, Nov 26): your auctions now up ("P"), and the last 30 days' sold, won
+// and expired ones ("H", from characters.silvermoon_auction_history, which the website's auction
+// tracker fills). Addon messages "SMMKT".
+std::vector<std::string> SilvermoonMarketMessages(Player* bot)
+{
+    auto clean = [](std::string t)
+    {
+        for (char& ch : t)
+            if (ch == '^' || ch == '|' || ch == '\t' || ch == '\n')
+                ch = ' ';
+        return t;
+    };
+    std::vector<std::string> out;
+    out.push_back("SMMKT\tBEGIN");
+    uint32 now = uint32(time(nullptr));
+    if (auto r = CharacterDatabase.PQuery("SELECT item_template, item_count, buyoutprice, lastbid, startbid, time FROM auction WHERE itemowner = %u ORDER BY time LIMIT 30", bot->GetGUIDLow()))
+    {
+        do
+        {
+            Field* f = r->Fetch();
+            ItemPrototype const* proto = sObjectMgr.GetItemPrototype(f[0].GetUInt32());
+            uint32 bid = f[3].GetUInt32() ? f[3].GetUInt32() : f[4].GetUInt32();
+            uint32 left = f[5].GetUInt32() > now ? f[5].GetUInt32() - now : 0;
+            out.push_back("SMMKT\tP^" + clean(proto ? proto->Name1 : "item") + "^" + std::to_string(f[1].GetUInt32()) + "^" +
+                std::to_string(f[2].GetUInt32()) + "^" + std::to_string(bid) + "^" + std::to_string(left) + "^" + std::to_string(proto ? proto->Quality : 1));
+        } while (r->NextRow());
+    }
+    if (auto r = CharacterDatabase.PQuery("SELECT ts, item_name, count, price, status, seller, buyer, item FROM silvermoon_auction_history "
+        "WHERE seller = %u OR buyer = %u ORDER BY ts DESC LIMIT 40", bot->GetGUIDLow(), bot->GetGUIDLow()))
+    {
+        do
+        {
+            Field* f = r->Fetch();
+            std::string status = f[4].GetCppString();
+            uint32 seller = f[5].GetUInt32(), buyer = f[6].GetUInt32();
+            char kind = status == "expired" ? 'E' : (buyer == bot->GetGUIDLow() ? 'W' : 'S');
+            std::string other;
+            uint32 otherGuid = kind == 'W' ? seller : buyer;
+            if (otherGuid)
+                sObjectMgr.GetPlayerNameByGUID(ObjectGuid(HIGHGUID_PLAYER, otherGuid), other);
+            ItemPrototype const* proto = sObjectMgr.GetItemPrototype(f[7].GetUInt32());
+            out.push_back("SMMKT\tH^" + std::to_string(f[0].GetUInt32()) + "^" + std::string(1, kind) + "^" + clean(f[1].GetCppString()) + "^" +
+                std::to_string(f[2].GetUInt32()) + "^" + std::to_string(f[3].GetUInt32()) + "^" + clean(other) + "^" + std::to_string(proto ? proto->Quality : 1));
+        } while (r->NextRow());
+    }
+    out.push_back("SMMKT\tEND");
+    return out;
+}
+
 // the log window's contents: the newest 40 lines and deaths of the last day, newest first
 std::vector<std::string> SilvermoonAwayLogMessages(Player* bot)
 {

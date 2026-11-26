@@ -729,6 +729,16 @@ std::list<std::string> PlayerbotHolder::HandlePlayerbotCommand(const std::string
     // Silvermoon: the in-game panel's Professions and Policies windows send ".bot prof ..." and
     // ".bot pol ..." for the character you're logged in as (a whisper to yourself never reached the
     // bot logic)
+    if (master && command == "pol" && param == "market" && master->GetSession())
+    {
+        for (std::string const& msg : SilvermoonMarketMessages(master))
+        {
+            WorldPacket packet;
+            ChatHandler::BuildChatPacket(packet, CHAT_MSG_PARTY, msg.c_str(), LANG_ADDON, CHAT_TAG_NONE, master->GetObjectGuid(), master->GetName());
+            master->GetSession()->SendPacket(packet);
+        }
+        return messages;
+    }
     if (master && command == "pol" && param == "log" && master->GetSession())
     {
         for (std::string const& msg : SilvermoonAwayLogMessages(master))
