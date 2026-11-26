@@ -215,6 +215,13 @@ bool ShouldSpiritHealerValue::Calculate()
     if (ai->HasActivePlayerMaster()) //Only use spirit healers with direct command with active master.
         return false;
 
+    // Silvermoon (S: Mommy ran toward her body, then stopped and turned around - she had died often
+    // enough that the stock rule sent her to the spirit healer instead): your characters always run
+    // back to their body. One that can't reach it is revived where it stands by the ghost rescue
+    // (2 minutes next to the corpse, or 15 minutes dead).
+    if (SilvermoonIsOwn(bot) && bot->GetCorpse())
+        return false;
+
     //Nothing to lose
     if (ai->HasAura(SPELL_ID_PASSIVE_RESURRECTION_SICKNESS, bot) || durability < 10)
         return true;
