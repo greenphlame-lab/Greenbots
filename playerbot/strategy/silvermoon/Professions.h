@@ -49,6 +49,8 @@ namespace ai
     std::string SilvermoonGoQueueText(Player* bot);
     // on a Go to trip (yours, or the brain's: rank training, bags, vendor materials)
     bool SilvermoonGoActive(Player* bot);
+    // a Go to trip you ordered (not one the brain planned: rank training, bags, materials)
+    bool SilvermoonGoIsYours(Player* bot);
     // "Buy bigger bags" (S, 1.6.21): a go order to the nearest vendor that sells this bag
     bool SilvermoonGoBagVendor(Player* bot, uint32 itemId);
     // profession ranks (S, 1.6.22): a go order to the nearest trainer of the rank this character can

@@ -867,6 +867,9 @@ bool ChooseGoalAction::Execute(Event& event)
 
     // Go to order (S, 1.6.21: "should immediately override whatever task the bot is on"): ahead of
     // everything - gather routes, resting, shopping - and without waiting for the destination search
+    // 1.7.6 (S: bots re-planned a training trip every 2-3 seconds): with Resurrection Sickness the
+    // brain's own trips wait - the res-sick rest ended them every tick and they were chosen again
+    if (SilvermoonGoIsYours(bot) || !SilvermoonResSickRestApplies(bot))
     {
         SilvermoonScoredGoal go;
         if (SilvermoonGoGoal(bot, go) && go.destination && go.position)

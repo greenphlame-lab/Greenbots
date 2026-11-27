@@ -102,7 +102,10 @@ bool RecheckGoalAction::isUseful()
     if (SilvermoonResSickRestApplies(bot) && !bot->IsInCombat() && !SilvermoonCatchUpSkill(bot->GetGUIDLow()))
     {
         TravelTarget* target = AI_VALUE(TravelTarget*, "travel target");
-        if (target && target->IsActive() && !SilvermoonIsResSickTrip(bot->GetGUIDLow(), target->GetDestination()))
+        // ...but a Go to trip you ordered goes ahead (1.7.6: ending it here made the brain choose it
+        // again every few seconds)
+        if (target && target->IsActive() && !SilvermoonIsResSickTrip(bot->GetGUIDLow(), target->GetDestination()) &&
+            !SilvermoonGoIsYours(bot))
             target->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
         return false;
     }

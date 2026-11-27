@@ -670,6 +670,13 @@ bool ai::SilvermoonGoActive(Player* bot)
     return bot && goOrders.count(bot->GetGUIDLow()) > 0;
 }
 
+bool ai::SilvermoonGoIsYours(Player* bot)
+{
+    std::lock_guard<std::mutex> guard(orderLock);
+    auto it = bot ? goOrders.find(bot->GetGUIDLow()) : goOrders.end();
+    return it != goOrders.end() && !it->second.kind.empty();
+}
+
 std::string ai::SilvermoonGoQueueText(Player* bot)
 {
     std::lock_guard<std::mutex> guard(orderLock);
