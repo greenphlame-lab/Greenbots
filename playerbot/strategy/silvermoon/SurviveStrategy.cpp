@@ -174,8 +174,10 @@ bool WalkPastGreysAction::isUseful()
 {
     if (!bot->IsAlive() || !bot->IsInCombat() || !SilvermoonIsOwn(bot))
         return false;
-    // gathering, with "ignore grey mobs" on (travel bit 2 clear = greys ignored)
-    if (!(SilvermoonGatherOrderFactor(bot->GetGUIDLow(), 182) > 1.0f || SilvermoonGatherOrderFactor(bot->GetGUIDLow(), 186) > 1.0f))
+    // gathering or travelling (S, 1.7.1: Mommy stopped to fight a grey level 9 mob on her way to the
+    // herbalism trainer), with "ignore grey mobs" on (travel bit 2 clear = greys ignored)
+    bool gathering = SilvermoonGatherOrderFactor(bot->GetGUIDLow(), 182) > 1.0f || SilvermoonGatherOrderFactor(bot->GetGUIDLow(), 186) > 1.0f;
+    if (!gathering && !AI_VALUE(bool, "travel target traveling"))
         return false;
     if (SilvermoonTravelRules(bot) & 2)
         return false;
