@@ -4,6 +4,7 @@
 #include "RequestGoalAction.h"
 #include "ChooseGoalAction.h"
 #include "Professions.h"
+#include "ActionQueue.h"
 #include "playerbot/silvermoon/Recovery.h"
 #include "playerbot/strategy/values/TravelValues.h"
 #include <mutex>
@@ -27,6 +28,12 @@ bool RecheckGoalAction::Execute(Event& event)
 {
     silvermoon::BrainTimer brainTimer(silvermoon::BrainMicros());
     uint32 guid = bot->GetGUIDLow();
+    // action queue (1.8): a queue step's goal isn't re-scored against everything else
+    if (SilvermoonQueueActive(bot))
+    {
+        SET_AI_VALUE2(int, "manual int", "silvermoon goal check at", int(time(nullptr) + 5 * MINUTE));
+        return false;
+    }
     // load guard (1.7.6): while the server is busy the re-check waits 2 minutes and the bot keeps
     // its goal - each re-check is a destination search
     if (!SilvermoonLoadOk())

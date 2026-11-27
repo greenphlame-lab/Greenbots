@@ -22,6 +22,7 @@
 #include <algorithm>
 #include <mutex>
 #include <unordered_map>
+#include "ActionQueue.h"
 
 using namespace ai;
 using namespace silvermoon;
@@ -895,6 +896,18 @@ bool ChooseGoalAction::Execute(Event& event)
         }
     }
 
+    // action queue (S, 1.8): Go and Wait steps (and "queue only" with nothing queued) are handled
+    // here; quest, grind and train steps filter the scored goals below
+    {
+        uint8_t qKind = 0;
+        uint32_t qId = 0;
+        if (SilvermoonQueueStep(bot, qKind, qId) == 1)
+        {
+            SET_AI_VALUE2(int, "manual int", "silvermoon goal retry at", int(time(nullptr) + 10));
+            return false;
+        }
+    }
+
     // "Buy bigger bags" (S, 1.6.21): a bigger bag it can afford and no vendor selling it nearby - a
     // trip to the nearest one (at most once an hour); the Go to step below takes it from there
     if (!bot->IsInCombat() && !SilvermoonCashOut(bot) && !bot->HasAura(15007))
@@ -1238,6 +1251,47 @@ bool ChooseGoalAction::Execute(Event& event)
         }
         else if (SilvermoonBestRelocate(bot, ai, bestLocal, relocate, relocateHub))
             goals.insert(goals.begin(), relocate);
+    }
+
+    // action queue (S, 1.8): a quest, grind or train step keeps only the goals that serve it - the
+    // quest's giver, objectives and turn-in; that mob's grind spots; the class trainer
+    {
+        uint8_t qKind = 0;
+        uint32_t qId = 0;
+        if (SilvermoonQueueStep(bot, qKind, qId) == 2)
+        {
+            std::vector<SilvermoonScoredGoal> fitting;
+            for (SilvermoonScoredGoal const& g : goals)
+            {
+                TravelDestination* d = g.destination;
+                if (!d)
+                    continue;
+                bool ok = false;
+                if (qKind == AQ_QUEST)
+                {
+                    QuestTravelDestination* qd = dynamic_cast<QuestTravelDestination*>(d);
+                    ok = qd && qd->GetQuestId() == qId;
+                }
+                else if (qKind == AQ_GRIND)
+                    ok = d->GetPurpose() == TravelDestinationPurpose::Grind && d->GetEntry() == int32(qId);
+                else if (qKind == AQ_TRAIN)
+                    ok = d->GetPurpose() == TravelDestinationPurpose::Trainer;
+                if (ok)
+                {
+                    fitting.push_back(g);
+                    fitting.back().score.score = std::max(fitting.back().score.score, 1.0f) * 1000.0f;
+                    fitting.back().score.reason = "queue: " + fitting.back().score.reason;
+                }
+            }
+            if (!fitting.empty())
+                goals = fitting;
+            else if (SilvermoonQueueOnly(bot))
+            {
+                // queue only, and nothing found for the step yet: wait and look again
+                SET_AI_VALUE2(int, "manual int", "silvermoon goal retry at", int(time(nullptr) + 30));
+                return false;
+            }
+        }
     }
 
     if (goals.empty() || goals.front().score.score <= 0.0f)

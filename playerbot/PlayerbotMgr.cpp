@@ -1,5 +1,6 @@
 #include "playerbot/playerbot.h"
 #include "playerbot/strategy/silvermoon/Policies.h"
+#include "playerbot/strategy/silvermoon/ActionQueue.h"
 #include "playerbot/strategy/silvermoon/Professions.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include "PlayerbotDbStore.h"
@@ -757,6 +758,31 @@ std::list<std::string> PlayerbotHolder::HandlePlayerbotCommand(const std::string
         WorldPacket polPacket;
         ChatHandler::BuildChatPacket(polPacket, CHAT_MSG_PARTY, pol.c_str(), LANG_ADDON, CHAT_TAG_NONE, master->GetObjectGuid(), master->GetName());
         master->GetSession()->SendPacket(polPacket);
+        return messages;
+    }
+    // the action queue (S, 1.8): "pol aq ..." - search results and the queue go back to the panel
+    if (master && command == "pol" && param.rfind("aq ", 0) == 0 && master->GetSession())
+    {
+        std::string reply;
+        std::vector<std::string> out;
+        if (!ai::SilvermoonQueueCommand(master, param.substr(3), reply, out))
+            reply = "Usage: aq add quest <id> | add grind <mob id> [level] [minutes] | add go <place> | add train | add wait <min> | del <n> | up <n> | clear | only on|off | find quest|mob <text>";
+        for (std::string const& t : ai::SilvermoonQueueText(master))
+            out.push_back(t);
+        for (std::string const& msg : out)
+        {
+            WorldPacket packet;
+            ChatHandler::BuildChatPacket(packet, CHAT_MSG_PARTY, msg.c_str(), LANG_ADDON, CHAT_TAG_NONE, master->GetObjectGuid(), master->GetName());
+            master->GetSession()->SendPacket(packet);
+        }
+        if (master->GetPlayerbotAI())
+        {
+            // re-choose now with the queue as it is
+            if (TravelTarget* target = master->GetPlayerbotAI()->GetAiObjectContext()->GetValue<TravelTarget*>("travel target")->Get())
+                if (target->IsActive() && param.rfind("aq find", 0) != 0)
+                    target->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
+            master->GetPlayerbotAI()->TellPlayerNoFacing(master, reply);
+        }
         return messages;
     }
     // the class's default rotation for the Rotation window (1.7.1)

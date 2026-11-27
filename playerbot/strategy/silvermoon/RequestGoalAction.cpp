@@ -7,6 +7,7 @@
 #include "playerbot/strategy/actions/ChooseTravelTargetAction.h"
 #include "ChooseGoalAction.h"
 #include "Professions.h"
+#include "ActionQueue.h"
 #include "playerbot/silvermoon/Recovery.h"
 #include <unordered_map>
 #include <mutex>
@@ -45,6 +46,24 @@ std::vector<SilvermoonGoalFetch> ai::SilvermoonBuildGoalFetches(PlayerbotAI* ai,
         }
         if (flag)
             fetches.push_back({ flag, { (int32)questId }, 1000.0f + (level * level) * 75.0f });
+    }
+
+    // action queue (S, 1.8): the top step's quest giver and grind spots from much further out, and
+    // the class trainer
+    if (uint32 q = SilvermoonQueueFetchQuest(bot))
+        if (bot->GetQuestStatus(q) != QUEST_STATUS_INCOMPLETE && bot->GetQuestStatus(q) != QUEST_STATUS_COMPLETE)
+            fetches.push_back({ (uint32)TravelDestinationPurpose::QuestGiver, { (int32)q }, 10000.0f });
+    if (uint32 mob = SilvermoonQueueGrindEntry(bot))
+        fetches.push_back({ (uint32)TravelDestinationPurpose::Grind, { (int32)mob }, 8000.0f });
+    {
+        uint8_t qKind = 0;
+        uint32_t qId = 0;
+        if (SilvermoonQueueStep(bot, qKind, qId) == 2 && qKind == AQ_TRAIN)
+        {
+            std::vector<int32> trainers = context->GetValue<std::vector<int32>>("available trainers", std::to_string((uint32)TRAINER_TYPE_CLASS))->Get();
+            if (!trainers.empty())
+                fetches.push_back({ (uint32)TravelDestinationPurpose::Trainer, trainers, 10000.0f });
+        }
     }
 
     // grind spots, always

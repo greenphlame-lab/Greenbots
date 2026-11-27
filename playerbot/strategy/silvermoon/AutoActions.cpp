@@ -1,6 +1,7 @@
 #include "playerbot/playerbot.h"
 #include "AutoActions.h"
 #include "Professions.h"
+#include "ActionQueue.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/TravelMgr.h"
 #include "playerbot/TravelNode.h"
@@ -153,6 +154,12 @@ void SilvermoonPushBrainPanel(Player* bot, Player* owner)
         WorldPacket p;
         ChatHandler::BuildChatPacket(p, CHAT_MSG_PARTY, prof.c_str(), LANG_ADDON, CHAT_TAG_NONE, bot->GetObjectGuid(), bot->GetName());
         owner->GetSession()->SendPacket(p);
+        for (std::string const& aq : SilvermoonQueueText(bot))     // the Queue window (1.8)
+        {
+            WorldPacket qp;
+            ChatHandler::BuildChatPacket(qp, CHAT_MSG_PARTY, aq.c_str(), LANG_ADDON, CHAT_TAG_NONE, bot->GetObjectGuid(), bot->GetName());
+            owner->GetSession()->SendPacket(qp);
+        }
         std::string go = SilvermoonGoQueueText(bot);   // the bag window's Go to queue (1.7)
         WorldPacket g;
         ChatHandler::BuildChatPacket(g, CHAT_MSG_PARTY, go.c_str(), LANG_ADDON, CHAT_TAG_NONE, bot->GetObjectGuid(), bot->GetName());

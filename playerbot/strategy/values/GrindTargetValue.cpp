@@ -17,7 +17,7 @@ using namespace ai;
 // Silvermoon (S): grey mobs (no XP) are only worth it for a destitute bot - weapon at 0 durability -
 // which farms them for coin; everyone else leaves them alone unless a quest needs them. (Stock let 1
 // in 50 through and, on long trips, bots spent their time killing grey mobs.)
-namespace ai { uint8 SilvermoonTravelRules(Player* bot); bool SilvermoonIsOwn(Player* bot); float SilvermoonGatherOrderFactor(uint32 guid, uint32 skill); uint8 SilvermoonFactionNpcKind(Player* bot, Unit* unit); bool SilvermoonGoActive(Player* bot); }
+namespace ai { uint8 SilvermoonTravelRules(Player* bot); bool SilvermoonIsOwn(Player* bot); float SilvermoonGatherOrderFactor(uint32 guid, uint32 skill); uint8 SilvermoonFactionNpcKind(Player* bot, Unit* unit); bool SilvermoonGoActive(Player* bot); uint32_t SilvermoonQueueGrindEntry(Player* bot); }
 
 static bool SilvermoonGreyAllowed(Player* bot)
 {
@@ -113,11 +113,16 @@ Unit* GrindTargetValue::FindTargetForGrinding(int assistCount)
 
     std::unordered_map<uint32, bool> needForQuestCache;
 
+    uint32 queueGrind = SilvermoonQueueGrindEntry(bot);
     int careful = -1;   // Silvermoon careful mode, worked out on first use
     for (std::list<ObjectGuid>::iterator tIter = targets.begin(); tIter != targets.end(); tIter++)
     {
         Unit* unit = ai->GetUnit(*tIter);
         if (!unit)
+            continue;
+
+        // action queue (S, 1.8): a "grind <mob>" step pulls only that mob
+        if (queueGrind && unit->GetEntry() != queueGrind)
             continue;
 
         // S (1.6.20): leave the other faction's NPCs alone. A guard (either side, or a neutral town's)
