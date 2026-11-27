@@ -1081,6 +1081,11 @@ void TravelTarget::CheckStatus()
 
             ai->TellDebug(ai->GetMaster(), "The target is starting to work because the destination has been reached.", "debug travel");
             SetStatus(TravelStatus::TRAVEL_STATUS_WORK);
+            // Silvermoon 1.7.7 (S: "is this limited to res sick or all forced trips?"): "forced" means
+            // don't give up on the way. Kept after arrival it also meant the work there never timed
+            // out, so a bot sat at its spot for good (163 at inns after res sickness, others after
+            // supply and trainer trips). From here the normal work timer (5 minutes) applies.
+            forced = false;
             return;
         }
         else if(IsForced()) return; //While traveling do not go into cooldown

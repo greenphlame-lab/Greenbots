@@ -118,6 +118,17 @@ bool RecheckGoalAction::isUseful()
             target->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
         return false;
     }
+    // a Go to trip is there within 15 yards (the Go to step's own rule) - the trip ends so the Go to
+    // step does its arrival work (train, repair, buy, the next queued stop). The travel code only
+    // counts 5 yards as there, and a trainer behind a counter is never that close: the forced trip
+    // then walked at it forever (1.7.7)
+    if (SilvermoonGoActive(bot))
+    {
+        TravelTarget* target = AI_VALUE(TravelTarget*, "travel target");
+        if (target && target->IsActive() && target->GetPosition() && dynamic_cast<TemporaryTravelDestination*>(target->GetDestination()) &&
+            target->GetPosition()->getMapId() == bot->GetMapId() && target->GetPosition()->distance(WorldPosition(bot)) < 15.0f)
+            target->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
+    }
     // ...and the inn rest ends when the sickness does (1.7.7, S: Farolas sat at the Darkshire inn on
     // "res sickness: rest at the inn" 20+ minutes after it wore off - the trip is forced, so once there
     // it never timed out)
