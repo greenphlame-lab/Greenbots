@@ -339,18 +339,37 @@ SilvermoonSupplyNeed ai::SilvermoonSupplies(Player* bot)
             n.water += item->GetCount();
     });
     bool mana = UsesMana(bot);
-    n.waterWanted = mana ? 2 * STACK : 0;
-    n.foodWanted = mana ? STACK : 2 * STACK;
-    // shopping when below half of what it wants; a trip when nearly out (under 5)
-    n.low = n.food * 2 < n.foodWanted || (mana && n.water * 2 < n.waterWanted);
+    // 1.6.23 (S: gold in circulation fell from 907g to 413g in 6 hours, ~80g an hour on food and
+    // water): a stack of water and half a stack of food for mana users, a stack of food for others
+    n.waterWanted = mana ? STACK : 0;
+    n.foodWanted = mana ? STACK / 2 : STACK;
+    // shopping when below a quarter of what it wants; a trip when nearly out (under 5)
+    n.low = n.food * 4 < n.foodWanted || (mana && n.water * 4 < n.waterWanted);
     n.veryLow = n.food < 5 || (mana && n.water < 5);
     return n;
 }
 
+namespace
+{
+    std::mutex supplyLock;
+    std::unordered_map<uint32, std::pair<time_t, uint32>> supplySpent;   // guid -> (hour started, spent in it)
+}
+
 uint32_t ai::SilvermoonSupplyBudget(Player* bot)
 {
-    uint32 share = bot->GetMoney() / 5;
-    return std::min(share, SilvermoonSpendable(bot));
+    // 1.6.23: at most 10% of its money per hour in all (it was 20% per purchase, and the buy step runs
+    // every minute), and never the repair fund
+    uint32 spent = 0;
+    {
+        std::lock_guard<std::mutex> guard(supplyLock);
+        auto& s = supplySpent[bot->GetGUIDLow()];
+        if (time(nullptr) - s.first >= HOUR)
+            s = { time(nullptr), 0 };
+        spent = s.second;
+    }
+    uint32 hourly = (bot->GetMoney() + spent) / 10;
+    uint32 left = hourly > spent ? hourly - spent : 0;
+    return std::min(left, SilvermoonSpendable(bot));
 }
 
 bool ai::SilvermoonBuySupplies(Player* bot)
@@ -428,6 +447,10 @@ bool ai::SilvermoonBuySupplies(Player* bot)
         if (!spent)
             return false;
         silvermoon::Ledger(silvermoon::LG_BUY) += spent;
+        {
+            std::lock_guard<std::mutex> guard(supplyLock);
+            supplySpent[bot->GetGUIDLow()].second += spent;
+        }
         sLog.outBasic("Silvermoon: bot %s (level %u) bought %s from %s for %u copper (had %u food, %u water)", bot->GetName(), bot->GetLevel(),
             bought.c_str(), vendor->GetName(), spent, need.food, need.water);
         return true;
