@@ -19,21 +19,21 @@ using namespace ai;
 
 namespace
 {
-    struct Step
+    struct AqStep
     {
         uint8 kind = AQ_NONE;
         uint32 a = 0, b = 0, c = 0;
         time_t started = 0;
         bool issued = false;      // a Go step's order was given
     };
-    struct Queue
+    struct AqQueue
     {
         bool only = false;
-        std::vector<Step> steps;
+        std::vector<AqStep> steps;
     };
 
     std::mutex queueLock;
-    std::unordered_map<uint32, Queue> queues;
+    std::unordered_map<uint32, AqQueue> queues;
     std::unordered_map<uint32, bool> loaded;
     const time_t STEP_TIMEOUT = 2 * HOUR;
     const size_t QUEUE_MAX = 20;
@@ -55,7 +55,7 @@ namespace
     }
 
     // with queueLock held
-    Queue& Get(uint32 guid)
+    AqQueue& Get(uint32 guid)
     {
         if (!loaded[guid])
         {
@@ -66,7 +66,7 @@ namespace
                 CharacterDatabase.Execute("CREATE TABLE IF NOT EXISTS silvermoon_action_queue (guid INT UNSIGNED NOT NULL PRIMARY KEY, "
                     "only_queue TINYINT UNSIGNED NOT NULL DEFAULT 0, data TEXT NOT NULL, updated_at INT UNSIGNED NOT NULL DEFAULT 0)");
             });
-            Queue q;
+            AqQueue q;
             if (auto r = CharacterDatabase.PQuery("SELECT only_queue, data FROM silvermoon_action_queue WHERE guid = %u", guid))
             {
                 Field* f = r->Fetch();
@@ -75,7 +75,7 @@ namespace
                 std::string part;
                 while (std::getline(ss, part, ','))
                 {
-                    Step s;
+                    AqStep s;
                     unsigned k = 0, a = 0, b = 0, c = 0;
                     unsigned long st = 0;
                     unsigned is = 0;
@@ -91,11 +91,11 @@ namespace
         return queues[guid];
     }
 
-    void Save(uint32 guid, Queue const& q)
+    void Save(uint32 guid, AqQueue const& q)
     {
         std::ostringstream out;
         bool first = true;
-        for (Step const& s : q.steps)
+        for (AqStep const& s : q.steps)
         {
             out << (first ? "" : ",") << uint32(s.kind) << ":" << s.a << ":" << s.b << ":" << s.c << ":" << (unsigned long)s.started << ":" << (s.issued ? 1 : 0);
             first = false;
@@ -104,7 +104,7 @@ namespace
             guid, q.only ? 1u : 0u, out.str().c_str());
     }
 
-    std::string Label(Step const& s)
+    std::string Label(AqStep const& s)
     {
         switch (s.kind)
         {
@@ -135,9 +135,9 @@ namespace
         return "?";
     }
 
-    void Note(Player* bot, Step const& s, char const* how)
+    void Note(Player* bot, AqStep const& s, char const* how)
     {
-        std::string text = std::string("Queue: ") + Label(s) + " - " + how;
+        std::string text = std::string("AqQueue: ") + Label(s) + " - " + how;
         sLog.outBasic("Silvermoon: %s %s", bot->GetName(), text.c_str());
         SilvermoonAwayNote(bot, text);
     }
@@ -223,12 +223,12 @@ bool ai::SilvermoonQueueCommand(Player* bot, std::string const& param, std::stri
     }
 
     std::lock_guard<std::mutex> guard(queueLock);
-    Queue& q = Get(guid);
+    AqQueue& q = Get(guid);
     if (verb == "add")
     {
         std::string kind;
         ss >> kind;
-        Step s;
+        AqStep s;
         if (kind == "quest")
         {
             s.kind = AQ_QUEST;
@@ -295,14 +295,14 @@ bool ai::SilvermoonQueueCommand(Player* bot, std::string const& param, std::stri
     else if (verb == "clear")
     {
         q.steps.clear();
-        reply = "Queue cleared.";
+        reply = "AqQueue cleared.";
     }
     else if (verb == "only")
     {
         std::string v;
         ss >> v;
         q.only = v == "on";
-        reply = q.only ? "Queue only: I'll do just my queue, and wait when it's empty." : "Queue only off: I play on my own between queue steps.";
+        reply = q.only ? "AqQueue only: I'll do just my queue, and wait when it's empty." : "AqQueue only off: I play on my own between queue steps.";
     }
     else
         return false;
@@ -313,7 +313,7 @@ bool ai::SilvermoonQueueCommand(Player* bot, std::string const& param, std::stri
 std::vector<std::string> ai::SilvermoonQueueText(Player* bot)
 {
     std::lock_guard<std::mutex> guard(queueLock);
-    Queue& q = Get(bot->GetGUIDLow());
+    AqQueue& q = Get(bot->GetGUIDLow());
     std::vector<std::string> out;
     std::string text = std::string("SMAQ\tR;") + (q.only ? "1" : "0") + ";";
     bool first = true;
@@ -345,7 +345,7 @@ bool ai::SilvermoonQueueActive(Player* bot)
     if (!SilvermoonIsOwn(bot))
         return false;
     std::lock_guard<std::mutex> guard(queueLock);
-    Queue& q = Get(bot->GetGUIDLow());
+    AqQueue& q = Get(bot->GetGUIDLow());
     return !q.steps.empty() && q.steps.front().started;
 }
 
@@ -354,7 +354,7 @@ uint32_t ai::SilvermoonQueueGrindEntry(Player* bot)
     if (!SilvermoonIsOwn(bot))
         return 0;
     std::lock_guard<std::mutex> guard(queueLock);
-    Queue& q = Get(bot->GetGUIDLow());
+    AqQueue& q = Get(bot->GetGUIDLow());
     return !q.steps.empty() && q.steps.front().kind == AQ_GRIND ? q.steps.front().a : 0;
 }
 
@@ -363,7 +363,7 @@ uint32_t ai::SilvermoonQueueFetchQuest(Player* bot)
     if (!SilvermoonIsOwn(bot))
         return 0;
     std::lock_guard<std::mutex> guard(queueLock);
-    Queue& q = Get(bot->GetGUIDLow());
+    AqQueue& q = Get(bot->GetGUIDLow());
     return !q.steps.empty() && q.steps.front().kind == AQ_QUEST ? q.steps.front().a : 0;
 }
 
@@ -376,12 +376,12 @@ int ai::SilvermoonQueueStep(Player* bot, uint8_t& kind, uint32_t& id)
     PlayerbotAI* ai = bot->GetPlayerbotAI();
     std::lock_guard<std::mutex> guard(queueLock);
     uint32 guid = bot->GetGUIDLow();
-    Queue& q = Get(guid);
+    AqQueue& q = Get(guid);
     time_t now = time(nullptr);
     bool changed = false;
     while (!q.steps.empty())
     {
-        Step& s = q.steps.front();
+        AqStep& s = q.steps.front();
         if (!s.started)
         {
             s.started = now;
@@ -439,7 +439,7 @@ int ai::SilvermoonQueueStep(Player* bot, uint8_t& kind, uint32_t& id)
         result = q.only ? 1 : 0;           // queue only: nothing to do, wait
     else
     {
-        Step& s = q.steps.front();
+        AqStep& s = q.steps.front();
         switch (s.kind)
         {
             case AQ_GO:
