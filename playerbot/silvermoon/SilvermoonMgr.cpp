@@ -1870,10 +1870,7 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                                 me->GetPlayerbotAI()->DoSpecificAction("equip upgrades", Event("silvermoon auto"), true);
                         }
                         SilvermoonPushBrainPanel(me, me);
-                        std::string pol = SilvermoonPolicyPanel(me);   // the Policies window
-                        WorldPacket polPacket;
-                        ChatHandler::BuildChatPacket(polPacket, CHAT_MSG_PARTY, pol.c_str(), LANG_ADDON, CHAT_TAG_NONE, me->GetObjectGuid(), me->GetName());
-                        me->GetSession()->SendPacket(polPacket);
+                        SilvermoonSendPolicyPanel(me, me);   // the Policies window (in pieces, 1.8)
                     }
             for (auto const& alt : sPlayerbotAIConfig.freeAltBots)
             {

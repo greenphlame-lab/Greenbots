@@ -103,6 +103,10 @@ namespace ai
     bool SilvermoonRotationBlocks(Player* bot, uint32 spellId);
     bool SilvermoonEquipAnswer(Player* bot, uint32 itemGuid, bool equip, std::string& reply);
     std::string SilvermoonPolicyPanel(Player* bot);
+    // sends it to the panel in pieces of at most 200 characters, "SMPOL\t<i>/<n>:<piece>" (1.8: Mommy's
+    // 20 item rules and rotation made it 387 long - over the game's 255 for an addon message, so the
+    // panel lost all her rules)
+    void SilvermoonSendPolicyPanel(Player* bot, Player* to);
     // weapon master training (S): in a capital, a weapon skill that is ticked (not "avoid"), that
     // the class can use and doesn't know yet, is learned for the weapon masters' 10 silver when it
     // fits the character's upgrade budget. One per call.

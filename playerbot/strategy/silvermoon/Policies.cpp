@@ -620,6 +620,26 @@ bool ai::SilvermoonPolicyCommand(Player* bot, std::string const& param, std::str
     return true;
 }
 
+void ai::SilvermoonSendPolicyPanel(Player* bot, Player* to)
+{
+    if (!bot || !to || !to->GetSession())
+        return;
+    std::string data;
+    {
+        std::lock_guard<std::mutex> guard(policyLock);
+        data = Encode(Get(bot->GetGUIDLow()));
+    }
+    const size_t PIECE = 200;
+    size_t n = std::max<size_t>(1, (data.size() + PIECE - 1) / PIECE);
+    for (size_t i = 0; i < n; ++i)
+    {
+        std::string msg = "SMPOL\t" + std::to_string(i + 1) + "/" + std::to_string(n) + ":" + data.substr(i * PIECE, PIECE);
+        WorldPacket packet;
+        ChatHandler::BuildChatPacket(packet, CHAT_MSG_PARTY, msg.c_str(), LANG_ADDON, CHAT_TAG_NONE, bot->GetObjectGuid(), bot->GetName());
+        to->GetSession()->SendPacket(packet);
+    }
+}
+
 std::string ai::SilvermoonPolicyPanel(Player* bot)
 {
     std::lock_guard<std::mutex> guard(policyLock);

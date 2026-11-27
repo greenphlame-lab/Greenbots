@@ -754,10 +754,7 @@ std::list<std::string> PlayerbotHolder::HandlePlayerbotCommand(const std::string
     // after a restart - the panel showed nothing until the next 30-second push)
     if (master && command == "pol" && param == "show" && master->GetSession())
     {
-        std::string pol = ai::SilvermoonPolicyPanel(master);
-        WorldPacket polPacket;
-        ChatHandler::BuildChatPacket(polPacket, CHAT_MSG_PARTY, pol.c_str(), LANG_ADDON, CHAT_TAG_NONE, master->GetObjectGuid(), master->GetName());
-        master->GetSession()->SendPacket(polPacket);
+        ai::SilvermoonSendPolicyPanel(master, master);
         return messages;
     }
     // the action queue (S, 1.8): "pol aq ..." - search results and the queue go back to the panel
@@ -831,10 +828,7 @@ std::list<std::string> PlayerbotHolder::HandlePlayerbotCommand(const std::string
         if (ok && master->GetSession())
         {
             SilvermoonPushBrainPanel(master, master);
-            std::string pol = ai::SilvermoonPolicyPanel(master);
-            WorldPacket polPacket;
-            ChatHandler::BuildChatPacket(polPacket, CHAT_MSG_PARTY, pol.c_str(), LANG_ADDON, CHAT_TAG_NONE, master->GetObjectGuid(), master->GetName());
-            master->GetSession()->SendPacket(polPacket);
+            ai::SilvermoonSendPolicyPanel(master, master);
         }
         messages.push_back(ok ? reply : std::string("Usage: .bot ") + command + " ...");
         return messages;
