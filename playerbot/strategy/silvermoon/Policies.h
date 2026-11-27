@@ -50,7 +50,11 @@ namespace ai
         // item rules (S): item id -> (action, always). action 1 sell, 2 auction, 3 destroy, 4 keep;
         // "once" rules end when none of the item is left
         std::map<uint32, std::pair<uint8, bool>> items;
-        bool Any() const { return askEquip || potionAt || disenchant || tradeGoods != 2 || !allowedZones.empty() || eatTo || drinkTo || travel || !blockedSpells.empty() || fleeMobs || fleeHealth || ahGold || upgradePct || !weapons.empty() || bags || !items.empty(); }
+        // rotation (S, 1.7): abilities by name in priority order, each with a condition
+        // (0 always, 1 keep it up, 2 target below 20%, 3 me below 50% health, 4 opener: target above 90%);
+        // empty = the class's own rotation
+        std::vector<std::pair<std::string, uint8>> rotation;
+        bool Any() const { return !rotation.empty() || askEquip || potionAt || disenchant || tradeGoods != 2 || !allowedZones.empty() || eatTo || drinkTo || travel || !blockedSpells.empty() || fleeMobs || fleeHealth || ahGold || upgradePct || !weapons.empty() || bags || !items.empty(); }
     };
 
     // your own character playing on its own: Auto (self-bot) or an always-online alt with auto on
@@ -77,6 +81,8 @@ namespace ai
     // asked, an hour to answer), true once you said Equip or the hour passed (it then decides
     // itself and leaves a notification in the away log). Your characters only; others always true.
     bool SilvermoonEquipAllowed(Player* bot, Item* item);
+    // rotation (S, 1.7): your priority list, empty when you haven't set one
+    std::vector<std::pair<std::string, uint8>> SilvermoonRotationFor(uint32 guid);
     bool SilvermoonEquipAnswer(Player* bot, uint32 itemGuid, bool equip, std::string& reply);
     std::string SilvermoonPolicyPanel(Player* bot);
     // weapon master training (S): in a capital, a weapon skill that is ticked (not "avoid"), that

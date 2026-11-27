@@ -41,6 +41,9 @@ namespace
         out << ";ae=" << (p.askEquip ? 1 : 0) << ";bg=" << uint32(p.bags) << ";fm=" << uint32(p.fleeMobs) << ";fh=" << uint32(p.fleeHealth) << ";ah=" << p.ahGold << ";up=" << uint32(p.upgradePct) << ";ws=";
         first = true;
         for (auto const& [skill, mode] : p.weapons) { out << (first ? "" : ",") << skill << ":" << uint32(mode); first = false; }
+        out << ";ro=";
+        first = true;
+        for (auto const& [name, cond] : p.rotation) { out << (first ? "" : ",") << name << ":" << uint32(cond); first = false; }
         return out.str();
     }
 
@@ -73,6 +76,17 @@ namespace
                         p.blockedSpells.insert(uint32(atoi(item.c_str())));
             }
             else if (key == "dt") p.drinkTo = uint8(atoi(value.c_str()));
+            else if (key == "ro")
+            {
+                std::stringstream vs(value);
+                std::string entry;
+                while (std::getline(vs, entry, ','))
+                {
+                    size_t c = entry.rfind(':');
+                    if (c != std::string::npos && c > 0)
+                        p.rotation.push_back(std::make_pair(entry.substr(0, c), uint8(atoi(entry.substr(c + 1).c_str()))));
+                }
+            }
             else if (key == "ah") p.ahGold = uint32(strtoul(value.c_str(), nullptr, 10));
             else if (key == "up") p.upgradePct = uint8(atoi(value.c_str()));
             else if (key == "it")
@@ -295,8 +309,44 @@ bool ai::SilvermoonWeaponAvoided(uint32 guid, uint32 skill)
     return it != w.end() && it->second == 2;
 }
 
+std::vector<std::pair<std::string, uint8>> ai::SilvermoonRotationFor(uint32 guid)
+{
+    std::lock_guard<std::mutex> guard(policyLock);
+    return Get(guid).rotation;
+}
+
 bool ai::SilvermoonPolicyCommand(Player* bot, std::string const& param, std::string& reply)
 {
+    // rotation (S, 1.7): "rot clear", or "rot Name:cond,Name:cond,..." (names have spaces, so it is
+    // read before the word-by-word parsing below)
+    if (param.rfind("rot ", 0) == 0)
+    {
+        std::string rest = param.substr(4);
+        std::vector<std::pair<std::string, uint8>> list;
+        if (rest != "clear")
+        {
+            std::stringstream vs(rest);
+            std::string entry;
+            while (std::getline(vs, entry, ',') && list.size() < 16)
+            {
+                size_t c = entry.rfind(':');
+                std::string name = c == std::string::npos ? entry : entry.substr(0, c);
+                uint8 cond = c == std::string::npos ? 0 : uint8(std::min(4, std::max(0, atoi(entry.substr(c + 1).c_str()))));
+                while (!name.empty() && name[0] == ' ') name.erase(0, 1);
+                while (!name.empty() && name.back() == ' ') name.pop_back();
+                if (name.empty() || name.find_first_of(";=") != std::string::npos)
+                    continue;
+                list.push_back(std::make_pair(name, cond));
+            }
+        }
+        std::lock_guard<std::mutex> guard(policyLock);
+        SilvermoonPolicy& p = Get(bot->GetGUIDLow());
+        p.rotation = list;
+        Save(bot->GetGUIDLow(), p);
+        reply = list.empty() ? "Rotation cleared: I fight with my class's own rotation." :
+            "Rotation set: " + std::to_string(list.size()) + " abilities, in your order.";
+        return true;
+    }
     char a[16] = {}, b[16] = {}, c[16] = {};
     int n = sscanf(param.c_str(), "%15s %15s %15s", a, b, c);
     std::string k = n >= 1 ? a : "", v1 = n >= 2 ? b : "", v2 = n >= 3 ? c : "";

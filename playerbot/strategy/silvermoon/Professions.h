@@ -44,6 +44,9 @@ namespace ai
     // Command: ".bot go inn|flight|ah|bank|vendor|stop"
     bool SilvermoonGoCommand(Player* bot, std::string const& param, std::string& reply);
     bool SilvermoonGoGoal(Player* bot, SilvermoonScoredGoal& goal);
+    // Go to queue (S, 1.7): ".bot go +ah" adds a stop after the current one, "clear" empties the queue,
+    // "-N" drops the Nth; the panel gets "SMGO	<current>;<queued>^<queued>"
+    std::string SilvermoonGoQueueText(Player* bot);
     // "Buy bigger bags" (S, 1.6.21): a go order to the nearest vendor that sells this bag
     bool SilvermoonGoBagVendor(Player* bot, uint32 itemId);
     // profession ranks (S, 1.6.22): a go order to the nearest trainer of the rank this character can

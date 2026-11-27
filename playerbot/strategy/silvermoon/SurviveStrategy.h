@@ -23,6 +23,18 @@ namespace ai
         virtual bool Execute(Event& event) override;
     };
 
+    // rotation (S, 1.7): your own priority list of abilities, first one that's ready and whose
+    // condition holds; nothing ready = the class's own rotation carries on
+    class PolicyRotationAction : public Action
+    {
+    public:
+        PolicyRotationAction(PlayerbotAI* ai) : Action(ai, "silvermoon rotation") {}
+        virtual bool isUseful() override;
+        virtual bool Execute(Event& event) override;
+    private:
+        bool Pick(std::string& name, Unit*& target);
+    };
+
     // policies (S): drink a healing potion below your set health (default 20%)
     class PolicyPotionAction : public Action
     {

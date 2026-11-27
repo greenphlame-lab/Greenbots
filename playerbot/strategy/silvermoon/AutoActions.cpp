@@ -153,6 +153,10 @@ void SilvermoonPushBrainPanel(Player* bot, Player* owner)
         WorldPacket p;
         ChatHandler::BuildChatPacket(p, CHAT_MSG_PARTY, prof.c_str(), LANG_ADDON, CHAT_TAG_NONE, bot->GetObjectGuid(), bot->GetName());
         owner->GetSession()->SendPacket(p);
+        std::string go = SilvermoonGoQueueText(bot);   // the bag window's Go to queue (1.7)
+        WorldPacket g;
+        ChatHandler::BuildChatPacket(g, CHAT_MSG_PARTY, go.c_str(), LANG_ADDON, CHAT_TAG_NONE, bot->GetObjectGuid(), bot->GetName());
+        owner->GetSession()->SendPacket(g);
     }
 }
 

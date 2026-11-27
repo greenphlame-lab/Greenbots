@@ -643,8 +643,40 @@ namespace
         });
         return spots;
     }
-    struct GoOrder { uint32 flag = 0; std::string what; std::set<uint32> entries; time_t at = 0; };   // entries: only these NPCs
+    // entries: only these NPCs; kind: the panel's name for a Go to order you gave ("ah"), empty for
+    // the brain's own trips; arrived: when it got there (a queued order waits a little there first)
+    struct GoOrder { uint32 flag = 0; std::string what; std::set<uint32> entries; time_t at = 0; std::string kind; time_t arrived = 0; };
     std::unordered_map<uint32, GoOrder> goOrders;
+    // Go to queue (S, 1.7): the places after the current one, in order
+    std::unordered_map<uint32, std::deque<GoOrder>> goQueue;
+    const size_t GO_QUEUE_MAX = 8;
+
+    // seconds a character stays at a stop before heading to the next queued one, so it gets its
+    // business done there (selling, posting auctions, banking)
+    uint32 GoDwell(GoOrder const& o)
+    {
+        if (o.flag & (UNIT_NPC_FLAG_AUCTIONEER | UNIT_NPC_FLAG_BANKER | UNIT_NPC_FLAG_VENDOR))
+            return 45;
+        if (o.flag & UNIT_NPC_FLAG_REPAIR)
+            return 10;
+        return 0;
+    }
+}
+
+// "SMGO	<current place's panel name or what>;<queued>^<queued>..." for the bag window's queue
+std::string ai::SilvermoonGoQueueText(Player* bot)
+{
+    std::lock_guard<std::mutex> guard(orderLock);
+    std::string text = "SMGO	";
+    auto it = goOrders.find(bot->GetGUIDLow());
+    if (it != goOrders.end())
+        text += it->second.kind.empty() ? "~" + it->second.what : it->second.kind;
+    text += ";";
+    auto q = goQueue.find(bot->GetGUIDLow());
+    if (q != goQueue.end())
+        for (size_t i = 0; i < q->second.size(); ++i)
+            text += (i ? "^" : "") + q->second[i].kind;
+    return text;
 }
 
 bool ai::SilvermoonGoCommand(Player* bot, std::string const& param, std::string& reply)
@@ -654,17 +686,57 @@ bool ai::SilvermoonGoCommand(Player* bot, std::string const& param, std::string&
         { "ah", { UNIT_NPC_FLAG_AUCTIONEER, "the auction house" } }, { "bank", { UNIT_NPC_FLAG_BANKER, "the bank" } },
         { "vendor", { UNIT_NPC_FLAG_VENDOR, "a vendor" } }, { "repair", { UNIT_NPC_FLAG_REPAIR, "a repair vendor" } } };
     std::lock_guard<std::mutex> guard(orderLock);
+    uint32 guid = bot->GetGUIDLow();
     if (param == "stop")
     {
-        goOrders.erase(bot->GetGUIDLow());
+        goOrders.erase(guid);
+        goQueue.erase(guid);
         reply = "Go-to cancelled.";
         return true;
     }
-    auto k = kinds.find(param);
+    // queue (S, 1.7): "clear" empties the queue, "-N" drops its Nth stop (1 = next), "+place" adds one
+    if (param == "clear")
+    {
+        goQueue.erase(guid);
+        reply = "Go-to queue cleared.";
+        return true;
+    }
+    if (param.size() > 1 && param[0] == '-')
+    {
+        size_t n = size_t(atoi(param.c_str() + 1));
+        auto q = goQueue.find(guid);
+        if (!n || q == goQueue.end() || n > q->second.size())
+            return false;
+        q->second.erase(q->second.begin() + (n - 1));
+        reply = "Removed stop " + std::to_string(n) + " from the queue.";
+        return true;
+    }
+    bool add = !param.empty() && param[0] == '+';
+    auto k = kinds.find(add ? param.substr(1) : param);
     if (k == kinds.end())
         return false;
-    goOrders[bot->GetGUIDLow()] = { k->second.first, k->second.second, {}, time(nullptr) };
-    reply = "Heading to " + k->second.second + ".";
+    GoOrder order;
+    order.flag = k->second.first;
+    order.what = k->second.second;
+    order.at = time(nullptr);
+    order.kind = k->first;
+    auto cur = goOrders.find(guid);
+    if (add && cur != goOrders.end() && !cur->second.kind.empty())
+    {
+        std::deque<GoOrder>& q = goQueue[guid];
+        if (q.size() >= GO_QUEUE_MAX)
+        {
+            reply = "The queue is full.";
+            return false;
+        }
+        q.push_back(order);
+        reply = "Then " + order.what + " (" + std::to_string(q.size()) + " queued).";
+        return true;
+    }
+    goOrders[guid] = order;
+    if (!add)
+        goQueue.erase(guid);        // a plain Go to replaces the whole plan
+    reply = "Heading to " + order.what + ".";
     return true;
 }
 
@@ -980,18 +1052,49 @@ bool ai::SilvermoonGoGoal(Player* bot, SilvermoonScoredGoal& goal)
     // "heading to a vendor" and not moving - 8 yards was closer than the bot could get), or the
     // order is 20 minutes old
     bool there = best && bestDist < 15.0f;
-    if (there && (order.flag & UNIT_NPC_FLAG_REPAIR))
-        SilvermoonRepairNearby(bot);           // Go to > Repair (S): repair on arrival
-    if (there && order.what.rfind("a bag vendor", 0) == 0)
-        SilvermoonBuyBag(bot);                 // "Buy bigger bags": buy on arrival
-    if (there && order.what.rfind("a trainer for ", 0) == 0)
-        SilvermoonLearnRankHere(bot);          // profession rank (1.6.22): train on arrival
-    std::lock_guard<std::mutex> guard(orderLock);
-    if (!best || there || (order.at && time(nullptr) - order.at > 20 * MINUTE))
+    bool firstArrival = there && !order.arrived;
+    if (firstArrival)
     {
-        goOrders.erase(bot->GetGUIDLow());     // there (or none on this continent): order done
-        return false;
+        std::lock_guard<std::mutex> guard(orderLock);
+        auto it = goOrders.find(bot->GetGUIDLow());
+        if (it != goOrders.end())
+            it->second.arrived = time(nullptr);
+        order.arrived = time(nullptr);
     }
+    if (firstArrival && (order.flag & UNIT_NPC_FLAG_REPAIR))
+        SilvermoonRepairNearby(bot);           // Go to > Repair (S): repair on arrival
+    if (firstArrival && order.what.rfind("a bag vendor", 0) == 0)
+        SilvermoonBuyBag(bot);                 // "Buy bigger bags": buy on arrival
+    if (firstArrival && order.what.rfind("a trainer for ", 0) == 0)
+        SilvermoonLearnRankHere(bot);          // profession rank (1.6.22): train on arrival
+    bool promoted = false;
+    {
+        std::lock_guard<std::mutex> guard(orderLock);
+        uint32 guid = bot->GetGUIDLow();
+        auto q = goQueue.find(guid);
+        bool queued = q != goQueue.end() && !q->second.empty();
+        // a queued stop after this one: stay here a little to get the business done (S, 1.7)
+        bool dwelling = there && queued && time(nullptr) - order.arrived < time_t(GoDwell(order));
+        if (!dwelling && (!best || there || (order.at && time(nullptr) - order.at > 20 * MINUTE)))
+        {
+            goOrders.erase(guid);              // there (or none on this continent): order done
+            if (queued)
+            {
+                GoOrder next = q->second.front();
+                q->second.pop_front();
+                if (q->second.empty())
+                    goQueue.erase(q);
+                next.at = time(nullptr);
+                goOrders[guid] = next;
+                promoted = true;
+            }
+            else
+                return false;
+        }
+    }
+    if (promoted)
+        return SilvermoonGoGoal(bot, goal);    // straight on to the next stop
+    std::lock_guard<std::mutex> guard(orderLock);
     TemporaryTravelDestination* destination = new TemporaryTravelDestination(WorldPosition(best->map, best->x, best->y, best->z), int32(best->entry));
     goal.destination = destination;
     goal.position = destination->GetPosition();

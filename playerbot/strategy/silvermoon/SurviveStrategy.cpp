@@ -11,6 +11,7 @@
 #include "Entities/Creature.h"
 #include "Entities/Pet.h"
 #include "Server/DBCStores.h"
+#include "Spells/SpellMgr.h"
 
 using namespace ai;
 
@@ -33,6 +34,11 @@ void SurviveStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
     triggers.push_back(new TriggerNode(
         "very often",
         NextAction::array(0, new NextAction("silvermoon lifesaver", ACTION_EMERGENCY + 6), NULL)));
+    // rotation (S, 1.7): your priority list, above the class rotations (they top out around
+    // ACTION_HIGH + 5), below moving into range, interrupts, heals and the lifesavers
+    triggers.push_back(new TriggerNode(
+        "very often",
+        NextAction::array(0, new NextAction("silvermoon rotation", ACTION_HIGH + 8), NULL)));
     // policies (S): your "use a potion below X% health"
     triggers.push_back(new TriggerNode(
         "very often",
@@ -99,6 +105,53 @@ bool LifesaverAction::Execute(Event& event)
         return true;
     }
     return false;
+}
+
+bool PolicyRotationAction::Pick(std::string& name, Unit*& target)
+{
+    if (!bot->IsAlive() || !bot->IsInCombat() || !SilvermoonIsOwn(bot) || bot->IsNonMeleeSpellCasted(true))
+        return false;
+    Unit* enemy = AI_VALUE(Unit*, "current target");
+    if (!enemy || !enemy->IsAlive() || !bot->CanAttack(enemy))
+        return false;
+    for (auto const& [spell, cond] : SilvermoonRotationFor(bot->GetGUIDLow()))
+    {
+        uint32 id = AI_VALUE2(uint32, "spell id", spell);
+        if (!id || !bot->HasSpell(id))
+            continue;
+        bool positive = IsPositiveSpell(id);
+        Unit* t = positive ? (Unit*)bot : enemy;
+        if (cond == 1 && ai->HasAura(spell, t, false, !positive))
+            continue;                       // keep it up: still on
+        if (cond == 2 && enemy->GetHealthPercent() >= 20.0f)
+            continue;
+        if (cond == 3 && bot->GetHealthPercent() >= 50.0f)
+            continue;
+        if (cond == 4 && enemy->GetHealthPercent() < 90.0f)
+            continue;
+        if (!ai->CanCastSpell(id, t, 0))
+            continue;
+        name = spell;
+        target = t;
+        return true;
+    }
+    return false;
+}
+
+bool PolicyRotationAction::isUseful()
+{
+    std::string name;
+    Unit* target = nullptr;
+    return Pick(name, target);
+}
+
+bool PolicyRotationAction::Execute(Event& event)
+{
+    std::string name;
+    Unit* target = nullptr;
+    if (!Pick(name, target))
+        return false;
+    return ai->CastSpell(name, target);
 }
 
 bool PolicyPotionAction::isUseful()
