@@ -43,7 +43,7 @@ namespace
         out << ";ae=" << (p.askEquip ? 1 : 0) << ";bg=" << uint32(p.bags) << ";fm=" << uint32(p.fleeMobs) << ";fh=" << uint32(p.fleeHealth) << ";ah=" << p.ahGold << ";up=" << uint32(p.upgradePct) << ";ws=";
         first = true;
         for (auto const& [skill, mode] : p.weapons) { out << (first ? "" : ",") << skill << ":" << uint32(mode); first = false; }
-        out << ";ro=";
+        out << ";rb=";
         first = true;
         for (auto const& [name, cond] : p.rotation) { out << (first ? "" : ",") << name << ":" << uint32(cond); first = false; }
         return out.str();
@@ -78,15 +78,21 @@ namespace
                         p.blockedSpells.insert(uint32(atoi(item.c_str())));
             }
             else if (key == "dt") p.drinkTo = uint8(atoi(value.c_str()));
-            else if (key == "ro")
+            else if (key == "ro" || key == "rb")
             {
+                // "ro" (1.7) held one condition 0-5; "rb" (1.7.1) holds condition bits
+                static const uint8 legacy[6] = { 0, 1, 2, 4, 8, 16 };
                 std::stringstream vs(value);
                 std::string entry;
                 while (std::getline(vs, entry, ','))
                 {
                     size_t c = entry.rfind(':');
                     if (c != std::string::npos && c > 0)
-                        p.rotation.push_back(std::make_pair(entry.substr(0, c), uint8(atoi(entry.substr(c + 1).c_str()))));
+                    {
+                        int v = atoi(entry.substr(c + 1).c_str());
+                        uint8 cond = key == "ro" ? legacy[std::min(5, std::max(0, v))] : uint8(std::min(127, std::max(0, v)));
+                        p.rotation.push_back(std::make_pair(entry.substr(0, c), cond));
+                    }
                 }
             }
             else if (key == "ah") p.ahGold = uint32(strtoul(value.c_str(), nullptr, 10));
@@ -341,7 +347,7 @@ std::vector<SilvermoonRotDefault> ai::SilvermoonDefaultRotation(Player* bot)
         if (Lower(name).rfind("zz", 0) == 0)
             continue;
         std::string t = Lower(trigger), a = Lower(action);
-        uint8 cond = 5;
+        uint8 cond = 16;                 // the class's own rule
         if (t == "default")
             cond = 0;
         else if (t.find("target") != std::string::npos && (t.find("low health") != std::string::npos || t.find("critical health") != std::string::npos))
@@ -350,9 +356,11 @@ std::vector<SilvermoonRotDefault> ai::SilvermoonDefaultRotation(Player* bot)
             cond = 2;
         else if (t.find("target") == std::string::npos && t.find("party") == std::string::npos &&
             (t == "low health" || t == "critical health" || t == "medium health" || t == "almost dead"))
-            cond = 3;
+            cond = 4;
         else if (t == a || t == "no " + a || t == a + " on target" || t == "no " + a + " on target")
             cond = 1;
+        else if (t.find("interrupt") != std::string::npos || t.find("casting") != std::string::npos)
+            cond = 32;
         SilvermoonRotDefault& e = best[Lower(name)];
         if (e.name.empty() || relevance > e.relevance)
         {
@@ -441,7 +449,7 @@ bool ai::SilvermoonPolicyCommand(Player* bot, std::string const& param, std::str
             {
                 size_t c = entry.rfind(':');
                 std::string name = c == std::string::npos ? entry : entry.substr(0, c);
-                uint8 cond = c == std::string::npos ? 0 : uint8(std::min(5, std::max(0, atoi(entry.substr(c + 1).c_str()))));
+                uint8 cond = c == std::string::npos ? 0 : uint8(std::min(127, std::max(0, atoi(entry.substr(c + 1).c_str()))));
                 while (!name.empty() && name[0] == ' ') name.erase(0, 1);
                 while (!name.empty() && name.back() == ' ') name.pop_back();
                 if (name.empty() || name.find_first_of(";=") != std::string::npos)

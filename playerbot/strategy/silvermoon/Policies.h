@@ -51,8 +51,10 @@ namespace ai
         // "once" rules end when none of the item is left
         std::map<uint32, std::pair<uint8, bool>> items;
         // rotation (S, 1.7): abilities by name in priority order, each with a condition
-        // (0 always, 1 keep it up, 2 target below 20%, 3 me below 50% health, 4 opener: target above 90%,
-        // 5 the class's own condition for it - the trigger its default rotation uses);
+        // as bits that must all hold (0 = always; 1.7.1, S: "options" per spell, several at once):
+        // 1 not active (its debuff on the target / buff on me isn't there), 2 target below 20%,
+        // 4 me below 50% health, 8 opener (target above 90%), 16 the class's own rule for it (the
+        // trigger its default rotation uses), 32 target is casting, 64 two or more enemies on me;
         // empty = the class's own rotation
         std::vector<std::pair<std::string, uint8>> rotation;
         bool Any() const { return !rotation.empty() || askEquip || potionAt || disenchant || tradeGoods != 2 || !allowedZones.empty() || eatTo || drinkTo || travel || !blockedSpells.empty() || fleeMobs || fleeHealth || ahGold || upgradePct || !weapons.empty() || bags || !items.empty(); }

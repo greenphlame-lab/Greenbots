@@ -121,15 +121,28 @@ bool PolicyRotationAction::Pick(std::string& name, Unit*& target)
             continue;
         bool positive = IsPositiveSpell(id);
         Unit* t = positive ? (Unit*)bot : enemy;
-        if (cond == 1 && ai->HasAura(spell, t, false, !positive))
-            continue;                       // keep it up: still on
-        if (cond == 2 && enemy->GetHealthPercent() >= 20.0f)
+        // conditions are bits that must all hold (see SilvermoonPolicy::rotation)
+        if ((cond & 1) && ai->HasAura(spell, t, false, !positive))
+            continue;                       // not active: still on
+        if ((cond & 2) && enemy->GetHealthPercent() >= 20.0f)
             continue;
-        if (cond == 3 && bot->GetHealthPercent() >= 50.0f)
+        if ((cond & 4) && bot->GetHealthPercent() >= 50.0f)
             continue;
-        if (cond == 4 && enemy->GetHealthPercent() < 90.0f)
+        if ((cond & 8) && enemy->GetHealthPercent() < 90.0f)
             continue;
-        if (cond == 5)
+        if ((cond & 32) && !enemy->IsNonMeleeSpellCasted(false))
+            continue;
+        if (cond & 64)
+        {
+            uint32 n = 0;
+            for (ObjectGuid const& guid : AI_VALUE(std::list<ObjectGuid>, "attackers"))
+                if (Unit* u = ai->GetUnit(guid))
+                    if (u->IsAlive())
+                        ++n;
+            if (n < 2)
+                continue;
+        }
+        if (cond & 16)
         {
             // the class's own condition (1.7.1): the trigger its default rotation uses for this spell
             std::string trig = SilvermoonDefaultTrigger(bot, spell);
