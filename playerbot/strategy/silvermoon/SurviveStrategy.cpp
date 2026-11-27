@@ -193,7 +193,7 @@ bool PolicyPotionAction::Execute(Event& event)
     return ai->DoSpecificAction("healing potion", Event("silvermoon policy potion"), true);
 }
 
-namespace ai { uint8 SilvermoonTravelRules(Player* bot); float SilvermoonGatherOrderFactor(uint32 guid, uint32 skill); }
+namespace ai { uint8 SilvermoonTravelRules(Player* bot); float SilvermoonGatherOrderFactor(uint32 guid, uint32 skill); bool SilvermoonGoActive(Player* bot); }
 
 bool WalkPastGreysAction::isUseful()
 {
@@ -202,11 +202,18 @@ bool WalkPastGreysAction::isUseful()
     // gathering or travelling (S, 1.7.1: Mommy stopped to fight a grey level 9 mob on her way to the
     // herbalism trainer), with "ignore grey mobs" on (travel bit 2 clear = greys ignored)
     bool gathering = SilvermoonGatherOrderFactor(bot->GetGUIDLow(), 182) > 1.0f || SilvermoonGatherOrderFactor(bot->GetGUIDLow(), 186) > 1.0f;
-    if (!gathering && !AI_VALUE(bool, "travel target traveling"))
+    bool goTrip = SilvermoonGoActive(bot);
+    if (!gathering && !goTrip && !AI_VALUE(bool, "travel target traveling"))
         return false;
-    if (SilvermoonTravelRules(bot) & 2)
+    uint8 rules = SilvermoonTravelRules(bot);
+    bool walkGreys = !(rules & 2);
+    // 1.7.1 (S: "avoid mobs while travelling" and she still fought on the way to Stormwind): with
+    // that policy on, a trip also walks on past ordinary mobs that jump it - not elites, nothing
+    // more than 2 levels above it, at most 2 of them - while above half health
+    bool walkMobs = (rules & 1) != 0;
+    if (!walkGreys && !walkMobs)
         return false;
-    if (bot->GetHealthPercent() < 40.0f)
+    if (bot->GetHealthPercent() < (walkMobs ? 50.0f : 40.0f))
         return false;                     // hurt: fight it out (the flee and lifesaver steps decide)
     TravelTarget* target = AI_VALUE(TravelTarget*, "travel target");
     if (!target || !target->GetPosition() || target->GetPosition()->getMapId() != bot->GetMapId())
@@ -217,11 +224,14 @@ bool WalkPastGreysAction::isUseful()
         Unit* u = ai->GetUnit(guid);
         if (!u || !u->IsAlive())
             continue;
-        if (u->GetTypeId() != TYPEID_UNIT || MaNGOS::XP::Gain(bot, (Creature*)u))
-            return false;                 // a player, or a mob that still gives XP: the normal fight
+        if (u->GetTypeId() != TYPEID_UNIT)
+            return false;                 // a player: the normal fight
+        bool grey = !MaNGOS::XP::Gain(bot, (Creature*)u);
+        if (grey ? !walkGreys : (!walkMobs || ((Creature*)u)->IsElite() || int32(u->GetLevel()) > int32(bot->GetLevel()) + 2))
+            return false;                 // a mob it doesn't walk past: the normal fight
         ++attackers;
     }
-    return attackers > 0;
+    return attackers > 0 && attackers <= (walkMobs ? 2u : 99u);
 }
 
 bool WalkPastGreysAction::Execute(Event& event)

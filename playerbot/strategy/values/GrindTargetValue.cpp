@@ -17,7 +17,7 @@ using namespace ai;
 // Silvermoon (S): grey mobs (no XP) are only worth it for a destitute bot - weapon at 0 durability -
 // which farms them for coin; everyone else leaves them alone unless a quest needs them. (Stock let 1
 // in 50 through and, on long trips, bots spent their time killing grey mobs.)
-namespace ai { uint8 SilvermoonTravelRules(Player* bot); bool SilvermoonIsOwn(Player* bot); float SilvermoonGatherOrderFactor(uint32 guid, uint32 skill); uint8 SilvermoonFactionNpcKind(Player* bot, Unit* unit); }
+namespace ai { uint8 SilvermoonTravelRules(Player* bot); bool SilvermoonIsOwn(Player* bot); float SilvermoonGatherOrderFactor(uint32 guid, uint32 skill); uint8 SilvermoonFactionNpcKind(Player* bot, Unit* unit); bool SilvermoonGoActive(Player* bot); }
 
 static bool SilvermoonGreyAllowed(Player* bot)
 {
@@ -208,8 +208,13 @@ Unit* GrindTargetValue::FindTargetForGrinding(int assistCount)
             else if (SilvermoonGatherOrderFactor(bot->GetGUIDLow(), 186) > 1.0f || SilvermoonGatherOrderFactor(bot->GetGUIDLow(), 182) > 1.0f ||
                      SilvermoonGatherOrderFactor(bot->GetGUIDLow(), 356) > 1.0f)
                 careful = 2;
-            // policy (S): "avoid mobs while travelling" - no new pulls on the way anywhere
-            else if ((SilvermoonTravelRules(bot) & 1) && AI_VALUE(bool, "travel target traveling"))
+            // policy (S): "avoid mobs while travelling" - no new pulls on the way anywhere. 1.7.1 (S:
+            // Mommy fought her way to the herbalism trainer): a Go to trip counts the whole way, and
+            // so does any trip still being set up (not only while the status reads "travelling")
+            else if ((SilvermoonTravelRules(bot) & 1) &&
+                     (AI_VALUE(bool, "travel target traveling") || SilvermoonGoActive(bot) ||
+                      AI_VALUE(TravelTarget*, "travel target")->GetStatus() == TravelStatus::TRAVEL_STATUS_PREPARE ||
+                      AI_VALUE(TravelTarget*, "travel target")->GetStatus() == TravelStatus::TRAVEL_STATUS_READY))
                 careful = 2;
         }
         // Silvermoon patch: a random bot on its own (no real player leading it) leaves alone

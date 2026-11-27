@@ -664,6 +664,12 @@ namespace
 }
 
 // "SMGO	<current place's panel name or what>;<queued>^<queued>..." for the bag window's queue
+bool ai::SilvermoonGoActive(Player* bot)
+{
+    std::lock_guard<std::mutex> guard(orderLock);
+    return bot && goOrders.count(bot->GetGUIDLow()) > 0;
+}
+
 std::string ai::SilvermoonGoQueueText(Player* bot)
 {
     std::lock_guard<std::mutex> guard(orderLock);
