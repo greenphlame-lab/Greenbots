@@ -101,9 +101,50 @@ uint32 ItemQualifier::GemId(Item* item, uint8 gemSlot)
 // sells what it would otherwise auction, craft with, disenchant or bank (below rare; quest items,
 // tools and the Hearthstone stay). Cavol, all gear at 0 and 2 silver, carried 1g 23s of gems, a
 // Gold Bar and wool marked for the auction house - from a zone with no auction house.
+// Silvermoon 1.7 (S: Omandric sold his broken green mace and fought on with a white Club): a broken
+// weapon or armor piece, green or better, that beats what is in its slot now is never sold, auctioned,
+// disenchanted or banked. It waits in the bags, the next repair-all mends it and the equip logic puts
+// it back on.
+static bool SilvermoonKeepForRepair(Player* bot, ItemPrototype const* proto, Item* item)
+{
+    if (!proto || !item || (proto->Class != ITEM_CLASS_WEAPON && proto->Class != ITEM_CLASS_ARMOR) || proto->Quality < ITEM_QUALITY_UNCOMMON)
+        return false;
+    if (item->GetUInt32Value(ITEM_FIELD_MAXDURABILITY) == 0 || item->GetUInt32Value(ITEM_FIELD_DURABILITY) > 0)
+        return false;
+    if (item->IsEquipped() || bot->CanUseItem(proto) != EQUIP_ERR_OK)
+        return false;
+    uint8 slot = bot->FindEquipSlot(proto, NULL_SLOT, true);
+    if (slot >= EQUIPMENT_SLOT_END)
+        return false;
+    Item* old = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
+    if (!old || old == item)
+        return true;
+    ItemPrototype const* op = old->GetProto();
+    if (!op)
+        return true;
+    if (proto->Quality > op->Quality)
+        return true;
+    if (proto->Class == ITEM_CLASS_WEAPON && op->Class == ITEM_CLASS_WEAPON && proto->Delay && op->Delay)
+    {
+        float newDps = (proto->Damage[0].DamageMin + proto->Damage[0].DamageMax) / 2.0f / (proto->Delay / 1000.0f);
+        float oldDps = (op->Damage[0].DamageMin + op->Damage[0].DamageMax) / 2.0f / (op->Delay / 1000.0f);
+        if (newDps >= oldDps * 1.1f)
+            return true;
+    }
+    return proto->Quality == op->Quality && proto->ItemLevel > op->ItemLevel;
+}
+
 ItemUsage ItemUsageValue::Calculate()
 {
     ItemUsage usage = CalculateStock();
+    if (usage == ItemUsage::ITEM_USAGE_VENDOR || usage == ItemUsage::ITEM_USAGE_AH || usage == ItemUsage::ITEM_USAGE_BROKEN_AH ||
+        usage == ItemUsage::ITEM_USAGE_DISENCHANT || usage == ItemUsage::ITEM_USAGE_BANK || usage == ItemUsage::ITEM_USAGE_NONE)
+    {
+        ItemQualifier keepQualifier(qualifier, false);
+        ItemPrototype const* keepProto = sObjectMgr.GetItemPrototype(keepQualifier.GetId());
+        if (keepProto && SilvermoonKeepForRepair(bot, keepProto, CurrentItem(keepProto, bot)))
+            return ItemUsage::ITEM_USAGE_KEEP;
+    }
     if (usage != ItemUsage::ITEM_USAGE_AH && usage != ItemUsage::ITEM_USAGE_BROKEN_AH && usage != ItemUsage::ITEM_USAGE_SKILL &&
         usage != ItemUsage::ITEM_USAGE_DISENCHANT && usage != ItemUsage::ITEM_USAGE_BANK)
         return usage;
@@ -915,7 +956,13 @@ ItemUsage ItemUsageValue::QueryItemUsageForEquip(ItemQualifier& itemQualifier, P
         float newDps = (itemProto->Damage[0].DamageMin + itemProto->Damage[0].DamageMax) / 2.0f / (itemProto->Delay / 1000.0f);
         float oldDps = (oldItemProto->Damage[0].DamageMin + oldItemProto->Damage[0].DamageMax) / 2.0f / (oldItemProto->Delay / 1000.0f);
         if (newDps >= oldDps * 1.15f && newDps > 0.0f && bot->CanUseItem(itemProto) == EQUIP_ERR_OK)
-            return ItemUsage::ITEM_USAGE_EQUIP;
+        {
+            // a broken weapon never replaces a working one: it waits for the repairer (1.7)
+            Item* cand = CurrentItem(itemProto, bot);
+            bool candBroken = cand && cand->GetUInt32Value(ITEM_FIELD_DURABILITY) == 0 && cand->GetUInt32Value(ITEM_FIELD_MAXDURABILITY) > 0;
+            bool oldBroken = oldItem->GetUInt32Value(ITEM_FIELD_DURABILITY) == 0 && oldItem->GetUInt32Value(ITEM_FIELD_MAXDURABILITY) > 0;
+            return (candBroken && !oldBroken) ? ItemUsage::ITEM_USAGE_BROKEN_EQUIP : ItemUsage::ITEM_USAGE_EQUIP;
+        }
     }
 
     if (itemProto->Class == ITEM_CLASS_ARMOR && itemProto->InventoryType == INVTYPE_TABARD)
