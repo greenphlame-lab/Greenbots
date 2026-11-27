@@ -890,7 +890,7 @@ void ai::SilvermoonLevelPass(Player* bot)
 // (creature entries) teach it. Built once.
 namespace
 {
-    struct SmRankInfo { uint32 skill = 0, reqSkill = 0, reqLevel = 0, cost = 0, learned = 0; std::set<uint32> trainers; };
+    struct SmRankInfo { uint32 skill = 0, reqSkill = 0, reqLevel = 0, cost = 0, learned = 0, teach = 0; std::set<uint32> trainers; };
     std::vector<SmRankInfo>& Ranks()
     {
         static std::once_flag once;
@@ -913,14 +913,23 @@ namespace
                         if (!t.reqSkill || !t.reqSkillValue)
                             continue;           // apprentice ranks (learning the profession) are done elsewhere
                         uint32 learned = t.learnedSpell;
-                        if (SpellEntry const* teach = sServerFacade.LookupSpellInfo(t.spell))
+                        bool step = false;
+                        SpellEntry const* teach = sServerFacade.LookupSpellInfo(t.spell);
+                        if (teach)
                             for (int j = 0; j < 3; ++j)
+                            {
                                 if (teach->Effect[j] == SPELL_EFFECT_LEARN_SPELL && teach->EffectTriggerSpell[j])
                                     learned = teach->EffectTriggerSpell[j];
+                                // 1.7 fix (S: Mommy at Herbalism 51 with 16s never went to train): in
+                                // classic the skill step sits on the trainer's teaching spell (2373
+                                // teaches Journeyman Herbalism 2368 AND raises the cap), not on the
+                                // learned spell - so no rank was ever found
+                                if (teach->Effect[j] == SPELL_EFFECT_SKILL_STEP)
+                                    step = true;
+                            }
                         SpellEntry const* info = learned ? sServerFacade.LookupSpellInfo(learned) : nullptr;
                         if (!info)
                             continue;
-                        bool step = false;
                         for (int j = 0; j < 3; ++j)
                             if (info->Effect[j] == SPELL_EFFECT_SKILL_STEP)
                                 step = true;
@@ -934,6 +943,7 @@ namespace
                             r.reqLevel = t.reqLevel;
                             r.cost = t.spellCost;
                             r.learned = learned;
+                            r.teach = teach ? t.spell : 0;
                         }
                         r.trainers.insert(co->Entry);
                     }
@@ -994,7 +1004,11 @@ bool ai::SilvermoonLearnRankHere(Player* bot)
         if (u->GetTypeId() == TYPEID_UNIT && u->IsAlive() && r->trainers.count(u->GetEntry()) && !bot->CanAttack(u))
         {
             bot->ModifyMoney(-int32(r->cost));
-            bot->learnSpell(r->learned, false);
+            // the trainer's teaching spell does both parts: learns the rank and raises the skill cap
+            if (r->teach)
+                u->CastSpell(bot, r->teach, TRIGGERED_OLD_TRIGGERED);   // as the trainer does
+            if (!bot->HasSpell(r->learned))
+                bot->learnSpell(r->learned, false);
             SpellEntry const* info = sServerFacade.LookupSpellInfo(r->learned);
             sLog.outBasic("Silvermoon: %s trained %s at %s for %u copper (skill %u at %u)", bot->GetName(), info ? info->SpellName[0] : "a rank",
                 u->GetName(), r->cost, r->skill, bot->GetSkillValuePure(r->skill));
