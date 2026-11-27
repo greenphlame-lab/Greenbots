@@ -486,9 +486,9 @@ static SilvermoonScoredGoal ScoreWith(Player* bot, BotSnapshot const& snapshot, 
         // X gold" policy still sends your character from anywhere.
         // 1.7.7 (S: "there's like no auctions right now"): that rule cut AH trips from ~350 to ~30
         // every 4 hours, and new listings dried up. A trip from further out (up to 3,000 yards) is
-        // back when the bags hold 10 or more stacks for the AH; the trip's length still weighs
+        // back when the bags hold 8 or more stacks for the AH; the trip's length still weighs
         // against it in the score
-        if (!policyTrip && distance > 600.0f && (stacks < 10 || distance > 3000.0f))
+        if (!policyTrip && distance > 600.0f && (stacks < 8 || distance > 3000.0f))
         {
             goal.score.score = 0.0f;
             goal.score.reason = "auction house: too far";
