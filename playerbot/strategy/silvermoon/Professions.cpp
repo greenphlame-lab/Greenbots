@@ -1094,6 +1094,34 @@ bool ai::SilvermoonGoGoal(Player* bot, SilvermoonScoredGoal& goal)
             bestDist = d;
         }
     }
+    // none on this continent (1.7.6, S: "bots should be able to take boats to move across
+    // continents"): the nearest one across the sea, measured from the faction's harbour there -
+    // the route planner takes the boat or zeppelin (ridden, TransportTeleportType 1)
+    bool otherContinent = false;
+    if (!best && (bot->GetMapId() == 0 || bot->GetMapId() == 1))
+    {
+        uint32 otherMap = bot->GetMapId() == 0 ? 1 : 0;
+        bool alliance = bot->GetTeam() == ALLIANCE;
+        // Auberdine / Menethil Harbor for the Alliance, Orgrimmar's and Tirisfal's zeppelin towers for the Horde
+        WorldPosition harbour = otherMap == 1 ? (alliance ? WorldPosition(1, 6421.0f, 822.0f, 0.0f) : WorldPosition(1, 1320.0f, -4650.0f, 0.0f))
+                                              : (alliance ? WorldPosition(0, -3726.0f, -583.0f, 0.0f) : WorldPosition(0, 2066.0f, 288.0f, 0.0f));
+        for (GoSpot const& s : GoSpots())
+        {
+            if (!(s.flag & order.flag) || s.map != otherMap || !Friendly(bot, s.entry))
+                continue;
+            if (!order.entries.empty() && !order.entries.count(s.entry))
+                continue;
+            float d = harbour.fDist(WorldPosition(s.map, s.x, s.y, s.z));
+            if (!best || d < bestDist)
+            {
+                best = &s;
+                bestDist = d;
+            }
+        }
+        otherContinent = best != nullptr;
+        if (otherContinent)
+            bestDist = 1000000.0f;     // not there yet, whatever the numbers say
+    }
     // there: within 15 yards (S: Kojimbo stood 10 yards from Ranik, behind his counter in Ratchet,
     // "heading to a vendor" and not moving - 8 yards was closer than the bot could get), or the
     // order is 20 minutes old
@@ -1121,7 +1149,8 @@ bool ai::SilvermoonGoGoal(Player* bot, SilvermoonScoredGoal& goal)
         bool queued = q != goQueue.end() && !q->second.empty();
         // a queued stop after this one: stay here a little to get the business done (S, 1.7)
         bool dwelling = there && queued && time(nullptr) - order.arrived < time_t(GoDwell(order));
-        if (!dwelling && (!best || there || (order.at && time(nullptr) - order.at > 20 * MINUTE)))
+        // a trip across the sea gets an hour (boat waits and rides), others 20 minutes
+    if (!dwelling && (!best || there || (order.at && time(nullptr) - order.at > (otherContinent ? HOUR : 20 * MINUTE))))
         {
             goOrders.erase(guid);              // there (or none on this continent): order done
             if (queued)

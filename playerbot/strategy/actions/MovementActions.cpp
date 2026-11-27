@@ -835,7 +835,9 @@ bool MovementAction::HandleSpecialMovement(TravelPath& path)
         // dock-to-dock travel (TransportTeleportType = 2), treat a lift like a dock: go straight to
         // the first path point after the ride.
         GameObjectInfo const* liftInfo = sGOStorage.LookupEntry<GameObjectInfo>(nextPoint.entry);
-        if (sPlayerbotAIConfig.transportTeleportType == 2 && liftInfo && liftInfo->type == GAMEOBJECT_TYPE_TRANSPORT)
+        // (1.7.6: also with TransportTeleportType 1, where boats and zeppelins are ridden - lifts
+        // still can't be boarded)
+        if (sPlayerbotAIConfig.transportTeleportType >= 1 && liftInfo && liftInfo->type == GAMEOBJECT_TYPE_TRANSPORT)
         {
             std::vector<PathNodePoint>& points = path.getPath();
             auto exit = std::next(points.begin());

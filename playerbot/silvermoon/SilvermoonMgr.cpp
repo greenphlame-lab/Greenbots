@@ -1574,8 +1574,19 @@ static void SilvermoonOwnIdleWatch(Player* me)
                 ++attackers;
     // never: dead, flying, grouped, resurrection-sick, fighting something, casting (fishing stands
     // still for long stretches)
+    // ...or riding a boat or zeppelin, or waiting at its dock (1.7.6: boats are ridden now)
+    bool atDock = false;
+    {
+        LastMovement& lastMove = ai->GetAiObjectContext()->GetValue<LastMovement&>("last movement")->Get();
+        if (!lastMove.lastPath.empty() && lastMove.lastPath.getPath().size() > 1)
+        {
+            PathNodePoint const& next = *std::next(lastMove.lastPath.getPath().begin());
+            atDock = next.type == PathNodeType::NODE_TRANSPORT && next.point.getMapId() == me->GetMapId() &&
+                next.point.distance(WorldPosition(me)) < 40.0f;
+        }
+    }
     bool never = !me->IsAlive() || me->IsTaxiFlying() || me->GetGroup() || me->HasAura(15007) ||
-        (me->IsInCombat() && attackers) || me->IsNonMeleeSpellCasted(true);
+        (me->IsInCombat() && attackers) || me->IsNonMeleeSpellCasted(true) || me->GetTransport() || atDock;
     // waits up to 5 minutes: sitting (eating, drinking), or nowhere to go
     const char* wait = nullptr;
     if (me->getStandState() != UNIT_STAND_STATE_STAND)
