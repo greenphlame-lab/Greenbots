@@ -933,7 +933,8 @@ bool ChooseGoalAction::Execute(Event& event)
     // bot walks to the nearest friendly inn when it gets there before the sickness ends (within 1,200
     // yards, running about 7 yards a second) and waits there; otherwise it sits down where it is. It
     // asks again every 30 seconds, so it goes back to its normal goals as soon as the sickness is gone.
-    if (SilvermoonResSickRestApplies(bot) && !bot->IsInCombat())
+    // (a gather session takes the place of resting while the bot has a gathering profession - S, 1.6.22)
+    if (SilvermoonResSickRestApplies(bot) && !bot->IsInCombat() && !SilvermoonCatchUpSkill(bot->GetGUIDLow()))
     {
         uint32 guid = bot->GetGUIDLow();
         SpellAuraHolder* holder = bot->GetSpellAuraHolder(15007);

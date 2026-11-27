@@ -163,11 +163,12 @@ void ai::SilvermoonRecoveryTick(Player* bot)
             SilvermoonBuySupplies(bot);
     }
 
-    // gathering milestones (S, 1.6.21: "level 25 at least 150 in a gathering skill, 200 by 35"): at
-    // most every 15 minutes, a bot whose Mining or Herbalism is 25+ points behind the milestone for
-    // its level, and not capped by its rank, gets a 25-minute gather session (its zone's node route,
-    // as a Gather order does), then an hour before the next one. A capped skill is trained at the
-    // next rest in town (the craft pass; ranks may now use all the spending money).
+    // gathering milestones (S, 1.6.21: "level 25 at least 150 in a gathering skill, 200 by 35"; 1.6.22:
+    // only for bots not levelling well anyway): every 2 minutes, a bot that is struggling, has
+    // resurrection sickness, or is broke with nothing to sell, and whose Mining or Herbalism is below the
+    // milestone for its level (not capped by its rank), commits to a gather session: it walks to an
+    // area whose nodes still raise the skill (up to 45 minutes), then gathers there for 30 minutes,
+    // then an hour before the next one. A capped skill gets its rank trained (the rank trip).
     {
         std::mutex& profLock = profCheckLock;
         std::unordered_map<uint32, time_t>& nextProfCheck = profCheckAt;
@@ -177,14 +178,17 @@ void ai::SilvermoonRecoveryTick(Player* bot)
             time_t& at = nextProfCheck[guid];
             if (now >= at)
             {
-                at = now + 15 * MINUTE;
+                at = now + 2 * MINUTE;              // often enough to catch a resurrection sickness (up to 10 minutes)
                 due = true;
             }
         }
         // ...also a bot cashing out with nothing left to sell (S: the stuck few - Olmoh, Ninmenno,
         // Kelyia - grinding grey mobs with broken gear): gathering is money without fighting
         bool brokeNoLoot = due && cashOut && SilvermoonBagSellValue(bot) < 200;
-        if (due && alive && (!cashOut || brokeNoLoot) && !bot->GetGroup() && !bot->IsInCombat() && !bot->HasAura(15007) && !SilvermoonCatchUpSkill(guid))
+        // only for a bot that isn't levelling well right now anyway (S, 1.6.22): struggling, or with
+        // resurrection sickness - or broke with nothing to sell
+        bool idleAnyway = SilvermoonStruggling(guid) || bot->HasAura(15007) || brokeNoLoot;
+        if (due && alive && idleAnyway && (!cashOut || brokeNoLoot) && !bot->GetGroup() && !bot->IsInCombat() && !SilvermoonCatchUpSkill(guid))
         {
             uint32 target = brokeNoLoot ? 300 : SilvermoonGatherMilestone(bot->GetLevel());
             uint32 best = 0, bestValue = 0;
@@ -195,7 +199,7 @@ void ai::SilvermoonRecoveryTick(Player* bot)
                     bestValue = bot->GetSkillValuePure(skill);
                 }
             bool capped = best && bestValue >= bot->GetSkillMaxPure(best);
-            if (best && target && bestValue + 25 <= target && (!capped || brokeNoLoot))   // broke: capped or not, the materials sell
+            if (best && target && bestValue < target && (!capped || brokeNoLoot))   // broke: capped or not, the materials sell
             {
                 // the session's target (1.6.22): the tier its own area needs (so it can gather at home
                 // afterwards), else the milestone; at least 15 points, never past the rank cap
@@ -206,7 +210,7 @@ void ai::SilvermoonRecoveryTick(Player* bot)
                 SilvermoonStartCatchUp(guid, best, goal);
                 {
                     std::lock_guard<std::mutex> guard(profLock);
-                    nextProfCheck[guid] = now + 3 * HOUR;      // ends early at the target, then an hour's rest (below)
+                    nextProfCheck[guid] = now + 2 * HOUR;      // ends at 30 minutes there (or the target), then an hour's rest (below)
                 }
                 sLog.outBasic("Silvermoon: bot %s (level %u) %s skill %u (%u, milestone %u) - gather session to %u",
                     bot->GetName(), bot->GetLevel(), brokeNoLoot ? "is broke with nothing to sell, gathers with" : "is behind on", best, bestValue, target, goal);
@@ -222,7 +226,7 @@ void ai::SilvermoonRecoveryTick(Player* bot)
     if (uint32 skill = SilvermoonCatchUpSkill(guid))
     {
         if (!SilvermoonGatherRouteRemote(guid) && SilvermoonCatchUpArrived(guid))
-            sLog.outBasic("Silvermoon: bot %s reached its gathering area (skill %u at %u), 2 hours there at most", bot->GetName(), skill, bot->GetSkillValuePure(skill));
+            sLog.outBasic("Silvermoon: bot %s reached its gathering area (skill %u at %u), 30 minutes there", bot->GetName(), skill, bot->GetSkillValuePure(skill));
         uint32 goal = SilvermoonCatchUpTarget(guid);
         if (goal && bot->GetSkillValuePure(skill) >= goal)
         {

@@ -99,7 +99,7 @@ bool RecheckGoalAction::isUseful()
     silvermoon::BrainTimer brainTimer(silvermoon::BrainMicros());
     // Resurrection Sickness (S, 1.6.20): whatever goal the bot had (a quest objective it went back to
     // after the spirit healer, a grind spot...) ends, so "choose goal" sends it to an inn to wait
-    if (SilvermoonResSickRestApplies(bot) && !bot->IsInCombat())
+    if (SilvermoonResSickRestApplies(bot) && !bot->IsInCombat() && !SilvermoonCatchUpSkill(bot->GetGUIDLow()))
     {
         TravelTarget* target = AI_VALUE(TravelTarget*, "travel target");
         if (target && target->IsActive() && !SilvermoonIsResSickTrip(bot->GetGUIDLow(), target->GetDestination()))

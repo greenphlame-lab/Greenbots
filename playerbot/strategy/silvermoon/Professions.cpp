@@ -337,8 +337,8 @@ void ai::SilvermoonStartCatchUp(uint32 guid, uint32 skill, uint32 target)
     CatchUp c;
     c.skill = skill;
     c.target = target;
-    c.until = time(nullptr) + 45 * MINUTE;              // to get there; the 2 hours start on arrival
-    c.hardUntil = time(nullptr) + 150 * MINUTE;
+    c.until = time(nullptr) + 45 * MINUTE;              // to get there; the 30 minutes start on arrival
+    c.hardUntil = time(nullptr) + 75 * MINUTE;
     catchUp[guid] = c;
 }
 
@@ -349,7 +349,7 @@ bool ai::SilvermoonCatchUpArrived(uint32 guid)
     if (it == catchUp.end() || it->second.arrived)
         return false;
     it->second.arrived = true;
-    it->second.until = std::min(it->second.hardUntil, time(nullptr) + 2 * HOUR);
+    it->second.until = std::min(it->second.hardUntil, time(nullptr) + 30 * MINUTE);   // S: a 25-30 minute session, once there
     return true;
 }
 
