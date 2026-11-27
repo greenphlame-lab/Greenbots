@@ -9,6 +9,8 @@
 #include "Spells/SpellMgr.h"
 #include "playerbot/silvermoon/Hubs.h"
 #include "playerbot/GuidPosition.h"
+#include "Server/DBCStores.h"
+#include <cmath>
 #include "playerbot/strategy/actions/BankAction.h"
 #include "playerbot/silvermoon/Recovery.h"
 #include "Policies.h"
@@ -1124,6 +1126,59 @@ bool ai::SilvermoonGoGoal(Player* bot, SilvermoonScoredGoal& goal)
         if (otherContinent)
             bestDist = 1000000.0f;     // not there yet, whatever the numbers say
     }
+    // Long trips fly (1.7.8, S: Mommy stood in Lakeshire on a Go to the Stormwind auction house, 2,790
+    // yards, with no route found; earlier "path via the road to Sentinel Hill and fly"): when the
+    // nearest flight point it knows and the one nearest the destination save 600+ yards of walking,
+    // the trip goes to that flight master first, and there it takes the flight (paid as usual).
+    // After landing the order picks up again from the new spot.
+    WorldPosition flyTo;
+    bool viaFlight = false;
+    if (best && !otherContinent && best->map == bot->GetMapId() && bestDist > 800.0f && !bot->IsTaxiFlying())
+    {
+        auto nearestKnown = [&](float x, float y) -> TaxiNodesEntry const*
+        {
+            TaxiNodesEntry const* n = nullptr;
+            float nd = 0.0f;
+            for (uint32 i = 1; i < sTaxiNodesStore.GetNumRows(); ++i)
+            {
+                TaxiNodesEntry const* t = sTaxiNodesStore.LookupEntry(i);
+                if (!t || t->map_id != bot->GetMapId() || !bot->m_taxi.IsTaximaskNodeKnown(i))
+                    continue;
+                float d = std::hypot(t->x - x, t->y - y);
+                if (!n || d < nd)
+                {
+                    n = t;
+                    nd = d;
+                }
+            }
+            return n;
+        };
+        TaxiNodesEntry const* from = nearestKnown(bot->GetPositionX(), bot->GetPositionY());
+        TaxiNodesEntry const* to = nearestKnown(best->x, best->y);
+        if (from && to && from != to)
+        {
+            float walkToFm = std::hypot(from->x - bot->GetPositionX(), from->y - bot->GetPositionY());
+            float landingToDest = std::hypot(to->x - best->x, to->y - best->y);
+            if (bestDist - (walkToFm + landingToDest) > 600.0f)
+            {
+                if (walkToFm < 20.0f)
+                {
+                    std::vector<uint32> nodes = { from->ID, to->ID };
+                    bot->GetMotionMaster()->Clear();
+                    if (bot->ActivateTaxiPathTo(nodes, nullptr, 0))
+                    {
+                        sLog.outBasic("Silvermoon: %s flies from node %u to node %u for its trip to %s", bot->GetName(), from->ID, to->ID, order.what.c_str());
+                        return false;      // in the air: the order stays, and picks up after landing
+                    }
+                }
+                else
+                {
+                    flyTo = WorldPosition(from->map_id, from->x, from->y, from->z);
+                    viaFlight = true;
+                }
+            }
+        }
+    }
     // there: within 15 yards (S: Kojimbo stood 10 yards from Ranik, behind his counter in Ratchet,
     // "heading to a vendor" and not moving - 8 yards was closer than the bot could get), or the
     // order is 20 minutes old
@@ -1177,7 +1232,7 @@ bool ai::SilvermoonGoGoal(Player* bot, SilvermoonScoredGoal& goal)
         // a queued stop after this one: stay here a little to get the business done (S, 1.7)
         bool dwelling = there && queued && time(nullptr) - order.arrived < time_t(GoDwell(order));
         // a trip across the sea gets an hour (boat waits and rides), others 20 minutes
-    if (!dwelling && (!best || there || (order.at && time(nullptr) - order.at > (otherContinent ? HOUR : 20 * MINUTE))))
+    if (!dwelling && (!best || there || (order.at && time(nullptr) - order.at > ((otherContinent || viaFlight) ? HOUR : 20 * MINUTE))))
         {
             goOrders.erase(guid);              // there (or none on this continent): order done
             if (queued)
@@ -1197,14 +1252,15 @@ bool ai::SilvermoonGoGoal(Player* bot, SilvermoonScoredGoal& goal)
     if (promoted)
         return SilvermoonGoGoal(bot, goal);    // straight on to the next stop
     std::lock_guard<std::mutex> guard(orderLock);
-    TemporaryTravelDestination* destination = new TemporaryTravelDestination(WorldPosition(best->map, best->x, best->y, best->z), int32(best->entry));
+    TemporaryTravelDestination* destination = viaFlight ? new TemporaryTravelDestination(flyTo) :
+        new TemporaryTravelDestination(WorldPosition(best->map, best->x, best->y, best->z), int32(best->entry));
     goal.destination = destination;
     goal.position = destination->GetPosition();
     goal.kind = silvermoon::GoalKind::Other;
     goal.score.value = goal.score.score = 2000000.0f;
     goal.score.minutes = 1.0f;
     CreatureInfo const* info = ObjectMgr::GetCreatureTemplate(best->entry);
-    goal.score.reason = "profession: go to " + order.what + (info ? std::string(" (") + info->Name + ")" : "");
+    goal.score.reason = "profession: go to " + order.what + (info ? std::string(" (") + info->Name + ")" : "") + (viaFlight ? ", by flight" : "");
     return true;
 }
 
