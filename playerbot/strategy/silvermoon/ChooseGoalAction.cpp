@@ -843,6 +843,28 @@ bool ChooseGoalAction::Execute(Event& event)
     if (travelTarget->GetStatus() != TravelStatus::TRAVEL_STATUS_PREPARE)
         return false;
 
+    // profession rank due (S, 1.6.22: "the #1 priority is to train the next level, as long as level and
+    // money permit"): a trip to the nearest trainer who teaches it, through the Go to step below (a
+    // trainer within 20 yards trains it on the spot). Checked at most every 2 minutes; out of combat,
+    // not with resurrection sickness.
+    if (!bot->IsInCombat() && !bot->HasAura(15007))
+    {
+        static std::mutex rankLock;
+        static std::unordered_map<uint32, time_t> lastRank;
+        bool due = false;
+        {
+            std::lock_guard<std::mutex> guard(rankLock);
+            time_t& at = lastRank[bot->GetGUIDLow()];
+            if (time(nullptr) - at >= 2 * MINUTE)
+            {
+                at = time(nullptr);
+                due = true;
+            }
+        }
+        if (due && !SilvermoonLearnRankHere(bot))
+            SilvermoonGoTrainRank(bot);
+    }
+
     // Go to order (S, 1.6.21: "should immediately override whatever task the bot is on"): ahead of
     // everything - gather routes, resting, shopping - and without waiting for the destination search
     {

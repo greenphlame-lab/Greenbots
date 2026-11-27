@@ -9,6 +9,11 @@
 #include "Spells/SpellMgr.h"
 #include "playerbot/silvermoon/Hubs.h"
 #include "playerbot/silvermoon/Recovery.h"
+#include "Policies.h"
+#include "Grids/GridNotifiers.h"
+#include "Grids/GridNotifiersImpl.h"
+#include "Grids/CellImpl.h"
+#include <list>
 #include <set>
 #include <algorithm>
 #include <cstdio>
@@ -624,7 +629,8 @@ namespace
         static std::vector<GoSpot> spots;
         std::call_once(once, []()
         {
-            const uint32 wanted = UNIT_NPC_FLAG_INNKEEPER | UNIT_NPC_FLAG_FLIGHTMASTER | UNIT_NPC_FLAG_AUCTIONEER | UNIT_NPC_FLAG_BANKER | UNIT_NPC_FLAG_VENDOR | UNIT_NPC_FLAG_REPAIR;
+            const uint32 wanted = UNIT_NPC_FLAG_INNKEEPER | UNIT_NPC_FLAG_FLIGHTMASTER | UNIT_NPC_FLAG_AUCTIONEER | UNIT_NPC_FLAG_BANKER | UNIT_NPC_FLAG_VENDOR | UNIT_NPC_FLAG_REPAIR |
+                UNIT_NPC_FLAG_TRAINER;   // 1.6.22: profession trainers (rank trips)
             if (auto r = WorldDatabase.PQuery("SELECT t.NpcFlags, c.id, c.map, c.position_x, c.position_y, c.position_z FROM creature c "
                 "JOIN creature_template t ON t.entry = c.id WHERE (t.NpcFlags & %u) <> 0 AND c.map IN (0, 1)", wanted))
             {
@@ -806,6 +812,127 @@ void ai::SilvermoonLevelPass(Player* bot)
     }
 }
 
+// Profession ranks (S, 1.6.22: "hit the threshold, and the #1 priority is to go train the next level,
+// as long as level and money permit"): every rank the profession trainers teach - the skill, the skill
+// and level it needs, its price, the spell the trainer casts and the one learned - and which trainers
+// (creature entries) teach it. Built once.
+namespace
+{
+    struct RankInfo { uint32 skill = 0, reqSkill = 0, reqLevel = 0, cost = 0, learned = 0; std::set<uint32> trainers; };
+    std::vector<RankInfo>& Ranks()
+    {
+        static std::once_flag once;
+        static std::vector<RankInfo> ranks;
+        std::call_once(once, []()
+        {
+            std::map<uint32, RankInfo> byLearned;
+            for (uint32 id = 0; id < sCreatureStorage.GetMaxEntry(); ++id)
+            {
+                CreatureInfo const* co = sCreatureStorage.LookupEntry<CreatureInfo>(id);
+                if (!co || co->TrainerType != TRAINER_TYPE_TRADESKILLS)
+                    continue;
+                for (TrainerSpellData const* data : { sObjectMgr.GetNpcTrainerSpells(co->Entry), sObjectMgr.GetNpcTrainerTemplateSpells(co->TrainerTemplateId) })
+                {
+                    if (!data)
+                        continue;
+                    for (auto const& itr : data->spellList)
+                    {
+                        TrainerSpell const& t = itr.second;
+                        if (!t.reqSkill || !t.reqSkillValue)
+                            continue;           // apprentice ranks (learning the profession) are done elsewhere
+                        uint32 learned = t.learnedSpell;
+                        if (SpellEntry const* teach = sServerFacade.LookupSpellInfo(t.spell))
+                            for (int j = 0; j < 3; ++j)
+                                if (teach->Effect[j] == SPELL_EFFECT_LEARN_SPELL && teach->EffectTriggerSpell[j])
+                                    learned = teach->EffectTriggerSpell[j];
+                        SpellEntry const* info = learned ? sServerFacade.LookupSpellInfo(learned) : nullptr;
+                        if (!info)
+                            continue;
+                        bool step = false;
+                        for (int j = 0; j < 3; ++j)
+                            if (info->Effect[j] == SPELL_EFFECT_SKILL_STEP)
+                                step = true;
+                        if (!step)
+                            continue;           // recipes aren't ranks
+                        RankInfo& r = byLearned[learned];
+                        if (r.trainers.empty() || t.spellCost < r.cost)
+                        {
+                            r.skill = t.reqSkill;
+                            r.reqSkill = t.reqSkillValue;
+                            r.reqLevel = t.reqLevel;
+                            r.cost = t.spellCost;
+                            r.learned = learned;
+                        }
+                        r.trainers.insert(co->Entry);
+                    }
+                }
+            }
+            for (auto const& e : byLearned)
+                ranks.push_back(e.second);
+        });
+        return ranks;
+    }
+
+    // the rank this character can train now: its skill reached the requirement, its level allows,
+    // it hasn't got it, and the price fits its money above the repair fund
+    RankInfo const* RankDue(Player* bot)
+    {
+        RankInfo const* best = nullptr;
+        for (RankInfo const& r : Ranks())
+        {
+            if (!bot->HasSkill(r.skill) || bot->GetSkillValuePure(r.skill) < r.reqSkill || bot->GetLevel() < r.reqLevel || bot->HasSpell(r.learned))
+                continue;
+            if (r.cost > SilvermoonSpendable(bot))
+                continue;
+            if (!best || r.reqSkill < best->reqSkill)
+                best = &r;
+        }
+        return best;
+    }
+}
+
+bool ai::SilvermoonGoTrainRank(Player* bot)
+{
+    RankInfo const* r = RankDue(bot);
+    if (!r)
+        return false;
+    SpellEntry const* info = sServerFacade.LookupSpellInfo(r->learned);
+    std::lock_guard<std::mutex> guard(orderLock);
+    if (goOrders.count(bot->GetGUIDLow()))
+        return false;                                   // already going somewhere
+    GoOrder& order = goOrders[bot->GetGUIDLow()];
+    order.flag = UNIT_NPC_FLAG_TRAINER;
+    order.what = std::string("a trainer for ") + (info ? info->SpellName[0] : "the next rank");
+    order.entries = r->trainers;
+    order.at = time(nullptr);
+    return true;
+}
+
+bool ai::SilvermoonLearnRankHere(Player* bot)
+{
+    RankInfo const* r = RankDue(bot);
+    if (!r)
+        return false;
+    // a trainer who teaches it within 20 yards
+    std::list<Unit*> near;
+    MaNGOS::AnyUnitInObjectRangeCheck check(bot, 20.0f);
+    MaNGOS::UnitListSearcher<MaNGOS::AnyUnitInObjectRangeCheck> searcher(near, check);
+    Cell::VisitAllObjects(bot, searcher, 20.0f);
+    for (Unit* u : near)
+        if (u->GetTypeId() == TYPEID_UNIT && u->IsAlive() && r->trainers.count(u->GetEntry()) && !bot->CanAttack(u))
+        {
+            bot->ModifyMoney(-int32(r->cost));
+            bot->learnSpell(r->learned, false);
+            SpellEntry const* info = sServerFacade.LookupSpellInfo(r->learned);
+            sLog.outBasic("Silvermoon: %s trained %s at %s for %u copper (skill %u at %u)", bot->GetName(), info ? info->SpellName[0] : "a rank",
+                u->GetName(), r->cost, r->skill, bot->GetSkillValuePure(r->skill));
+            if (SilvermoonIsOwn(bot))
+                SilvermoonAwayNote(bot, std::string("Trained ") + (info ? info->SpellName[0] : "a profession rank") + " for " + SilvermoonMoneyText(r->cost));
+            return true;
+        }
+    return false;
+}
+
 bool ai::SilvermoonGoBagVendor(Player* bot, uint32 itemId)
 {
     std::set<uint32> const& sellers = VendorsSelling(itemId);
@@ -857,6 +984,8 @@ bool ai::SilvermoonGoGoal(Player* bot, SilvermoonScoredGoal& goal)
         SilvermoonRepairNearby(bot);           // Go to > Repair (S): repair on arrival
     if (there && order.what.rfind("a bag vendor", 0) == 0)
         SilvermoonBuyBag(bot);                 // "Buy bigger bags": buy on arrival
+    if (there && order.what.rfind("a trainer for ", 0) == 0)
+        SilvermoonLearnRankHere(bot);          // profession rank (1.6.22): train on arrival
     std::lock_guard<std::mutex> guard(orderLock);
     if (!best || there || (order.at && time(nullptr) - order.at > 20 * MINUTE))
     {

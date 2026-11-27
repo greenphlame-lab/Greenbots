@@ -46,6 +46,10 @@ namespace ai
     bool SilvermoonGoGoal(Player* bot, SilvermoonScoredGoal& goal);
     // "Buy bigger bags" (S, 1.6.21): a go order to the nearest vendor that sells this bag
     bool SilvermoonGoBagVendor(Player* bot, uint32 itemId);
+    // profession ranks (S, 1.6.22): a go order to the nearest trainer of the rank this character can
+    // train now (skill, level and money allow); and the training itself with that trainer in reach
+    bool SilvermoonGoTrainRank(Player* bot);
+    bool SilvermoonLearnRankHere(Player* bot);
     // profession catch-up (S, 1.6.21): a gather session for a random bot behind its milestone
     void SilvermoonStartCatchUp(uint32 guid, uint32 skill, uint32 target);
     uint32 SilvermoonCatchUpSkill(uint32 guid);
