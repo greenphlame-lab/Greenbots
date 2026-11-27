@@ -1550,34 +1550,67 @@ static void SilvermoonVendorGear(Player* bot)
 // Called every 30 seconds per character.
 static void SilvermoonOwnIdleWatch(Player* me)
 {
+    // 1.7.3 (S: Mommy stood still again and the 1.7.2 watchdog never fired - it skipped anything that
+    // looked "busy" or had no trip on record): standing still 2 minutes with a trip due, or 5 minutes
+    // sitting or with nothing planned, resets the AI - unless dead, flying, grouped, resurrection-sick,
+    // fighting something or casting. A combat flag with nobody attacking no longer counts as fighting
+    // (it froze the AI); the reset clears it. Waiting checks past 2 minutes are logged once a minute.
     static std::mutex lock;
     static std::unordered_map<uint32, std::tuple<uint32, float, float, time_t>> last;   // map, x, y, since
+    static std::unordered_map<uint32, time_t> lastNote;
     PlayerbotAI* ai = me ? me->GetPlayerbotAI() : nullptr;
     if (!ai)
         return;
     uint32 guid = me->GetGUIDLow();
     TravelTarget* target = ai->GetAiObjectContext()->GetValue<TravelTarget*>("travel target")->Get();
-    bool wantsToGo = SilvermoonGoActive(me) || (target && target->IsActive() &&
+    bool goTrip = SilvermoonGoActive(me);
+    bool wantsToGo = goTrip || (target && target->IsActive() &&
         (target->GetStatus() == TravelStatus::TRAVEL_STATUS_TRAVEL || target->GetStatus() == TravelStatus::TRAVEL_STATUS_READY ||
          target->GetStatus() == TravelStatus::TRAVEL_STATUS_PREPARE));
-    bool busy = !me->IsAlive() || me->IsInCombat() || me->IsTaxiFlying() || me->IsNonMeleeSpellCasted(true) ||
-        me->getStandState() != UNIT_STAND_STATE_STAND || me->GetGroup() || me->HasAura(15007);
+    uint32 attackers = 0;
+    for (ObjectGuid const& g : ai->GetAiObjectContext()->GetValue<std::list<ObjectGuid>>("attackers")->Get())
+        if (Unit* u = ai->GetUnit(g))
+            if (u->IsAlive())
+                ++attackers;
+    // never: dead, flying, grouped, resurrection-sick, fighting something, casting (fishing stands
+    // still for long stretches)
+    bool never = !me->IsAlive() || me->IsTaxiFlying() || me->GetGroup() || me->HasAura(15007) ||
+        (me->IsInCombat() && attackers) || me->IsNonMeleeSpellCasted(true);
+    // waits up to 5 minutes: sitting (eating, drinking), or nowhere to go
+    const char* wait = nullptr;
+    if (me->getStandState() != UNIT_STAND_STATE_STAND)
+        wait = "sitting";
+    else if (!wantsToGo)
+        wait = "no trip planned";
     std::lock_guard<std::mutex> guard(lock);
     auto it = last.find(guid);
     time_t now = time(nullptr);
-    if (!wantsToGo || busy || it == last.end() || std::get<0>(it->second) != me->GetMapId() ||
+    if (never || it == last.end() || std::get<0>(it->second) != me->GetMapId() ||
         std::hypot(me->GetPositionX() - std::get<1>(it->second), me->GetPositionY() - std::get<2>(it->second)) > 3.0f)
     {
         last[guid] = std::make_tuple(me->GetMapId(), me->GetPositionX(), me->GetPositionY(), now);
         return;
     }
-    if (now - std::get<3>(it->second) < 2 * MINUTE)
+    time_t still = now - std::get<3>(it->second);
+    if (still < 2 * MINUTE || (wait && still < 5 * MINUTE))
+    {
+        if (wait && still >= 2 * MINUTE && now - lastNote[guid] >= MINUTE)
+        {
+            lastNote[guid] = now;
+            sLog.outBasic("Silvermoon: %s still for %u s with somewhere to go, waiting (%s)", me->GetName(), uint32(still), wait);
+        }
         return;
-    sLog.outBasic("Silvermoon: %s stood still for 2 minutes with somewhere to go (%s), resetting its AI",
-        me->GetName(), target && target->GetDestination() ? target->GetDestination()->GetTitle().c_str() : "a Go to trip");
+    }
+    sLog.outBasic("Silvermoon: %s stood still for %u s with somewhere to go (%s%s), resetting its AI", me->GetName(), uint32(still),
+        target && target->GetDestination() ? target->GetDestination()->GetTitle().c_str() : "a Go to trip",
+        me->IsInCombat() && !attackers ? "; in combat with no attackers" : "");
+    if (me->IsInCombat() && !attackers)
+        me->CombatStop();
     if (target)
         target->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
     ai->GetAiObjectContext()->GetValue<int>("manual int", "silvermoon goal retry at")->Set(0);
+    if (me->getStandState() != UNIT_STAND_STATE_STAND)
+        me->SetStandState(UNIT_STAND_STATE_STAND);
     ai->StopMoving();
     ai->Reset(true);
     last[guid] = std::make_tuple(me->GetMapId(), me->GetPositionX(), me->GetPositionY(), now);
