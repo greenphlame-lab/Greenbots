@@ -484,7 +484,11 @@ static SilvermoonScoredGoal ScoreWith(Player* bot, BotSnapshot const& snapshot, 
         // only when already in or near a town with an auction house (600 yards) - S, Nov 25:
         // Grashnak picked three Orgrimmar auctioneers in a row from the Crossroads. Your "AH trip at
         // X gold" policy still sends your character from anywhere.
-        if (!policyTrip && distance > 600.0f)
+        // 1.7.7 (S: "there's like no auctions right now"): that rule cut AH trips from ~350 to ~30
+        // every 4 hours, and new listings dried up. A trip from further out (up to 3,000 yards) is
+        // back when the bags hold 10 or more stacks for the AH; the trip's length still weighs
+        // against it in the score
+        if (!policyTrip && distance > 600.0f && (stacks < 10 || distance > 3000.0f))
         {
             goal.score.score = 0.0f;
             goal.score.reason = "auction house: too far";
