@@ -12,6 +12,8 @@ namespace ai
         SurviveStrategy(PlayerbotAI* ai) : Strategy(ai) {}
         std::string getName() override { return "silvermoon survive"; }
         void InitCombatTriggers(std::list<TriggerNode*>& triggers) override;
+        // 1.7.2: out of fights, your list's "if not active" buffs on yourself
+        void InitNonCombatTriggers(std::list<TriggerNode*>& triggers) override;
     };
 
     // below 25% health in a fight: the class escape / survival buttons (see SurviveStrategy.cpp)
@@ -33,6 +35,18 @@ namespace ai
         virtual bool Execute(Event& event) override;
     private:
         bool Pick(std::string& name, Unit*& target);
+    };
+
+    // 1.7.2 (S: Blessing of Might "if not active" on the list): out of fights, keep up the buffs on
+    // yourself that your list marks "not active"
+    class PolicyRotationBuffAction : public Action
+    {
+    public:
+        PolicyRotationBuffAction(PlayerbotAI* ai) : Action(ai, "silvermoon rotation buff") {}
+        virtual bool isUseful() override;
+        virtual bool Execute(Event& event) override;
+    private:
+        std::string Pick();
     };
 
     // policies (S): drink a healing potion below your set health (default 20%)

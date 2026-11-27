@@ -56,6 +56,7 @@
 #endif
 #include "AI/ScriptDevAI/ScriptDevAIMgr.h"
 #include "strategy/values/GuildValues.h"
+namespace ai { bool SilvermoonRotationBlocks(Player* bot, uint32 spellId); }
 
 using namespace ai;
 
@@ -4571,6 +4572,14 @@ bool PlayerbotAI::CanCastSpell(std::string name, Unit* target, uint8 effectMask,
 
 bool PlayerbotAI::CanCastSpell(uint32 spellid, Unit* target, uint8 effectMask, bool checkHasSpell, Item* itemTarget, bool ignoreRange, bool ignoreInCombat, bool ignoreMount, SpellCastResult* checkResult)
 {
+    // Silvermoon 1.7.2: your rotation list overrides the class's pick within a group of exclusive
+    // buffs (Blessing of Might on the list: no Blessing of Wisdom)
+    if (spellid && ai::SilvermoonRotationBlocks(bot, spellid))
+    {
+        if (checkResult)
+            *checkResult = SPELL_FAILED_NOT_KNOWN;
+        return false;
+    }
     if (!spellid)
     {
         if (checkResult)

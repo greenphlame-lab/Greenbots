@@ -1003,6 +1003,9 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
                      (sPlayerbotAIConfig.IsFreeAltBot(player) && !player->GetGroup() && SilvermoonAutoOn(player->GetGUIDLow()))) &&
                     !sRandomPlayerbotMgr.SilvermoonDungeonOf(player->GetGUIDLow()))
                     nonCombatEngine->addStrategy("silvermoon brain");
+                // 1.7.2: your own characters keep up the buffs their rotation list marks "not active"
+                if (sPlayerbotAIConfig.silvermoonBrain && (facade->IsRealPlayer() || sPlayerbotAIConfig.IsFreeAltBot(player)))
+                    nonCombatEngine->addStrategy("silvermoon survive");
             }
 
             if (sPlayerbotAIConfig.randomBotJoinBG)

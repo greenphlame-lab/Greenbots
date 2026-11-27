@@ -425,6 +425,44 @@ std::string ai::SilvermoonDefaultTrigger(Player* bot, std::string const& spell)
     return t == triggers.end() ? std::string() : t->second;
 }
 
+bool ai::SilvermoonRotationBlocks(Player* bot, uint32 spellId)
+{
+    static const std::vector<std::vector<std::string>> groups = {
+        { "blessing of might", "blessing of wisdom", "blessing of kings", "blessing of salvation", "blessing of light", "blessing of sanctuary" },
+        { "devotion aura", "retribution aura", "concentration aura", "shadow resistance aura", "frost resistance aura", "fire resistance aura", "sanctity aura" },
+        { "seal of righteousness", "seal of the crusader", "seal of command", "seal of justice", "seal of light", "seal of wisdom" },
+        { "aspect of the hawk", "aspect of the monkey", "aspect of the cheetah", "aspect of the pack", "aspect of the wild", "aspect of the beast" },
+        { "demon skin", "demon armor" },
+        { "frost armor", "ice armor", "mage armor" },
+        { "battle stance", "defensive stance", "berserker stance" },
+        { "bear form", "dire bear form", "cat form", "travel form", "aquatic form", "moonkin form" },
+        { "rockbiter weapon", "flametongue weapon", "frostbrand weapon", "windfury weapon" },
+    };
+    if (!bot || !spellId || !SilvermoonIsOwn(bot))
+        return false;
+    SpellEntry const* sp = sServerFacade.LookupSpellInfo(spellId);
+    if (!sp || !sp->SpellName[0])
+        return false;
+    std::string name = Lower(sp->SpellName[0]);
+    for (auto const& group : groups)
+    {
+        if (std::find(group.begin(), group.end(), name) == group.end())
+            continue;
+        std::vector<std::pair<std::string, uint8>> list = SilvermoonRotationFor(bot->GetGUIDLow());
+        bool listed = false, other = false;
+        for (auto const& e : list)
+        {
+            std::string n = Lower(e.first);
+            if (n == name)
+                listed = true;
+            else if (std::find(group.begin(), group.end(), n) != group.end())
+                other = true;
+        }
+        return other && !listed;
+    }
+    return false;
+}
+
 std::vector<std::pair<std::string, uint8>> ai::SilvermoonRotationFor(uint32 guid)
 {
     std::lock_guard<std::mutex> guard(policyLock);

@@ -163,6 +163,46 @@ bool PolicyRotationAction::Pick(std::string& name, Unit*& target)
     return false;
 }
 
+void SurviveStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& triggers)
+{
+    // above the class buffs (ACTION_HIGH and below), below eating, drinking and healing
+    triggers.push_back(new TriggerNode(
+        "often",
+        NextAction::array(0, new NextAction("silvermoon rotation buff", ACTION_HIGH + 9), NULL)));
+}
+
+std::string PolicyRotationBuffAction::Pick()
+{
+    if (!bot->IsAlive() || bot->IsInCombat() || !SilvermoonIsOwn(bot) || bot->IsMounted() || bot->IsTaxiFlying() ||
+        bot->IsNonMeleeSpellCasted(true) || bot->getStandState() != UNIT_STAND_STATE_STAND)
+        return "";
+    for (auto const& [spell, cond] : SilvermoonRotationFor(bot->GetGUIDLow()))
+    {
+        if (!(cond & 1))
+            continue;
+        uint32 id = AI_VALUE2(uint32, "spell id", spell);
+        if (!id || !bot->HasSpell(id) || !IsPositiveSpell(id))
+            continue;
+        if (ai->HasAura(spell, bot))
+            continue;
+        if (!ai->CanCastSpell(id, bot, 0))
+            continue;
+        return spell;
+    }
+    return "";
+}
+
+bool PolicyRotationBuffAction::isUseful()
+{
+    return !Pick().empty();
+}
+
+bool PolicyRotationBuffAction::Execute(Event& event)
+{
+    std::string spell = Pick();
+    return !spell.empty() && ai->CastSpell(spell, bot);
+}
+
 bool PolicyRotationAction::isUseful()
 {
     std::string name;

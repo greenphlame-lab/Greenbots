@@ -95,6 +95,11 @@ namespace ai
     std::vector<std::string> SilvermoonDefaultRotationText(Player* bot);
     // condition 5: the trigger the class rotation uses for this spell ("" = none known)
     std::string SilvermoonDefaultTrigger(Player* bot, std::string const& spell);
+    // 1.7.2 (S: Blessing of Might on the list, yet the class kept casting Blessing of Wisdom): spells
+    // that exclude each other (blessings, auras, seals, aspects, armors, stances, forms...). When your
+    // list names one of a group, the character never casts another of that group unless it's also
+    // on the list. Your own characters only.
+    bool SilvermoonRotationBlocks(Player* bot, uint32 spellId);
     bool SilvermoonEquipAnswer(Player* bot, uint32 itemGuid, bool equip, std::string& reply);
     std::string SilvermoonPolicyPanel(Player* bot);
     // weapon master training (S): in a capital, a weapon skill that is ticked (not "avoid"), that
