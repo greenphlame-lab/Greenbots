@@ -113,7 +113,10 @@ bool RecheckGoalAction::isUseful()
     // it"): at the spot (12 yards) with nothing to gather in the 60-yard scan, out of combat and not
     // casting, the stop is over - the trip ends and the brain picks the next unvisited spot at once.
     // Without this the bot stood at an empty spot until the trip's timer ran out (1.6.11, Mommy).
-    if (SilvermoonGatherOrderFactor(bot->GetGUIDLow(), 182) > 1.0f || SilvermoonGatherOrderFactor(bot->GetGUIDLow(), 186) > 1.0f)
+    // (not while on a Go to trip: 1.7.6, Minzu re-planned her trip to the Skinning trainer 188 times
+    // in an hour - near the trainer this took the trip for a finished gather stop and ended it)
+    if ((SilvermoonGatherOrderFactor(bot->GetGUIDLow(), 182) > 1.0f || SilvermoonGatherOrderFactor(bot->GetGUIDLow(), 186) > 1.0f) &&
+        !SilvermoonGoActive(bot))
     {
         TravelTarget* target = AI_VALUE(TravelTarget*, "travel target");
         if (target && target->GetPosition() && dynamic_cast<TemporaryTravelDestination*>(target->GetDestination()) &&

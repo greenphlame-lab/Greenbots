@@ -650,6 +650,8 @@ namespace
     // Go to queue (S, 1.7): the places after the current one, in order
     std::unordered_map<uint32, std::deque<GoOrder>> goQueue;
     const size_t GO_QUEUE_MAX = 8;
+    // brain-planned trips that got stuck: none for this bot until then (1.7.6)
+    std::unordered_map<uint32, time_t> goGiveUpUntil;
 
     // seconds a character stays at a stop before heading to the next queued one, so it gets its
     // business done there (selling, posting auctions, banking)
@@ -668,6 +670,17 @@ bool ai::SilvermoonGoActive(Player* bot)
 {
     std::lock_guard<std::mutex> guard(orderLock);
     return bot && goOrders.count(bot->GetGUIDLow()) > 0;
+}
+
+void ai::SilvermoonGoGiveUp(Player* bot)
+{
+    std::lock_guard<std::mutex> guard(orderLock);
+    auto it = goOrders.find(bot->GetGUIDLow());
+    if (it == goOrders.end() || !it->second.kind.empty())
+        return;                                         // none, or yours: yours keep going
+    sLog.outBasic("Silvermoon: %s gave up on its trip to %s (stuck), no brain trips for an hour", bot->GetName(), it->second.what.c_str());
+    goOrders.erase(it);
+    goGiveUpUntil[bot->GetGUIDLow()] = time(nullptr) + HOUR;
 }
 
 bool ai::SilvermoonGoIsYours(Player* bot)
@@ -995,6 +1008,9 @@ bool ai::SilvermoonGoTrainRank(Player* bot)
     std::lock_guard<std::mutex> guard(orderLock);
     if (goOrders.count(bot->GetGUIDLow()))
         return false;                                   // already going somewhere
+    auto gu = goGiveUpUntil.find(bot->GetGUIDLow());
+    if (gu != goGiveUpUntil.end() && time(nullptr) < gu->second)
+        return false;                                   // a trip got stuck lately (1.7.6)
     GoOrder& order = goOrders[bot->GetGUIDLow()];
     order.flag = UNIT_NPC_FLAG_TRAINER;
     order.what = std::string("a trainer for ") + (info ? info->SpellName[0] : "the next rank");
@@ -1041,6 +1057,9 @@ bool ai::SilvermoonGoBagVendor(Player* bot, uint32 itemId)
     std::lock_guard<std::mutex> guard(orderLock);
     if (goOrders.count(bot->GetGUIDLow()))
         return false;                                   // already going somewhere
+    auto gu = goGiveUpUntil.find(bot->GetGUIDLow());
+    if (gu != goGiveUpUntil.end() && time(nullptr) < gu->second)
+        return false;                                   // a trip got stuck lately (1.7.6)
     GoOrder& order = goOrders[bot->GetGUIDLow()];
     order.flag = UNIT_NPC_FLAG_VENDOR;
     order.what = std::string("a bag vendor for a ") + (proto ? proto->Name1 : "bigger bag");

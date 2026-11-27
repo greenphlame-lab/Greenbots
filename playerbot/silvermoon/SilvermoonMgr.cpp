@@ -3796,6 +3796,9 @@ void RandomPlayerbotMgr::SilvermoonFastProcessBot(Player* player, PlayerbotAI* a
             {
                 if (dest)
                     SilvermoonSkipDestination(bot, dest, 20 * MINUTE);   // was an hour: a wrong give-up hid quest turn-ins too long
+                // a brain-planned Go trip (rank training, bags) that got stuck is dropped for an hour
+                // (1.7.6: it was chosen again at once - Cardib gave up 7 times on one trainer)
+                SilvermoonGoGiveUp(player);
                 silvermoon::DecisionRow row;
                 row.ts = uint32(time(nullptr));
                 row.guid = bot;
