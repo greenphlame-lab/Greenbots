@@ -111,7 +111,8 @@ bool PolicyRotationAction::Pick(std::string& name, Unit*& target)
 {
     if (!bot->IsAlive() || !bot->IsInCombat() || !SilvermoonIsOwn(bot) || bot->IsNonMeleeSpellCasted(true))
         return false;
-    Unit* enemy = AI_VALUE(Unit*, "current target");
+    // "current target" holds a guid (S, 1.7.1: asking it for a Unit* gave a null value and crashed the server)
+    Unit* enemy = ai->GetUnit(AI_VALUE(ObjectGuid, "current target"));
     if (!enemy || !enemy->IsAlive() || !bot->CanAttack(enemy))
         return false;
     for (auto const& [spell, cond] : SilvermoonRotationFor(bot->GetGUIDLow()))
