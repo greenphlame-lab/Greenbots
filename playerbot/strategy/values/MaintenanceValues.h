@@ -110,7 +110,11 @@ namespace ai
     {
     public:
         CanAHSellValue(PlayerbotAI* ai) : BoolCalculatedValue(ai, "can ah sell", 2) {}
-        virtual bool Calculate() override { return ai->HasStrategy("rpg vendor", BotState::BOT_STATE_NON_COMBAT) && AI_VALUE2(uint32, "item count", "usage " + std::to_string((uint8)ItemUsage::ITEM_USAGE_AH)) > 1 && AI_VALUE2(uint32, "free money for", (uint32)NeedMoneyFor::ah) > GetAuctionDeposit(); };
+        // Silvermoon 1.8 (S: "there's like no auctions"): AH trips came back in 1.7.7 but nothing was
+        // posted - the deposit had to come out of money left after every reserve (repair, training,
+        // food...), which a bot at 5-60 silver never has. The deposit comes back when the item sells, so
+        // posting is allowed when the bot holds 3 times the deposit
+        virtual bool Calculate() override { return ai->HasStrategy("rpg vendor", BotState::BOT_STATE_NON_COMBAT) && AI_VALUE2(uint32, "item count", "usage " + std::to_string((uint8)ItemUsage::ITEM_USAGE_AH)) > 1 && (AI_VALUE2(uint32, "free money for", (uint32)NeedMoneyFor::ah) > GetAuctionDeposit() || bot->GetMoney() > GetAuctionDeposit() * 3); };
 
         uint32 GetAuctionDeposit()
         {

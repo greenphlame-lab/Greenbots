@@ -83,7 +83,9 @@ bool AhAction::ExecuteCommand(Player* requester, std::string text, Unit* auction
             RESET_AI_VALUE2(uint32, "free money for", (uint32)NeedMoneyFor::ah);
             uint32 freeMoney = AI_VALUE2(uint32, "free money for", (uint32)NeedMoneyFor::ah);
 
-            if (deposit > freeMoney)
+            // Silvermoon 1.8: or 3 times the deposit in the purse (it comes back when the item sells) -
+            // reserves left bots at 5-60 silver no "free" money, and nothing was posted
+            if (deposit > freeMoney && bot->GetMoney() < deposit * 3)
                 return false;
 
             const ItemPrototype* proto = item->GetProto();
