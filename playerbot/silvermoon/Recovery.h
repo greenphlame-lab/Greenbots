@@ -56,6 +56,8 @@ namespace ai
     bool SilvermoonActivityStart(std::string const& name, uint32_t cap);
     void SilvermoonActivityEnd(std::string const& name);
     uint32_t SilvermoonActivityCount(std::string const& name);
+    // re-checks the guard held back since the last call (resets it)
+    uint32_t SilvermoonLoadHeldBack(bool take = true);
 
     // gathering milestone for a level (S, 1.6.21): 150 at 25, 200 at 35 ... 300 at 60 (0 below 10)
     uint32_t SilvermoonGatherMilestone(uint32_t level);

@@ -31,6 +31,7 @@ bool RecheckGoalAction::Execute(Event& event)
     // its goal - each re-check is a destination search
     if (!SilvermoonLoadOk())
     {
+        SilvermoonLoadHeldBack(false);
         SET_AI_VALUE2(int, "manual int", "silvermoon goal check at", int(time(nullptr) + 2 * MINUTE));
         return false;
     }

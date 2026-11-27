@@ -3291,6 +3291,9 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                     uint32 tp[silvermoon::TP_COUNT];
                     for (int k = 0; k < silvermoon::TP_COUNT; ++k)
                         tp[k] = silvermoon::Tp(silvermoon::TpKind(k)).exchange(0);
+                    // load guard tracking (S, 1.7.6): busy or not, and re-checks held back in these 5 minutes
+                    sLog.outBasic("Silvermoon: load guard: %s, world update average %u ms, %u goal re-checks held back in 5 minutes",
+                        SilvermoonLoadOk() ? "ok" : "busy", uint32(sWorld.GetAverageDiff()), SilvermoonLoadHeldBack(true));
                     CharacterDatabase.PExecute("INSERT INTO silvermoon_perf (ts, bots, players, avg_diff, max_diff, brain_ms, brain_async_ms, tp_lift, "
                         "tp_level_zone, tp_too_dangerous, tp_enemy_zone, tp_city, tp_goldshire, tp_fallback, tp_stuck) "
                         "VALUES (UNIX_TIMESTAMP(), %u, %u, %u, %u, %u, %u, %u, %u, %u, %u, %u, %u, %u, %u)",

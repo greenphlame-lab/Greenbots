@@ -394,6 +394,15 @@ bool ai::SilvermoonLoadOk()
     return !nowBusy;
 }
 
+namespace { std::atomic<uint32> loadHeldBack{ 0 }; }
+
+uint32_t ai::SilvermoonLoadHeldBack(bool take)
+{
+    if (!take)
+        return ++loadHeldBack;
+    return loadHeldBack.exchange(0);
+}
+
 namespace
 {
     std::mutex activityLock;

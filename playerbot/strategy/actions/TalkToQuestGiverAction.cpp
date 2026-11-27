@@ -235,6 +235,13 @@ ItemIds TalkToQuestGiverAction::BestRewards(Quest const* quest)
                     best = uint8(i);
                 }
             }
+            // tracking (S): "Silvermoon: reward pick:" lines - same = the old rule's choice too
+            ItemPrototype const* chosen = sObjectMgr.GetItemPrototype(quest->RewChoiceItemId[best]);
+            ItemPrototype const* oldRule = sObjectMgr.GetItemPrototype(quest->RewChoiceItemId[*returnIds.begin()]);
+            sLog.outBasic("Silvermoon: reward pick: %s (level %u) quest %u took %s (gain %.0f, %s) %s %s",
+                bot->GetName(), bot->GetLevel(), quest->GetQuestId(), chosen ? chosen->Name1 : "?", bestGain,
+                (bestUsage == ItemUsage::ITEM_USAGE_EQUIP || bestUsage == ItemUsage::ITEM_USAGE_BAD_EQUIP) ? "upgrade" : "sale value",
+                best == *returnIds.begin() ? "same as before over" : "instead of", oldRule ? oldRule->Name1 : "?");
             return { best };
         }
         return returnIds;
