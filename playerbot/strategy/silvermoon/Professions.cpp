@@ -818,14 +818,14 @@ void ai::SilvermoonLevelPass(Player* bot)
 // (creature entries) teach it. Built once.
 namespace
 {
-    struct RankInfo { uint32 skill = 0, reqSkill = 0, reqLevel = 0, cost = 0, learned = 0; std::set<uint32> trainers; };
-    std::vector<RankInfo>& Ranks()
+    struct SmRankInfo { uint32 skill = 0, reqSkill = 0, reqLevel = 0, cost = 0, learned = 0; std::set<uint32> trainers; };
+    std::vector<SmRankInfo>& Ranks()
     {
         static std::once_flag once;
-        static std::vector<RankInfo> ranks;
+        static std::vector<SmRankInfo> ranks;
         std::call_once(once, []()
         {
-            std::map<uint32, RankInfo> byLearned;
+            std::map<uint32, SmRankInfo> byLearned;
             for (uint32 id = 0; id < sCreatureStorage.GetMaxEntry(); ++id)
             {
                 CreatureInfo const* co = sCreatureStorage.LookupEntry<CreatureInfo>(id);
@@ -854,7 +854,7 @@ namespace
                                 step = true;
                         if (!step)
                             continue;           // recipes aren't ranks
-                        RankInfo& r = byLearned[learned];
+                        SmRankInfo& r = byLearned[learned];
                         if (r.trainers.empty() || t.spellCost < r.cost)
                         {
                             r.skill = t.reqSkill;
@@ -875,10 +875,10 @@ namespace
 
     // the rank this character can train now: its skill reached the requirement, its level allows,
     // it hasn't got it, and the price fits its money above the repair fund
-    RankInfo const* RankDue(Player* bot)
+    SmRankInfo const* RankDue(Player* bot)
     {
-        RankInfo const* best = nullptr;
-        for (RankInfo const& r : Ranks())
+        SmRankInfo const* best = nullptr;
+        for (SmRankInfo const& r : Ranks())
         {
             if (!bot->HasSkill(r.skill) || bot->GetSkillValuePure(r.skill) < r.reqSkill || bot->GetLevel() < r.reqLevel || bot->HasSpell(r.learned))
                 continue;
@@ -893,7 +893,7 @@ namespace
 
 bool ai::SilvermoonGoTrainRank(Player* bot)
 {
-    RankInfo const* r = RankDue(bot);
+    SmRankInfo const* r = RankDue(bot);
     if (!r)
         return false;
     SpellEntry const* info = sServerFacade.LookupSpellInfo(r->learned);
@@ -910,7 +910,7 @@ bool ai::SilvermoonGoTrainRank(Player* bot)
 
 bool ai::SilvermoonLearnRankHere(Player* bot)
 {
-    RankInfo const* r = RankDue(bot);
+    SmRankInfo const* r = RankDue(bot);
     if (!r)
         return false;
     // a trainer who teaches it within 20 yards
