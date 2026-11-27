@@ -596,12 +596,12 @@ bool ai::SilvermoonPolicyCommand(Player* bot, std::string const& param, std::str
     }
     else if (k == "item" && n >= 2)
     {
-        // pol item <id> sell|ah|destroy|keep|clear [once|always]
+        // pol item <id> sell|ah|destroy|keep|bank|clear [once|always]
         uint32 item = uint32(atoi(v1.c_str()));
         char act[16] = {}, freq[16] = {};
         sscanf(param.c_str(), "%*s %*s %15s %15s", act, freq);
         std::string a(act), f(freq);
-        uint8 action = a == "sell" ? 1 : a == "ah" ? 2 : a == "destroy" ? 3 : a == "keep" ? 4 : 0;
+        uint8 action = a == "sell" ? 1 : a == "ah" ? 2 : a == "destroy" ? 3 : a == "keep" ? 4 : a == "bank" ? 5 : 0;
         if (!item)
             return false;
         if (!action)

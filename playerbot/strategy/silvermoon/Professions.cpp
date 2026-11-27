@@ -9,6 +9,7 @@
 #include "Spells/SpellMgr.h"
 #include "playerbot/silvermoon/Hubs.h"
 #include "playerbot/GuidPosition.h"
+#include "playerbot/strategy/actions/BankAction.h"
 #include "playerbot/silvermoon/Recovery.h"
 #include "Policies.h"
 #include "Grids/GridNotifiers.h"
@@ -1152,6 +1153,14 @@ bool ai::SilvermoonGoGoal(Player* bot, SilvermoonScoredGoal& goal)
                     bai->GetAiObjectContext()->GetValue<GuidPosition>("rpg target")->Set(GuidPosition(u));
                     break;
                 }
+    }
+    // Go to > Bank (1.7.8, S: a "bank" item rule): at the banker, everything marked for the bank goes
+    // in - your bank rules and the stock "keep in the bank" items
+    if (firstArrival && (order.flag & UNIT_NPC_FLAG_BANKER) && bot->GetPlayerbotAI())
+    {
+        BankAction bank(bot->GetPlayerbotAI());
+        if (bank.AutoDeposit() && SilvermoonIsOwn(bot))
+            SilvermoonAwayNote(bot, "Put items in the bank");
     }
     if (firstArrival && (order.flag & UNIT_NPC_FLAG_REPAIR))
         SilvermoonRepairNearby(bot);           // Go to > Repair (S): repair on arrival

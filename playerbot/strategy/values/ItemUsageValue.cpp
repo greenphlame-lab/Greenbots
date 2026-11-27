@@ -186,6 +186,7 @@ ItemUsage ItemUsageValue::CalculateStock()
             case 1: return ItemUsage::ITEM_USAGE_VENDOR;
             case 2: return ItemUsage::ITEM_USAGE_AH;
             case 4: return ItemUsage::ITEM_USAGE_KEEP;
+            case 5: return ItemUsage::ITEM_USAGE_BANK;     // 1.7.8: "bank" rule
             default: break;
         }
 

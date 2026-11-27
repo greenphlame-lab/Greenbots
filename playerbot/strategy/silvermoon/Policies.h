@@ -47,7 +47,8 @@ namespace ai
         std::map<uint32, uint8> weapons;   // skill -> 1 train, 2 avoid
         uint8 bags = 0;              // bit 1: don't buy bags; bit 2: replace small bags with bigger ones
         bool askEquip = false;       // 1.6.21 (S): ask before equipping upgrades (1 hour, then it decides)
-        // item rules (S): item id -> (action, always). action 1 sell, 2 auction, 3 destroy, 4 keep;
+        // item rules (S): item id -> (action, always). action 1 sell, 2 auction, 3 destroy, 4 keep,
+        // 5 bank (1.7.8);
         // "once" rules end when none of the item is left
         std::map<uint32, std::pair<uint8, bool>> items;
         // rotation (S, 1.7): abilities by name in priority order, each with a condition
