@@ -306,25 +306,79 @@ namespace
 // gather session of its own, the same as a Gather order from the panel, until a set time
 namespace
 {
-    std::unordered_map<uint32, std::pair<uint32, time_t>> catchUp;   // guid -> (skill, until); orderLock
+    // 1.6.22 (S: "more calculated skill-ups"): the clock starts on arrival at the gathering area; the
+    // session then runs until the skill reaches its target (the tier its home area needs, or the
+    // milestone) or 2 hours there, at most 2.5 hours in all
+    struct CatchUp { uint32 skill = 0, target = 0; time_t until = 0, hardUntil = 0; bool arrived = false; };
+    std::unordered_map<uint32, CatchUp> catchUp;        // orderLock
     uint32 CatchUpSkillLocked(uint32 guid)
     {
         auto it = catchUp.find(guid);
         if (it == catchUp.end())
             return 0;
-        if (time(nullptr) >= it->second.second)
+        time_t now = time(nullptr);
+        if (now >= it->second.until || now >= it->second.hardUntil)
         {
             catchUp.erase(it);
             return 0;
         }
-        return it->second.first;
+        return it->second.skill;
     }
 }
 
-void ai::SilvermoonStartCatchUp(uint32 guid, uint32 skill, uint32 seconds)
+void ai::SilvermoonStartCatchUp(uint32 guid, uint32 skill, uint32 target)
 {
     std::lock_guard<std::mutex> guard(orderLock);
-    catchUp[guid] = { skill, time(nullptr) + seconds };
+    CatchUp c;
+    c.skill = skill;
+    c.target = target;
+    c.until = time(nullptr) + 45 * MINUTE;              // to get there; the 2 hours start on arrival
+    c.hardUntil = time(nullptr) + 150 * MINUTE;
+    catchUp[guid] = c;
+}
+
+bool ai::SilvermoonCatchUpArrived(uint32 guid)
+{
+    std::lock_guard<std::mutex> guard(orderLock);
+    auto it = catchUp.find(guid);
+    if (it == catchUp.end() || it->second.arrived)
+        return false;
+    it->second.arrived = true;
+    it->second.until = std::min(it->second.hardUntil, time(nullptr) + 2 * HOUR);
+    return true;
+}
+
+uint32 ai::SilvermoonCatchUpTarget(uint32 guid)
+{
+    std::lock_guard<std::mutex> guard(orderLock);
+    return CatchUpSkillLocked(guid) ? catchUp[guid].target : 0;
+}
+
+void ai::SilvermoonEndCatchUp(uint32 guid)
+{
+    std::lock_guard<std::mutex> guard(orderLock);
+    catchUp.erase(guid);
+}
+
+bool ai::SilvermoonGatherRouteRemote(uint32 guid)
+{
+    std::lock_guard<std::mutex> guard(routeLock);
+    auto it = routes.find(guid);
+    // no route yet counts as "not there yet"
+    return it == routes.end() || it->second.points.empty() || it->second.remote;
+}
+
+uint32 ai::SilvermoonHomeNodeReq(Player* bot, uint32 skill, uint32 value)
+{
+    // the smallest requirement above its skill among the nodes around it (1,200 yards): the tier it
+    // has to reach to gather where it is
+    uint32 best = 0;
+    for (NodeSpot const& s : NodeSpots())
+        if (s.skill == skill && s.map == bot->GetMapId() && s.req > value &&
+            (s.x - bot->GetPositionX()) * (s.x - bot->GetPositionX()) + (s.y - bot->GetPositionY()) * (s.y - bot->GetPositionY()) < 1200.0f * 1200.0f &&
+            (!best || s.req < best))
+            best = s.req;
+    return best;
 }
 
 uint32 ai::SilvermoonCatchUpSkill(uint32 guid)
@@ -394,7 +448,8 @@ bool ai::SilvermoonGatherRouteNext(Player* bot, WorldPosition& next, uint32& ind
                 if (n < 8)
                     continue;
                 float d = here.fDist(WorldPosition(h.map, h.x, h.y, h.z));
-                float score = float(n) / (1.0f + d / 2000.0f);
+                // nearer areas count much more (1.6.22): half the score at 800 yards, a fifth at 1,600
+                float score = float(n) / (1.0f + (d / 800.0f) * (d / 800.0f));
                 if (score > bestScore)
                 {
                     bestScore = score;

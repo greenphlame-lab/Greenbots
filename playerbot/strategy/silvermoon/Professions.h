@@ -47,8 +47,16 @@ namespace ai
     // "Buy bigger bags" (S, 1.6.21): a go order to the nearest vendor that sells this bag
     bool SilvermoonGoBagVendor(Player* bot, uint32 itemId);
     // profession catch-up (S, 1.6.21): a gather session for a random bot behind its milestone
-    void SilvermoonStartCatchUp(uint32 guid, uint32 skill, uint32 seconds);
+    void SilvermoonStartCatchUp(uint32 guid, uint32 skill, uint32 target);
     uint32 SilvermoonCatchUpSkill(uint32 guid);
+    // 1.6.22: arrival at the gathering area starts the session's 2 hours (true the first time)
+    bool SilvermoonCatchUpArrived(uint32 guid);
+    uint32 SilvermoonCatchUpTarget(uint32 guid);
+    void SilvermoonEndCatchUp(uint32 guid);
+    // the bot's gather route leads to another area it hasn't reached yet (or there is no route yet)
+    bool SilvermoonGatherRouteRemote(uint32 guid);
+    // the smallest node requirement above its skill around it (0 = none): the tier its area needs
+    uint32 SilvermoonHomeNodeReq(Player* bot, uint32 skill, uint32 value);
 
     // at the trainer the learn order points at: learn it (paying the trainer's fee)
     class ProfessionLearnAction : public Action

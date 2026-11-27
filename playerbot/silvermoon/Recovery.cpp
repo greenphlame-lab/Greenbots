@@ -34,6 +34,8 @@ namespace
         time_t lastSample = 0;
     };
     std::mutex recoveryLock;
+    std::mutex profCheckLock;                           // gathering milestone checks: next check per bot
+    std::unordered_map<uint32, time_t> profCheckAt;
     std::unordered_map<uint32, RecoveryState> recovery;
 
     bool IsTool(uint32 itemId)
@@ -167,8 +169,8 @@ void ai::SilvermoonRecoveryTick(Player* bot)
     // as a Gather order does), then an hour before the next one. A capped skill is trained at the
     // next rest in town (the craft pass; ranks may now use all the spending money).
     {
-        static std::mutex profLock;
-        static std::unordered_map<uint32, time_t> nextProfCheck;
+        std::mutex& profLock = profCheckLock;
+        std::unordered_map<uint32, time_t>& nextProfCheck = profCheckAt;
         bool due = false;
         {
             std::lock_guard<std::mutex> guard(profLock);
@@ -195,17 +197,39 @@ void ai::SilvermoonRecoveryTick(Player* bot)
             bool capped = best && bestValue >= bot->GetSkillMaxPure(best);
             if (best && target && bestValue + 25 <= target && (!capped || brokeNoLoot))   // broke: capped or not, the materials sell
             {
-                SilvermoonStartCatchUp(guid, best, 25 * MINUTE);
+                // the session's target (1.6.22): the tier its own area needs (so it can gather at home
+                // afterwards), else the milestone; at least 15 points, never past the rank cap
+                uint32 home = SilvermoonHomeNodeReq(bot, best, bestValue);
+                uint32 goal = (home && home < target) ? home : target;
+                goal = std::max(goal, bestValue + 15);
+                goal = std::min<uint32>(goal, bot->GetSkillMaxPure(best));
+                SilvermoonStartCatchUp(guid, best, goal);
                 {
                     std::lock_guard<std::mutex> guard(profLock);
-                    nextProfCheck[guid] = now + 85 * MINUTE;   // 25 minutes of gathering, then an hour
+                    nextProfCheck[guid] = now + 3 * HOUR;      // ends early at the target, then an hour's rest (below)
                 }
-                sLog.outBasic("Silvermoon: bot %s (level %u) %s skill %u (%u, milestone %u) - gather session",
-                    bot->GetName(), bot->GetLevel(), brokeNoLoot ? "is broke with nothing to sell, gathers with" : "is behind on", best, bestValue, target);
+                sLog.outBasic("Silvermoon: bot %s (level %u) %s skill %u (%u, milestone %u) - gather session to %u",
+                    bot->GetName(), bot->GetLevel(), brokeNoLoot ? "is broke with nothing to sell, gathers with" : "is behind on", best, bestValue, target, goal);
                 if (PlayerbotAI* pai = bot->GetPlayerbotAI())
                     if (TravelTarget* t = pai->GetAiObjectContext()->GetValue<TravelTarget*>("travel target")->Get())
                         t->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
             }
+        }
+    }
+
+    // a gather session under way (1.6.22): the clock starts when it reaches the area; it ends at the
+    // target skill, after which the next check is an hour away
+    if (uint32 skill = SilvermoonCatchUpSkill(guid))
+    {
+        if (!SilvermoonGatherRouteRemote(guid) && SilvermoonCatchUpArrived(guid))
+            sLog.outBasic("Silvermoon: bot %s reached its gathering area (skill %u at %u), 2 hours there at most", bot->GetName(), skill, bot->GetSkillValuePure(skill));
+        uint32 goal = SilvermoonCatchUpTarget(guid);
+        if (goal && bot->GetSkillValuePure(skill) >= goal)
+        {
+            SilvermoonEndCatchUp(guid);
+            sLog.outBasic("Silvermoon: bot %s reached skill %u in %u - gather session done", bot->GetName(), goal, skill);
+            std::lock_guard<std::mutex> guard(profCheckLock);
+            profCheckAt[guid] = now + HOUR;
         }
     }
 
