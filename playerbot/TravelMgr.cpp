@@ -4,6 +4,8 @@
 #include <cstdio>
 #include <numeric>
 #include <iomanip>
+#include <execinfo.h>
+#include <atomic>
 
 #include "playerbot/strategy/values/SharedValueContext.h"
 #include "playerbot/strategy/values/TravelValues.h"
@@ -933,6 +935,29 @@ void TravelTarget::CopyTarget(TravelTarget* const target) {
 }
 
 void TravelTarget::SetStatus(TravelStatus status) {
+    // Silvermoon 1.7.5 diagnostic (S: Go trips to far trainers re-planned every 2-3 seconds): a
+    // forced trip to a far temporary spot that is cut off gets a backtrace in the log, at most one
+    // every 20 seconds server-wide (resolve the +offsets with gdb "info symbol" on mangosd)
+    if ((status == TravelStatus::TRAVEL_STATUS_EXPIRED || status == TravelStatus::TRAVEL_STATUS_COOLDOWN || status == TravelStatus::TRAVEL_STATUS_NONE) &&
+        (m_status == TravelStatus::TRAVEL_STATUS_READY || m_status == TravelStatus::TRAVEL_STATUS_TRAVEL) && forced && bot &&
+        tDestination && dynamic_cast<TemporaryTravelDestination*>(tDestination) && wPosition && wPosition->distance(WorldPosition(bot)) > 500.0f)
+    {
+        static std::atomic<uint32> lastLog{ 0 };
+        uint32 now = uint32(time(nullptr));
+        uint32 prev = lastLog.load();
+        if (now - prev >= 20 && lastLog.compare_exchange_strong(prev, now))
+        {
+            void* frames[14];
+            int n = backtrace(frames, 14);
+            char** names = backtrace_symbols(frames, n);
+            std::string trace;
+            for (int i = 1; i < n && names; ++i)
+                trace += std::string(" | ") + names[i];
+            sLog.outBasic("Silvermoon: trip cut %s: status %u -> %u, %.0f yards left; trace%s", bot->GetName(), uint32(m_status), uint32(status),
+                wPosition->distance(WorldPosition(bot)), trace.c_str());
+            free(names);
+        }
+    }
     m_status = status;
     startTime = WorldTimer::getMSTime();
 
