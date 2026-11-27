@@ -1,5 +1,7 @@
 #pragma once
 
+#include <tuple>
+#include <vector>
 #include <map>
 
 #include "Action.h"
@@ -80,6 +82,9 @@ namespace ai
 		void ChangeStrategy(const std::string& names);
 		void PrintStrategies(Player* requester, const std::string& engineType);
         std::string GetLastAction() { return lastAction; }
+        // Silvermoon 1.7.1 (rotation window): every action this engine's strategies push - action
+        // name, relevance, and the trigger that pushes it ("default" for default actions)
+        std::vector<std::tuple<std::string, float, std::string>> SilvermoonActionList();
         const Action* GetLastExecutedAction() const { return lastExecutedAction; }
 
     public:

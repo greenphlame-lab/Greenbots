@@ -17,6 +17,8 @@
 #include <algorithm>
 #include <map>
 #include <tuple>
+#include <cctype>
+#include "playerbot/strategy/Engine.h"
 
 using namespace ai;
 
@@ -309,6 +311,112 @@ bool ai::SilvermoonWeaponAvoided(uint32 guid, uint32 skill)
     return it != w.end() && it->second == 2;
 }
 
+namespace
+{
+    std::string Lower(std::string s)
+    {
+        std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return char(std::tolower(c)); });
+        return s;
+    }
+}
+
+std::vector<SilvermoonRotDefault> ai::SilvermoonDefaultRotation(Player* bot)
+{
+    std::vector<SilvermoonRotDefault> out;
+    PlayerbotAI* ai = bot ? bot->GetPlayerbotAI() : nullptr;
+    Engine* engine = ai ? ai->SilvermoonEngine(BotState::BOT_STATE_COMBAT) : nullptr;
+    if (!engine)
+        return out;
+    AiObjectContext* context = ai->GetAiObjectContext();
+    std::map<std::string, SilvermoonRotDefault> best;      // by spell name, the highest relevance
+    for (auto const& [action, relevance, trigger] : engine->SilvermoonActionList())
+    {
+        uint32 id = context->GetValue<uint32>("spell id", action)->Get();
+        if (!id || !bot->HasSpell(id))
+            continue;
+        SpellEntry const* sp = sServerFacade.LookupSpellInfo(id);
+        if (!sp || !sp->SpellName[0] || IsPassiveSpell(id))
+            continue;
+        std::string name = sp->SpellName[0];
+        if (Lower(name).rfind("zz", 0) == 0)
+            continue;
+        std::string t = Lower(trigger), a = Lower(action);
+        uint8 cond = 5;
+        if (t == "default")
+            cond = 0;
+        else if (t.find("target") != std::string::npos && (t.find("low health") != std::string::npos || t.find("critical health") != std::string::npos))
+            cond = 2;
+        else if (t.find("execute") != std::string::npos)
+            cond = 2;
+        else if (t.find("target") == std::string::npos && t.find("party") == std::string::npos &&
+            (t == "low health" || t == "critical health" || t == "medium health" || t == "almost dead"))
+            cond = 3;
+        else if (t == a || t == "no " + a || t == a + " on target" || t == "no " + a + " on target")
+            cond = 1;
+        SilvermoonRotDefault& e = best[Lower(name)];
+        if (e.name.empty() || relevance > e.relevance)
+        {
+            e.name = name;
+            e.cond = cond;
+            e.trigger = trigger;
+            e.relevance = relevance;
+        }
+    }
+    for (auto const& entry : best)
+        out.push_back(entry.second);
+    std::stable_sort(out.begin(), out.end(), [](SilvermoonRotDefault const& x, SilvermoonRotDefault const& y) { return x.relevance > y.relevance; });
+    return out;
+}
+
+std::vector<std::string> ai::SilvermoonDefaultRotationText(Player* bot)
+{
+    std::vector<std::string> out;
+    std::string text = "SMROT\tR;";
+    bool first = true;
+    for (SilvermoonRotDefault const& e : SilvermoonDefaultRotation(bot))
+    {
+        std::string trig = e.trigger;
+        for (char& ch : trig)
+            if (ch == ':' || ch == '^' || ch == ',' || ch == ';')
+                ch = ' ';
+        std::string part = e.name + ":" + std::to_string(uint32(e.cond)) + ":" + trig;
+        if (!first && text.size() + part.size() > 200)
+        {
+            out.push_back(text);
+            text = "SMROT\t+;";
+            first = true;
+        }
+        text += (first ? "" : "^") + part;
+        first = false;
+    }
+    out.push_back(text);
+    return out;
+}
+
+std::string ai::SilvermoonDefaultTrigger(Player* bot, std::string const& spell)
+{
+    // cached per character for a minute (the class rotation doesn't change mid-fight)
+    static std::mutex lock;
+    static std::unordered_map<uint32, std::pair<time_t, std::map<std::string, std::string>>> cache;
+    {
+        std::lock_guard<std::mutex> guard(lock);
+        auto it = cache.find(bot->GetGUIDLow());
+        if (it != cache.end() && time(nullptr) - it->second.first < 60)
+        {
+            auto t = it->second.second.find(Lower(spell));
+            return t == it->second.second.end() ? std::string() : t->second;
+        }
+    }
+    std::map<std::string, std::string> triggers;
+    for (SilvermoonRotDefault const& e : SilvermoonDefaultRotation(bot))
+        if (e.trigger != "default")
+            triggers[Lower(e.name)] = e.trigger;
+    std::lock_guard<std::mutex> guard(lock);
+    cache[bot->GetGUIDLow()] = std::make_pair(time(nullptr), triggers);
+    auto t = triggers.find(Lower(spell));
+    return t == triggers.end() ? std::string() : t->second;
+}
+
 std::vector<std::pair<std::string, uint8>> ai::SilvermoonRotationFor(uint32 guid)
 {
     std::lock_guard<std::mutex> guard(policyLock);
@@ -319,19 +427,21 @@ bool ai::SilvermoonPolicyCommand(Player* bot, std::string const& param, std::str
 {
     // rotation (S, 1.7): "rot clear", or "rot Name:cond,Name:cond,..." (names have spaces, so it is
     // read before the word-by-word parsing below)
-    if (param.rfind("rot ", 0) == 0)
+    // "rot+ ..." adds to the list (a long list comes in several chat lines)
+    if (param.rfind("rot ", 0) == 0 || param.rfind("rot+ ", 0) == 0)
     {
-        std::string rest = param.substr(4);
+        bool append = param[3] == '+';
+        std::string rest = param.substr(append ? 5 : 4);
         std::vector<std::pair<std::string, uint8>> list;
         if (rest != "clear")
         {
             std::stringstream vs(rest);
             std::string entry;
-            while (std::getline(vs, entry, ',') && list.size() < 16)
+            while (std::getline(vs, entry, ',') && list.size() < 24)
             {
                 size_t c = entry.rfind(':');
                 std::string name = c == std::string::npos ? entry : entry.substr(0, c);
-                uint8 cond = c == std::string::npos ? 0 : uint8(std::min(4, std::max(0, atoi(entry.substr(c + 1).c_str()))));
+                uint8 cond = c == std::string::npos ? 0 : uint8(std::min(5, std::max(0, atoi(entry.substr(c + 1).c_str()))));
                 while (!name.empty() && name[0] == ' ') name.erase(0, 1);
                 while (!name.empty() && name.back() == ' ') name.pop_back();
                 if (name.empty() || name.find_first_of(";=") != std::string::npos)
@@ -341,10 +451,17 @@ bool ai::SilvermoonPolicyCommand(Player* bot, std::string const& param, std::str
         }
         std::lock_guard<std::mutex> guard(policyLock);
         SilvermoonPolicy& p = Get(bot->GetGUIDLow());
-        p.rotation = list;
+        if (append)
+        {
+            for (auto const& e : list)
+                if (p.rotation.size() < 24)
+                    p.rotation.push_back(e);
+        }
+        else
+            p.rotation = list;
         Save(bot->GetGUIDLow(), p);
-        reply = list.empty() ? "Rotation cleared: I fight with my class's own rotation." :
-            "Rotation set: " + std::to_string(list.size()) + " abilities, in your order.";
+        reply = p.rotation.empty() ? "Rotation cleared: I fight with my class's own rotation." :
+            "Rotation set: " + std::to_string(p.rotation.size()) + " abilities, in your order.";
         return true;
     }
     char a[16] = {}, b[16] = {}, c[16] = {};

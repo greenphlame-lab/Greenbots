@@ -759,6 +759,17 @@ std::list<std::string> PlayerbotHolder::HandlePlayerbotCommand(const std::string
         master->GetSession()->SendPacket(polPacket);
         return messages;
     }
+    // the class's default rotation for the Rotation window (1.7.1)
+    if (master && command == "pol" && param == "rotdefault" && master->GetSession())
+    {
+        for (std::string const& msg : ai::SilvermoonDefaultRotationText(master))
+        {
+            WorldPacket packet;
+            ChatHandler::BuildChatPacket(packet, CHAT_MSG_PARTY, msg.c_str(), LANG_ADDON, CHAT_TAG_NONE, master->GetObjectGuid(), master->GetName());
+            master->GetSession()->SendPacket(packet);
+        }
+        return messages;
+    }
     if (master && command == "pol" && param == "spells" && master->GetSession())
     {
         for (std::string const& msg : ai::SilvermoonSpellListMessages(master))

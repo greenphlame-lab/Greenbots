@@ -129,6 +129,17 @@ bool PolicyRotationAction::Pick(std::string& name, Unit*& target)
             continue;
         if (cond == 4 && enemy->GetHealthPercent() < 90.0f)
             continue;
+        if (cond == 5)
+        {
+            // the class's own condition (1.7.1): the trigger its default rotation uses for this spell
+            std::string trig = SilvermoonDefaultTrigger(bot, spell);
+            if (!trig.empty())
+            {
+                Trigger* tr = context->GetTrigger(trig);
+                if (!tr || !tr->IsActive())
+                    continue;
+            }
+        }
         if (!ai->CanCastSpell(id, t, 0))
             continue;
         name = spell;

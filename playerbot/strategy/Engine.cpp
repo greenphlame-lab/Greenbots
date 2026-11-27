@@ -709,6 +709,28 @@ void Engine::ProcessTriggers(bool minimal)
     }
 }
 
+std::vector<std::tuple<std::string, float, std::string>> Engine::SilvermoonActionList()
+{
+    std::vector<std::tuple<std::string, float, std::string>> out;
+    for (TriggerNode* node : triggers)
+    {
+        if (!node || !node->getTrigger())
+            continue;
+        NextAction** handlers = node->getHandlers();
+        for (int i = 0; handlers && handlers[i]; ++i)
+            out.emplace_back(handlers[i]->getName(), handlers[i]->getRelevance(), node->getName());
+        NextAction::destroy(handlers);
+    }
+    for (auto const& entry : strategies)
+    {
+        NextAction** actions = entry.second->getDefaultActions(state);
+        for (int i = 0; actions && actions[i]; ++i)
+            out.emplace_back(actions[i]->getName(), actions[i]->getRelevance(), std::string("default"));
+        NextAction::destroy(actions);
+    }
+    return out;
+}
+
 void Engine::PushDefaultActions()
 {
     for (std::map<std::string, Strategy*>::iterator i = strategies.begin(); i != strategies.end(); i++)

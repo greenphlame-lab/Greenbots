@@ -51,7 +51,8 @@ namespace ai
         // "once" rules end when none of the item is left
         std::map<uint32, std::pair<uint8, bool>> items;
         // rotation (S, 1.7): abilities by name in priority order, each with a condition
-        // (0 always, 1 keep it up, 2 target below 20%, 3 me below 50% health, 4 opener: target above 90%);
+        // (0 always, 1 keep it up, 2 target below 20%, 3 me below 50% health, 4 opener: target above 90%,
+        // 5 the class's own condition for it - the trigger its default rotation uses);
         // empty = the class's own rotation
         std::vector<std::pair<std::string, uint8>> rotation;
         bool Any() const { return !rotation.empty() || askEquip || potionAt || disenchant || tradeGoods != 2 || !allowedZones.empty() || eatTo || drinkTo || travel || !blockedSpells.empty() || fleeMobs || fleeHealth || ahGold || upgradePct || !weapons.empty() || bags || !items.empty(); }
@@ -83,6 +84,15 @@ namespace ai
     bool SilvermoonEquipAllowed(Player* bot, Item* item);
     // rotation (S, 1.7): your priority list, empty when you haven't set one
     std::vector<std::pair<std::string, uint8>> SilvermoonRotationFor(uint32 guid);
+    // the class's own combat rotation as the bot runs it now (1.7.1, the Rotation window's starting
+    // point): spells it casts, best first, each with a condition (as above) and the trigger behind it
+    struct SilvermoonRotDefault { std::string name; uint8 cond = 0; std::string trigger; float relevance = 0.0f; };
+    std::vector<SilvermoonRotDefault> SilvermoonDefaultRotation(Player* bot);
+    // addon messages "SMROT\t<R|+>;<name>:<cond>:<trigger>^..." for the Rotation window: R starts the
+    // list, + continues it (short messages; the client cuts long ones). "SMROT\tR;" = none (not on Auto)
+    std::vector<std::string> SilvermoonDefaultRotationText(Player* bot);
+    // condition 5: the trigger the class rotation uses for this spell ("" = none known)
+    std::string SilvermoonDefaultTrigger(Player* bot, std::string const& spell);
     bool SilvermoonEquipAnswer(Player* bot, uint32 itemGuid, bool equip, std::string& reply);
     std::string SilvermoonPolicyPanel(Player* bot);
     // weapon master training (S): in a capital, a weapon skill that is ticked (not "avoid"), that

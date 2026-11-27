@@ -453,6 +453,7 @@ public:
     void PrintStrategies(Player* requester, BotState type);
     void ClearStrategies(BotState type);
     std::list<std::string_view> GetStrategies(BotState type);
+    Engine* SilvermoonEngine(BotState type) { return engines[(uint8)type]; }
     bool ContainsStrategy(StrategyType type);
     bool HasStrategy(const std::string& name, BotState type);
     template<class T>
