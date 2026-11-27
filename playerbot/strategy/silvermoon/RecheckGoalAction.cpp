@@ -118,6 +118,19 @@ bool RecheckGoalAction::isUseful()
             target->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
         return false;
     }
+    // ...and the inn rest ends when the sickness does (1.7.7, S: Farolas sat at the Darkshire inn on
+    // "res sickness: rest at the inn" 20+ minutes after it wore off - the trip is forced, so once there
+    // it never timed out)
+    if (!bot->HasAura(15007))
+    {
+        TravelTarget* target = AI_VALUE(TravelTarget*, "travel target");
+        if (target && target->IsActive() && SilvermoonIsResSickTrip(bot->GetGUIDLow(), target->GetDestination()))
+        {
+            target->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
+            if (bot->IsSitState())
+                bot->SetStandState(UNIT_STAND_STATE_STAND);
+        }
+    }
     // Gather order patrol (S: "if nothing at a spawn point, continue on; if a herb is visible, gather
     // it"): at the spot (12 yards) with nothing to gather in the 60-yard scan, out of combat and not
     // casting, the stop is over - the trip ends and the brain picks the next unvisited spot at once.
