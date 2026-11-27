@@ -8,6 +8,8 @@
 #include "ChooseGoalAction.h"
 #include "Professions.h"
 #include "playerbot/silvermoon/Recovery.h"
+#include <unordered_map>
+#include <mutex>
 
 using namespace ai;
 
@@ -119,6 +121,31 @@ FutureDestinations ai::SilvermoonLaunchGoalFetch(Player* bot, std::vector<Silver
 bool RequestGoalAction::Execute(Event& event)
 {
     silvermoon::BrainTimer brainTimer(silvermoon::BrainMicros());
+    // 1.7.4 diagnostic (S: Go trips re-planned every few seconds - 138 times in 9 minutes for one
+    // bot - and the bots stood still): what ended the trip, logged at most once a minute per bot
+    if (SilvermoonGoActive(bot))
+    {
+        static std::mutex diagLock;
+        static std::unordered_map<uint32, time_t> lastDiag;
+        bool log = false;
+        {
+            std::lock_guard<std::mutex> guard(diagLock);
+            time_t& at = lastDiag[bot->GetGUIDLow()];
+            if (time(nullptr) - at >= MINUTE)
+            {
+                at = time(nullptr);
+                log = true;
+            }
+        }
+        if (log)
+        {
+            TravelTarget* old = AI_VALUE(TravelTarget*, "travel target");
+            sLog.outBasic("Silvermoon: %s Go trip ended early: status %u, last action %s / %s, %.0f yards to go", bot->GetName(),
+                uint32(old->GetStatus()), ai->GetLastAction(BotState::BOT_STATE_NON_COMBAT).c_str(),
+                ai->GetLastAction(BotState::BOT_STATE_COMBAT).c_str(),
+                old->GetPosition() ? old->GetPosition()->distance(WorldPosition(bot)) : -1.0f);
+        }
+    }
     *AI_VALUE(FutureDestinations*, "future travel destinations") = SilvermoonLaunchGoalFetch(bot, SilvermoonBuildGoalFetches(ai, bot));
 
     AI_VALUE(TravelTarget*, "travel target")->SetStatus(TravelStatus::TRAVEL_STATUS_PREPARE);
