@@ -100,6 +100,8 @@ using namespace MaNGOS;
 #include "Chat/Chat.h"
 #include "playerbot/strategy/silvermoon/Policies.h"
 #include "playerbot/strategy/silvermoon/Professions.h"
+#include <tuple>
+#include <cmath>
 #include "playerbot/silvermoon/Crowd.h"
 #include "playerbot/LootObjectStack.h"
 #include "playerbot/strategy/silvermoon/ChooseGoalAction.h"
@@ -1541,6 +1543,46 @@ static void SilvermoonVendorGear(Player* bot)
 
 
 // Called from RandomPlayerbotMgr::UpdateAIInternal, right after the autologin/party-bot checks.
+// Idle watchdog (S, 1.7.2: Mommy stood still for minutes on her trip to the herbalism trainer until
+// Auto was switched off and on): your own character on Auto that has somewhere to go (a Go to trip
+// or any active travel target) but hasn't moved 3 yards in 2 minutes - out of combat, not casting,
+// sitting, flying or dead - gets what the Auto toggle did: its AI reset and its trip planned afresh.
+// Called every 30 seconds per character.
+static void SilvermoonOwnIdleWatch(Player* me)
+{
+    static std::mutex lock;
+    static std::unordered_map<uint32, std::tuple<uint32, float, float, time_t>> last;   // map, x, y, since
+    PlayerbotAI* ai = me ? me->GetPlayerbotAI() : nullptr;
+    if (!ai)
+        return;
+    uint32 guid = me->GetGUIDLow();
+    TravelTarget* target = ai->GetAiObjectContext()->GetValue<TravelTarget*>("travel target")->Get();
+    bool wantsToGo = SilvermoonGoActive(me) || (target && target->IsActive() &&
+        (target->GetStatus() == TravelStatus::TRAVEL_STATUS_TRAVEL || target->GetStatus() == TravelStatus::TRAVEL_STATUS_READY ||
+         target->GetStatus() == TravelStatus::TRAVEL_STATUS_PREPARE));
+    bool busy = !me->IsAlive() || me->IsInCombat() || me->IsTaxiFlying() || me->IsNonMeleeSpellCasted(true) ||
+        me->getStandState() != UNIT_STAND_STATE_STAND || me->GetGroup() || me->HasAura(15007);
+    std::lock_guard<std::mutex> guard(lock);
+    auto it = last.find(guid);
+    time_t now = time(nullptr);
+    if (!wantsToGo || busy || it == last.end() || std::get<0>(it->second) != me->GetMapId() ||
+        std::hypot(me->GetPositionX() - std::get<1>(it->second), me->GetPositionY() - std::get<2>(it->second)) > 3.0f)
+    {
+        last[guid] = std::make_tuple(me->GetMapId(), me->GetPositionX(), me->GetPositionY(), now);
+        return;
+    }
+    if (now - std::get<3>(it->second) < 2 * MINUTE)
+        return;
+    sLog.outBasic("Silvermoon: %s stood still for 2 minutes with somewhere to go (%s), resetting its AI",
+        me->GetName(), target && target->GetDestination() ? target->GetDestination()->GetTitle().c_str() : "a Go to trip");
+    if (target)
+        target->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
+    ai->GetAiObjectContext()->GetValue<int>("manual int", "silvermoon goal retry at")->Set(0);
+    ai->StopMoving();
+    ai->Reset(true);
+    last[guid] = std::make_tuple(me->GetMapId(), me->GetPositionX(), me->GetPositionY(), now);
+}
+
 void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
 {
     silvermoon::DecisionLog::FlushIfDue(); // brain decisions, batched every 30 seconds
@@ -1752,6 +1794,7 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                             SilvermoonAwayTick(me);
                             SilvermoonInnBind(me);
                             SilvermoonLevelPass(me);   // "Level it" orders (Professions window)
+                            SilvermoonOwnIdleWatch(me);   // stood still with somewhere to go (1.7.2)
                             // a Gather order needs the gathering step (it finds and loots the nodes)
                             if ((SilvermoonGatherOrderFactor(me->GetGUIDLow(), 182) > 1.0f || SilvermoonGatherOrderFactor(me->GetGUIDLow(), 186) > 1.0f ||
                                  SilvermoonGatherOrderFactor(me->GetGUIDLow(), 356) > 1.0f) &&
