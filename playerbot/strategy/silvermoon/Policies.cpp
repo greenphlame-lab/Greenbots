@@ -689,6 +689,27 @@ void ai::SilvermoonApplyItemRules(Player* bot)
         ItemPrototype const* proto = sObjectMgr.GetItemPrototype(item);
         sLog.outBasic("Silvermoon: %s destroyed %u x %s (item rule)", bot->GetName(), count, proto ? proto->Name1 : "?");
     }
+    // "sell" rules (1.7.8, S: items set to sell always weren't sold on a vendor trip): whenever a vendor
+    // is in reach and something with a sell rule is in the bags, it's sold - the stock sell step only
+    // runs as the bags fill up
+    PlayerbotAI* ai = bot->GetPlayerbotAI();
+    if (!ai || bot->IsInCombat())
+        return;
+    bool haveSell = false;
+    {
+        std::lock_guard<std::mutex> guard(policyLock);
+        for (auto const& [item, rule] : Get(bot->GetGUIDLow()).items)
+            if (rule.first == 1 && bot->GetItemCount(item))
+                haveSell = true;
+    }
+    if (!haveSell)
+        return;
+    for (ObjectGuid const& g : ai->GetAiObjectContext()->GetValue<std::list<ObjectGuid>>("nearest npcs")->Get())
+        if (bot->GetNPCIfCanInteractWith(g, UNIT_NPC_FLAG_VENDOR))
+        {
+            ai->DoSpecificAction("sell", Event("silvermoon item rules", "legacy all"), true);
+            return;
+        }
 }
 
 bool SilvermoonPolicyAction::Execute(Event& event)

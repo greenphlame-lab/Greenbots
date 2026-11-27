@@ -8,6 +8,7 @@
 #include "playerbot/strategy/values/CraftValues.h"
 #include "Spells/SpellMgr.h"
 #include "playerbot/silvermoon/Hubs.h"
+#include "playerbot/GuidPosition.h"
 #include "playerbot/silvermoon/Recovery.h"
 #include "Policies.h"
 #include "Grids/GridNotifiers.h"
@@ -1134,6 +1135,23 @@ bool ai::SilvermoonGoGoal(Player* bot, SilvermoonScoredGoal& goal)
         if (it != goOrders.end())
             it->second.arrived = time(nullptr);
         order.arrived = time(nullptr);
+    }
+    // Go to > Vendor (1.7.8, S: items set to "sell always" weren't sold on a Go to vendor trip): the
+    // vendor visit sells everything marked for the vendor, item rules included - the stock sell step
+    // only runs when the bags are getting full
+    if (firstArrival && (order.flag & (UNIT_NPC_FLAG_VENDOR | UNIT_NPC_FLAG_REPAIR)) && bot->GetPlayerbotAI())
+    {
+        PlayerbotAI* bai = bot->GetPlayerbotAI();
+        bai->DoSpecificAction("sell", Event("silvermoon go", "legacy all"), true);
+        // up to 15 yards counts as there, but selling needs the vendor in reach: the vendor becomes the
+        // rpg target, so the character walks up and its vendor visit sells the rest
+        for (ObjectGuid const& g : bai->GetAiObjectContext()->GetValue<std::list<ObjectGuid>>("nearest npcs")->Get())
+            if (Unit* u = bai->GetUnit(g))
+                if (u->GetEntry() == best->entry)
+                {
+                    bai->GetAiObjectContext()->GetValue<GuidPosition>("rpg target")->Set(GuidPosition(u));
+                    break;
+                }
     }
     if (firstArrival && (order.flag & UNIT_NPC_FLAG_REPAIR))
         SilvermoonRepairNearby(bot);           // Go to > Repair (S): repair on arrival
