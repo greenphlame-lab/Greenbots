@@ -1596,13 +1596,26 @@ static void SilvermoonOwnIdleWatch(Player* me)
     std::lock_guard<std::mutex> guard(lock);
     auto it = last.find(guid);
     time_t now = time(nullptr);
-    if (never || it == last.end() || std::get<0>(it->second) != me->GetMapId() ||
+    if (it == last.end() || std::get<0>(it->second) != me->GetMapId() ||
         std::hypot(me->GetPositionX() - std::get<1>(it->second), me->GetPositionY() - std::get<2>(it->second)) > 3.0f)
     {
         last[guid] = std::make_tuple(me->GetMapId(), me->GetPositionX(), me->GetPositionY(), now);
         return;
     }
     time_t still = now - std::get<3>(it->second);
+    if (never)
+    {
+        // 1.7.8 (S: Mommy stood 2+ minutes and nothing was logged): say why it leaves her alone
+        if (still >= 2 * MINUTE && now - lastNote[guid] >= MINUTE)
+        {
+            lastNote[guid] = now;
+            sLog.outBasic("Silvermoon: %s still for %u s, left alone: alive %d, flying %d, grouped %d, res-sick %d, fighting %d (%u attackers), casting %d, on transport %d, at dock %d; trip status %u",
+                me->GetName(), uint32(still), me->IsAlive() ? 1 : 0, me->IsTaxiFlying() ? 1 : 0, me->GetGroup() ? 1 : 0, me->HasAura(15007) ? 1 : 0,
+                me->IsInCombat() ? 1 : 0, attackers, me->IsNonMeleeSpellCasted(true) ? 1 : 0, me->GetTransport() ? 1 : 0, atDock ? 1 : 0,
+                target ? uint32(target->GetStatus()) : 99u);
+        }
+        return;
+    }
     if (still < 2 * MINUTE || (wait && still < 5 * MINUTE))
     {
         if (wait && still >= 2 * MINUTE && now - lastNote[guid] >= MINUTE)
