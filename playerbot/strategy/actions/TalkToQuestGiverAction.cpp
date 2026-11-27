@@ -3,6 +3,7 @@
 #include "playerbot/playerbot.h"
 #include "TalkToQuestGiverAction.h"
 #include "playerbot/strategy/values/ItemUsageValue.h"
+#include "playerbot/RandomItemMgr.h"
 #include "playerbot/strategy/values/QuestValues.h"
 #include "playerbot/strategy/values/GuildValues.h"
 
@@ -194,6 +195,47 @@ ItemIds TalkToQuestGiverAction::BestRewards(Quest const* quest)
             {
                 returnIds.insert(i);
             }
+        }
+        // Silvermoon 1.7.6 (S: "quest rewards picked by upgrade size"): of the equally usable choices,
+        // the one that gains most over what is worn in its slot now (stat weight, plus damage per
+        // second for weapons); for rewards it won't wear, the one that sells for most. Was: the first
+        // in the list.
+        if (returnIds.size() > 1)
+        {
+            uint8 best = *returnIds.begin();
+            float bestGain = -1e9f;
+            for (uint32 i : returnIds)
+            {
+                ItemPrototype const* proto = sObjectMgr.GetItemPrototype(quest->RewChoiceItemId[i]);
+                if (!proto)
+                    continue;
+                float gain;
+                if (bestUsage == ItemUsage::ITEM_USAGE_EQUIP || bestUsage == ItemUsage::ITEM_USAGE_BAD_EQUIP)
+                {
+                    ItemQualifier q(proto->ItemId);
+                    gain = float(sRandomItemMgr.ItemStatWeight(bot, q));
+                    uint8 slot = bot->FindEquipSlot(proto, NULL_SLOT, true);
+                    Item* old = slot < EQUIPMENT_SLOT_END ? bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot) : nullptr;
+                    if (old)
+                        gain -= float(sRandomItemMgr.ItemStatWeight(bot, old));
+                    if (proto->Class == ITEM_CLASS_WEAPON && proto->Delay)
+                    {
+                        float dps = (proto->Damage[0].DamageMin + proto->Damage[0].DamageMax) / 2.0f / (proto->Delay / 1000.0f);
+                        float oldDps = 0.0f;
+                        if (old && old->GetProto()->Class == ITEM_CLASS_WEAPON && old->GetProto()->Delay)
+                            oldDps = (old->GetProto()->Damage[0].DamageMin + old->GetProto()->Damage[0].DamageMax) / 2.0f / (old->GetProto()->Delay / 1000.0f);
+                        gain += (dps - oldDps) * 10.0f;
+                    }
+                }
+                else
+                    gain = float(proto->SellPrice);
+                if (gain > bestGain)
+                {
+                    bestGain = gain;
+                    best = uint8(i);
+                }
+            }
+            return { best };
         }
         return returnIds;
     }

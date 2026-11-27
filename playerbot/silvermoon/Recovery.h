@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <string>
 
 class Player;
 
@@ -41,6 +42,20 @@ namespace ai
     // buys food and water from a friendly vendor within 30 yards that sells them (paid at the vendor
     // price, level-appropriate items, up to what the bot wants and the budget allows); true if it bought
     bool SilvermoonBuySupplies(Player* bot);
+
+    // Load guard (S, 1.7.6, "item 0": every new bot activity gets a cap and a slow-server cut-out).
+    // The world update is already near its budget (avg 115-125 ms against 120), so optional work
+    // asks first:
+    //  - SilvermoonLoadOk(): the world's average update time is under SILVERMOON_LOAD_LIMIT_MS. Going
+    //    over and coming back under are logged ("load guard: busy/ok").
+    //  - SilvermoonActivityStart(name, cap): one more of an activity (a dungeon run, a battleground,
+    //    a boat crossing...) may start - load is fine and fewer than cap are running; counted if so.
+    //    SilvermoonActivityEnd(name) when it ends. SilvermoonActivityCount(name) for telemetry.
+    const uint32_t SILVERMOON_LOAD_LIMIT_MS = 110;
+    bool SilvermoonLoadOk();
+    bool SilvermoonActivityStart(std::string const& name, uint32_t cap);
+    void SilvermoonActivityEnd(std::string const& name);
+    uint32_t SilvermoonActivityCount(std::string const& name);
 
     // gathering milestone for a level (S, 1.6.21): 150 at 25, 200 at 35 ... 300 at 60 (0 below 10)
     uint32_t SilvermoonGatherMilestone(uint32_t level);

@@ -18,6 +18,8 @@
 #include <vector>
 #include <deque>
 #include <mutex>
+#include <atomic>
+#include "World/World.h"
 #include <unordered_map>
 
 using namespace ai;
@@ -370,6 +372,59 @@ uint32_t ai::SilvermoonSupplyBudget(Player* bot)
     uint32 hourly = (bot->GetMoney() + spent) / 10;
     uint32 left = hourly > spent ? hourly - spent : 0;
     return std::min(left, SilvermoonSpendable(bot));
+}
+
+bool ai::SilvermoonLoadOk()
+{
+    static std::atomic<bool> busy{ false };
+    static std::atomic<uint32> lastFlip{ 0 };
+    uint32 avg = sWorld.GetAverageDiff();
+    bool nowBusy = avg >= SILVERMOON_LOAD_LIMIT_MS;
+    // a little hysteresis: busy from the limit up, ok again 10 ms below it
+    if (busy.load() && avg >= SILVERMOON_LOAD_LIMIT_MS - 10)
+        nowBusy = true;
+    bool was = busy.exchange(nowBusy);
+    if (was != nowBusy)
+    {
+        uint32 now = uint32(time(nullptr));
+        if (now - lastFlip.exchange(now) >= 60)
+            sLog.outBasic("Silvermoon: load guard: %s (world update average %u ms, limit %u)", nowBusy ? "busy, optional bot activities paused" : "ok again",
+                avg, SILVERMOON_LOAD_LIMIT_MS);
+    }
+    return !nowBusy;
+}
+
+namespace
+{
+    std::mutex activityLock;
+    std::unordered_map<std::string, uint32> activities;
+}
+
+bool ai::SilvermoonActivityStart(std::string const& name, uint32_t cap)
+{
+    if (!SilvermoonLoadOk())
+        return false;
+    std::lock_guard<std::mutex> guard(activityLock);
+    uint32& n = activities[name];
+    if (n >= cap)
+        return false;
+    ++n;
+    return true;
+}
+
+void ai::SilvermoonActivityEnd(std::string const& name)
+{
+    std::lock_guard<std::mutex> guard(activityLock);
+    uint32& n = activities[name];
+    if (n)
+        --n;
+}
+
+uint32_t ai::SilvermoonActivityCount(std::string const& name)
+{
+    std::lock_guard<std::mutex> guard(activityLock);
+    auto it = activities.find(name);
+    return it == activities.end() ? 0 : it->second;
 }
 
 bool ai::SilvermoonBuySupplies(Player* bot)

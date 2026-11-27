@@ -4,6 +4,7 @@
 #include "RequestGoalAction.h"
 #include "ChooseGoalAction.h"
 #include "Professions.h"
+#include "playerbot/silvermoon/Recovery.h"
 #include "playerbot/strategy/values/TravelValues.h"
 #include <mutex>
 #include <unordered_map>
@@ -26,6 +27,13 @@ bool RecheckGoalAction::Execute(Event& event)
 {
     silvermoon::BrainTimer brainTimer(silvermoon::BrainMicros());
     uint32 guid = bot->GetGUIDLow();
+    // load guard (1.7.6): while the server is busy the re-check waits 2 minutes and the bot keeps
+    // its goal - each re-check is a destination search
+    if (!SilvermoonLoadOk())
+    {
+        SET_AI_VALUE2(int, "manual int", "silvermoon goal check at", int(time(nullptr) + 2 * MINUTE));
+        return false;
+    }
     FutureDestinations future;
     {
         std::lock_guard<std::mutex> guard(pendingLock);
