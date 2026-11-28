@@ -91,6 +91,9 @@ namespace ai
 
     public:
         NextAction** getHandlers();
+        // Silvermoon 1.8.1: the node's own actions, also before its trigger is created (the trigger
+        // only exists once the engine has run it - a character that hasn't fought since a restart)
+        NextAction** getOwnHandlers() { return NextAction::clone(handlers); }
         float getFirstRelevance();
     private:
         std::string name;

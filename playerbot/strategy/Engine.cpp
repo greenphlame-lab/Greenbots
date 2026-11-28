@@ -714,9 +714,11 @@ std::vector<std::tuple<std::string, float, std::string>> Engine::SilvermoonActio
     std::vector<std::tuple<std::string, float, std::string>> out;
     for (TriggerNode* node : triggers)
     {
-        if (!node || !node->getTrigger())
+        if (!node)
             continue;
-        NextAction** handlers = node->getHandlers();
+        // 1.8.1 (S: Guile's Rotation window showed no class rotation): a trigger is only created when
+        // the engine first runs it, so before the first fight after a restart every node was skipped
+        NextAction** handlers = node->getTrigger() ? node->getHandlers() : node->getOwnHandlers();
         for (int i = 0; handlers && handlers[i]; ++i)
             out.emplace_back(handlers[i]->getName(), handlers[i]->getRelevance(), node->getName());
         NextAction::destroy(handlers);
