@@ -1836,6 +1836,17 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                             me->GetPlayerbotAI()->HasStrategy("silvermoon brain", BotState::BOT_STATE_NON_COMBAT) &&
                             !me->GetPlayerbotAI()->HasStrategy("rpg vendor", BotState::BOT_STATE_NON_COMBAT))
                             me->GetPlayerbotAI()->ChangeStrategy("+rpg vendor", BotState::BOT_STATE_NON_COMBAT);
+                        // 1.8.1 (S: Mommy healed herself in a pull of 4 with "flee at 2 mobs" set, and no flee or
+                        // lifesaver was ever logged for her): the survive step (flee rules, lifesavers, potion,
+                        // rotation, walking past mobs) wasn't on her combat strategies - it's added when the AI
+                        // is built, before the server knows it's your character on Auto. Checked every 30 s.
+                        if (me->GetPlayerbotAI() && !me->GetPlayerbotAI()->HasStrategy("silvermoon survive", BotState::BOT_STATE_COMBAT))
+                        {
+                            me->GetPlayerbotAI()->ChangeStrategy("+silvermoon survive", BotState::BOT_STATE_COMBAT);
+                            sLog.outBasic("Silvermoon: %s on Auto had no survive step in combat, added it", me->GetName());
+                        }
+                        if (me->GetPlayerbotAI() && !me->GetPlayerbotAI()->HasStrategy("silvermoon survive", BotState::BOT_STATE_NON_COMBAT))
+                            me->GetPlayerbotAI()->ChangeStrategy("+silvermoon survive", BotState::BOT_STATE_NON_COMBAT);
                         if (me->GetPlayerbotAI())
                             SilvermoonGhostRescue(me);
                         // relocation trips end here for your characters too (S: Guile reached the
@@ -1890,6 +1901,8 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                 if (SilvermoonAutoOn(alt.second) && !p->GetGroup() &&
                     !p->GetPlayerbotAI()->HasStrategy("rpg vendor", BotState::BOT_STATE_NON_COMBAT))
                     p->GetPlayerbotAI()->ChangeStrategy("+rpg vendor", BotState::BOT_STATE_NON_COMBAT);   // AH posting (see above)
+                if (SilvermoonAutoOn(alt.second) && !p->GetPlayerbotAI()->HasStrategy("silvermoon survive", BotState::BOT_STATE_COMBAT))
+                    p->GetPlayerbotAI()->ChangeStrategy("+silvermoon survive", BotState::BOT_STATE_COMBAT);   // flee rules etc. (1.8.1, above)
                 if (SilvermoonAutoOn(alt.second) && p->IsAlive() && !p->IsInCombat() && p->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_RESTING) &&
                     !GetEventValue(alt.second, "silvermoon_alt_shop"))
                 {
