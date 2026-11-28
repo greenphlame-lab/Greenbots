@@ -86,6 +86,16 @@ bool LifesaverAction::Execute(Event& event)
         Unit* on = s.target ? enemy : bot;
         if (!on)
             continue;
+        // 1.8.5 (S: running away at low health, Chino turned round and re-engaged - Gouge at 15% health,
+        // then died): a saver cast on the enemy is only used when it's already in that spell's reach - a
+        // melee one (Gouge, Wing Clip) never turns a fleeing bot round to walk back into the fight
+        if (s.target && on != bot)
+        {
+            std::string sp = s.spell;
+            float reach = (sp == "gouge" || sp == "wing clip") ? 5.0f : sp == "blind" ? 10.0f : 30.0f;
+            if (bot->GetDistance(on) > reach || !bot->HasInArc(on, M_PI_F / 2))
+                continue;
+        }
         // area spells around the caster (Frost Nova, Psychic Scream, Intimidating Shout...) never
         // passed the cast check on the bot itself - 0 uses in the audit with 86 mages and 92 priests
         // knowing them: try them on the enemy too

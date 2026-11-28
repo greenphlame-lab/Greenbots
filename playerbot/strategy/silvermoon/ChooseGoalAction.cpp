@@ -1426,6 +1426,15 @@ bool ChooseGoalAction::Execute(Event& event)
         travelTarget->SetExpireIn(uint32(30 * MINUTE * IN_MILLISECONDS));
         travelTarget->SetForced(true);
     }
+    // a queued step's goal (1.8.5, S: Chino, queue only, picked his Ironforge turn-in twice and stood still
+    // with "no trip planned"): an ordinary trip drops into cooldown on the way when a stock check
+    // stumbles, and queue only then waits. Forced like a profession trip, with time for the walk
+    if (best.score.reason.rfind("queue: ", 0) == 0)
+    {
+        float far = (best.position && best.position->getMapId() == bot->GetMapId()) ? best.position->fDist(WorldPosition(bot)) : 0.0f;
+        travelTarget->SetExpireIn(uint32(std::max(10.0f * MINUTE, far / 5.0f + 5.0f * MINUTE) * IN_MILLISECONDS));
+        travelTarget->SetForced(true);
+    }
 
     SilvermoonLogDecision(bot, best, goals.size() > 1 ? &goals[1] : nullptr, goals.size() > 2 ? &goals[2] : nullptr);
 
