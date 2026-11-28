@@ -253,6 +253,12 @@ ItemUsage ItemUsageValue::CalculateStock()
             ItemUsage equip = QueryItemUsageForEquip(itemQualifier, bot);
             if (equip == ItemUsage::ITEM_USAGE_EQUIP)
                 return equip;
+            // 1.8.2 (S: Chino kept the Ragged Leather Vest and the Boar Handler Gloves in his bags with
+            // his chest and hands bare): armor with no stats scores 0 for the spec, so for an empty slot
+            // it's only "wear it if nothing else" - which this check then sold as grey/white gear.
+            // Any armor beats a bare slot.
+            if (equip == ItemUsage::ITEM_USAGE_BAD_EQUIP && proto->Class == ITEM_CLASS_ARMOR)
+                return equip;
             // blues it won't wear go to the auction house (S), when they can be sold there
             if (proto->Class != ITEM_CLASS_CONTAINER && proto->Quality == ITEM_QUALITY_RARE && proto->Bonding != BIND_WHEN_PICKED_UP)
                 return ItemUsage::ITEM_USAGE_AH;

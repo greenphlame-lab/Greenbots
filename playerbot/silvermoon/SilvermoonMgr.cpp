@@ -890,6 +890,11 @@ void SilvermoonNoteDroppedQuest(uint32 guid, uint32 questId)
 }
 bool SilvermoonQuestDropped(uint32 guid, uint32 questId)
 {
+    // never taken (1.8.3 quest stall review): Blueleaf Tubers needs a Snufflenose Gopher to dig up the
+    // tubers - 279 bots held it with nothing found, and the ones inside Razorfen Kraul paced the tuber
+    // area for up to an hour (S); CLUCK! is an emote quest bots can't do
+    if (questId == 1221 || questId == 3861)
+        return true;
     std::lock_guard<std::mutex> guard(droppedLock);
     auto it = droppedQuests.find(guid);
     return it != droppedQuests.end() && it->second.count(questId) > 0;
@@ -899,9 +904,15 @@ static void SilvermoonDropStaleQuests(Player* bot)
 {
     static std::mutex lock;
     static std::unordered_map<uint32, std::unordered_map<uint32, uint32>> seenAt;   // guid -> quest -> level
+    // 1.8.3 (S: "comprehensive review of quest stalls"): guid -> quest -> (progress, since). A random bot's
+    // quest with no progress for 4 hours is given up - elite "Wanted" bounties it can't solo, turn-ins on
+    // the other continent, objectives bots can't work out. It frees the log and stops the walks there.
+    static std::unordered_map<uint32, std::unordered_map<uint32, std::pair<uint32, time_t>>> progressAt;
     uint32 level = bot->GetLevel();
     std::lock_guard<std::mutex> guard(lock);
     auto& seen = seenAt[bot->GetGUIDLow()];
+    auto& prog = progressAt[bot->GetGUIDLow()];
+    bool own = SilvermoonIsOwn(bot);
     for (uint8 slot = 0; slot < MAX_QUEST_LOG_SIZE; ++slot)
     {
         uint32 questId = bot->GetQuestSlotQuestId(slot);
@@ -911,7 +922,34 @@ static void SilvermoonDropStaleQuests(Player* bot)
         auto it = seen.find(questId);
         if (it == seen.end())
             it = seen.emplace(questId, level).first;
-        if (bot->GetQuestStatus(questId) != QUEST_STATUS_INCOMPLETE || quest->GetRequiredClasses())
+        QuestStatus qs = bot->GetQuestStatus(questId);
+        bool stalled = false;
+        if (!own && (qs == QUEST_STATUS_INCOMPLETE || qs == QUEST_STATUS_COMPLETE))
+        {
+            QuestStatusData const& d = bot->getQuestStatusMap()[questId];
+            uint32 progress = qs == QUEST_STATUS_COMPLETE ? 1000000u : 0u;
+            for (int i = 0; i < QUEST_OBJECTIVES_COUNT; ++i)
+                progress += d.m_creatureOrGOcount[i] + d.m_itemcount[i];
+            auto pit = prog.find(questId);
+            if (pit == prog.end() || pit->second.first != progress)
+                prog[questId] = { progress, time(nullptr) };
+            else if (time(nullptr) - pit->second.second >= 4 * HOUR)
+                stalled = true;
+        }
+        if (stalled)
+        {
+            bot->SetQuestSlot(slot, 0);
+            bot->TakeQuestSourceItem(questId, false);
+            bot->SetQuestStatus(questId, QUEST_STATUS_NONE);
+            bot->getQuestStatusMap()[questId].m_rewarded = false;
+            seen.erase(it);
+            prog.erase(questId);
+            SilvermoonNoteDroppedQuest(bot->GetGUIDLow(), questId);
+            sLog.outBasic("Silvermoon: bot %s (level %u) abandoned quest %u \"%s\" (no progress for 4 hours)",
+                bot->GetName(), level, questId, quest->GetTitle().c_str());
+            continue;
+        }
+        if (qs != QUEST_STATUS_INCOMPLETE || quest->GetRequiredClasses())
             continue;
         int32 questLevel = quest->GetQuestLevel() > 0 ? quest->GetQuestLevel() : int32(level);
         bool stale = int32(level) >= int32(it->second) + 5 || int32(level) >= questLevel + 5;
@@ -1864,6 +1902,7 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                             SilvermoonLevelPass(me);   // "Level it" orders (Professions window)
                             SilvermoonOwnIdleWatch(me);   // stood still with somewhere to go (1.7.2)
                             SilvermoonRoguePoisons(me);   // 1.8.1: your rogues too
+                            SilvermoonBagVendorTrip(me);  // 1.8.3: "vendor when N bag slots free" policy
                             // a Gather order needs the gathering step (it finds and loots the nodes)
                             if ((SilvermoonGatherOrderFactor(me->GetGUIDLow(), 182) > 1.0f || SilvermoonGatherOrderFactor(me->GetGUIDLow(), 186) > 1.0f ||
                                  SilvermoonGatherOrderFactor(me->GetGUIDLow(), 356) > 1.0f) &&
@@ -2138,6 +2177,27 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                         d = &entry.second;
                 if (!d)
                     return;
+                // level cap (1.8.3, S: "lvl 38 Dotmatrix should not end up in Deadmines groups"): a bot more
+                // than 3 levels over the dungeon's range (an old commitment, or one that out-levelled the
+                // run) is let go instead of being brought back to the party
+                if (p->GetLevel() > d->maxLevel + 3)
+                {
+                    sLog.outBasic("Silvermoon: bot %s (level %u) is over the level range of dungeon map %u, released", p->GetName(), p->GetLevel(), dungeonMap);
+                    if (!p->IsAlive())
+                    {
+                        p->ResurrectPlayer(0.5f);
+                        p->SpawnCorpseBones();
+                    }
+                    SetEventValue(guid, "silvermoon_dungeon", 0, 0);
+                    SetEventValue(guid, "silvermoon_dungeon_party", 0, 0);
+                    SetEventValue(guid, "silvermoon_dungeon_wipes", 0, 0);
+                    silvermoonLastGood.erase(guid);
+                    if (Group* g = p->GetGroup())
+                        g->RemoveMember(p->GetObjectGuid(), 0);
+                    if (committed.erase(guid))
+                        toRelease.push_back(p);
+                    return;
+                }
                 // Deaths and getting back in. While alive inside the dungeon (and within its area) the
                 // bot's position is remembered every 2 seconds. A dead bot - body or ghost, inside or
                 // released outside - waits until no living party member is still fighting (and at
@@ -2649,7 +2709,26 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                                 if ((path.getPathType() & (PATHFIND_NOPATH | PATHFIND_INCOMPLETE)) != 0 && dist > 30.0f)
                                 {
                                     sLog.outBasic("Silvermoon: bot %s has no walking path to boss %u on dungeon map %u, moving it there", p->GetName(), entry, dungeonMap);
-                                    p->NearTeleportTo(spot->coord_x, spot->coord_y, spot->coord_z, p->GetOrientation());
+                                    // 1.8.3 (S: "SFK runs not making it past Fenrus"; Fenrus and his Lupine Horrors killed
+                                    // 234 bots in 6 hours): not onto the boss - that pulled him and everything around him
+                                    // at once. 30 yards short, on the bot's side, in sight of the boss; then the pull rule
+                                    // above starts the fight
+                                    float tx = spot->coord_x, ty = spot->coord_y, tz = spot->coord_z;
+                                    float dx = p->GetPositionX() - spot->coord_x, dy = p->GetPositionY() - spot->coord_y;
+                                    float len = std::sqrt(dx * dx + dy * dy);
+                                    if (len > 1.0f)
+                                        for (float back : { 30.0f, 25.0f, 20.0f, 15.0f })
+                                        {
+                                            float x = spot->coord_x + dx / len * back, y = spot->coord_y + dy / len * back;
+                                            float z = p->GetMap()->GetHeight(x, y, spot->coord_z + 10.0f);
+                                            if (z > INVALID_HEIGHT + 1.0f && std::fabs(z - spot->coord_z) < 12.0f &&
+                                                p->GetMap()->IsInLineOfSight(x, y, z + 2.0f, spot->coord_x, spot->coord_y, spot->coord_z + 2.0f, true))
+                                            {
+                                                tx = x; ty = y; tz = z;
+                                                break;
+                                            }
+                                        }
+                                    p->NearTeleportTo(tx, ty, tz, p->GetOrientation());
                                     prog = std::make_pair(0.0f, 0u);
                                 }
                                 else
@@ -3575,6 +3654,16 @@ void RandomPlayerbotMgr::SilvermoonFastProcessBot(Player* player, PlayerbotAI* a
     // recovery (S, 1.6.20): cash-out and struggling flags, the safe way out (Recovery.cpp)
     SilvermoonRecoveryTick(player);
     SilvermoonRoguePoisons(player);     // 1.8.1: rogues learn, make and carry poisons
+    SilvermoonBagVendorTrip(player);    // 1.8.3: your always-online alts' "vendor when N slots free"
+    // duels (1.8.3, S: "bots dueling endlessly ... shouldn't go on forever"): a bots-only duel that's run 3
+    // minutes ends with no winner (two healers, or two bots that can't hurt each other). Duels with a real
+    // player are left alone.
+    if (player->duel && player->duel->opponent && player->duel->startTime && time(nullptr) - player->duel->startTime > 3 * MINUTE &&
+        !(ai && ai->IsRealPlayer()) && player->duel->opponent->GetPlayerbotAI() && !player->duel->opponent->GetPlayerbotAI()->IsRealPlayer())
+    {
+        sLog.outBasic("Silvermoon: duel %s vs %s called off after 3 minutes", player->GetName(), player->duel->opponent->GetName());
+        player->DuelComplete(DUEL_INTERRUPTED);
+    }
     // gold watch: a bot whose money jumps by 5 gold or more within one 10-second check is logged
     // with what it is doing (5 Horde casters gained 50-96 gold in one hour on 2026-11-22 and the
     // cause could not be traced afterwards)
@@ -4402,6 +4491,12 @@ bool RandomPlayerbotMgr::SilvermoonConsoleCommand(ChatHandler* handler, char con
             handler->SendSysMessage("They are not on the same faction.");
             return true;
         }
+        for (auto const& entry : g_silvermoonDungeons)
+            if (entry.second.map == map && joiner->GetLevel() > entry.second.maxLevel + 3)
+            {
+                handler->PSendSysMessage("%s (level %u) is over that dungeon's level range (up to %u).", joiner->GetName(), joiner->GetLevel(), entry.second.maxLevel);
+                return true;
+            }
         if (joiner->GetGroup() != group)
         {
             if (group->IsFull())

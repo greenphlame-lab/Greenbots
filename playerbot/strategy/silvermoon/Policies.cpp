@@ -41,7 +41,7 @@ namespace
         out << ";it=";
         first = true;
         for (auto const& [item, rule] : p.items) { out << (first ? "" : ",") << item << ":" << uint32(rule.first) << ":" << (rule.second ? 1 : 0); first = false; }
-        out << ";ae=" << (p.askEquip ? 1 : 0) << ";bg=" << uint32(p.bags) << ";fm=" << uint32(p.fleeMobs) << ";fh=" << uint32(p.fleeHealth) << ";ah=" << p.ahGold << ";up=" << uint32(p.upgradePct) << ";ws=";
+        out << ";ae=" << (p.askEquip ? 1 : 0) << ";bg=" << uint32(p.bags) << ";fm=" << uint32(p.fleeMobs) << ";fh=" << uint32(p.fleeHealth) << ";ah=" << p.ahGold << ";up=" << uint32(p.upgradePct) << ";vs=" << uint32(p.vendorSlots) << ";ws=";
         first = true;
         for (auto const& [skill, mode] : p.weapons) { out << (first ? "" : ",") << skill << ":" << uint32(mode); first = false; }
         out << ";rb=";
@@ -63,6 +63,7 @@ namespace
             std::string key = part.substr(0, eq), value = part.substr(eq + 1);
             if (key == "fm") p.fleeMobs = uint8(atoi(value.c_str()));
             else if (key == "bg") p.bags = uint8(atoi(value.c_str()));
+            else if (key == "vs") p.vendorSlots = uint8(atoi(value.c_str()));
             else if (key == "ae") p.askEquip = atoi(value.c_str()) != 0;
             else if (key == "fh") p.fleeHealth = uint8(atoi(value.c_str()));
             else if (key == "et") p.eatTo = uint8(atoi(value.c_str()));
@@ -591,6 +592,11 @@ bool ai::SilvermoonPolicyCommand(Player* bot, std::string const& param, std::str
         p.potionAt = uint8(std::min(90, std::max(5, atoi(v1.c_str())))), reply = "I'll drink a healing potion below " + std::to_string(p.potionAt) + "% health.";
     else if (k == "ah" && n == 2)
         p.ahGold = uint32(std::max(0, atoi(v1.c_str()))) * 10000, reply = "Auction house trip updated.";
+    else if (k == "vendorslots" && n == 2)
+    {
+        p.vendorSlots = uint8(std::min(20, std::max(0, atoi(v1.c_str()))));
+        reply = p.vendorSlots ? "I'll go to a vendor when " + std::to_string(p.vendorSlots) + " or fewer bag slots are free." : "I'll go to a vendor when I decide to.";
+    }
     else if (k == "upgrade" && n == 2)
         p.upgradePct = uint8(std::min(100, std::max(0, atoi(v1.c_str())))), reply = "Upgrade budget updated.";
     else if (k == "weapon" && n == 3)

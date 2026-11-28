@@ -86,7 +86,16 @@ namespace
         if (row.reason.rfind("profession: go to ", 0) == 0)
             return "Heading to " + row.reason.substr(18);
         if (row.reason.rfind("profession: learn ", 0) == 0)
+        {
+            // 1.8.3 (S: "learn mining" still showing with Mining learned): once it's known, say so
+            std::string prof = row.reason.substr(18);
+            prof = prof.substr(0, prof.find(" at "));
+            for (uint32 i = 0; i < sSkillLineStore.GetNumRows(); ++i)
+                if (SkillLineEntry const* sk = sSkillLineStore.LookupEntry(i))
+                    if (sk->name[0] && prof == sk->name[0] && ai->GetBot()->HasSkill(sk->id))
+                        return "Learned " + prof;
             return "Learning " + row.reason.substr(18);
+        }
         if (row.goal == "quest objective")
             return quest ? quest->GetTitle() + ": " + what : what;
         if (row.goal == "quest turn-in")

@@ -37,6 +37,14 @@ namespace ai
                 return !ai->HasAura("fire shield", target);
             }
 
+            // Silvermoon 1.8.3 (S: "my druid companion Sayrena never buffs me with Thorns"): Thorns went only
+            // to tanks. You, the player the druid follows, get it too when you fight in melee.
+            Player* master = ai->GetMaster();
+            if (master && master != bot && ai->IsRealPlayer(master) && bot->GetGroup() && master->GetGroup() == bot->GetGroup() &&
+                master->IsAlive() && !ai->IsRanged(master) && bot->IsWithinDistInMap(master, 30.0f) &&
+                !ai->HasAura("thorns", master) && !ai->HasAura("fire shield", master))
+                return true;
+
             return false;
         }
     };

@@ -12,6 +12,7 @@
 #include "playerbot/TravelNode.h"
 #include "playerbot/strategy/silvermoon/RelocateGoal.h"
 #include "playerbot/silvermoon/Recovery.h"
+#include "playerbot/strategy/silvermoon/ActionQueue.h"
 
 using namespace ai;
 // Silvermoon (S): grey mobs (no XP) are only worth it for a destitute bot - weapon at 0 durability -
@@ -204,8 +205,16 @@ Unit* GrindTargetValue::FindTargetForGrinding(int assistCount)
                         broken += slot == EQUIPMENT_SLOT_MAINHAND ? 4 : 1;
             // ...or struggling (S, 1.6.20: dying and losing money over the last hour)
             careful = (broken >= 3 || SilvermoonRecentDeaths(bot->GetGUIDLow(), 30 * MINUTE) >= 3 || SilvermoonStruggling(bot->GetGUIDLow())) ? 1 : 0;
+            // action queue, "queue only" (1.8.2, S: Chino on Coldridge Valley Mail Delivery ran around
+            // killing wolves for other quests): on a queued quest, new fights only at that quest's own
+            // objective - on the way to its giver or turn-in, and anywhere else, only what attacks
+            uint32 queueQuest = SilvermoonQueueOnly(bot) ? SilvermoonQueueFetchQuest(bot) : 0;
+            QuestObjectiveTravelDestination* atObjective = queueQuest ?
+                dynamic_cast<QuestObjectiveTravelDestination*>(AI_VALUE(TravelTarget*, "travel target")->GetDestination()) : nullptr;
             if (bot->HasAura(15007))
                 careful = 2;    // Resurrection Sickness: no new fights until it wears off
+            else if (queueQuest && !(atObjective && atObjective->GetQuestId() == queueQuest))
+                careful = 2;
             else if (SilvermoonOnRelocateTrip(bot->GetGUIDLow()))
                 careful = 2;    // on a relocation trip: keep moving, fight only what attacks
             // Gather order (S): node to node, no fights on the way unless something attacks

@@ -925,6 +925,42 @@ void ai::SilvermoonLevelPass(Player* bot)
     }
 }
 
+void ai::SilvermoonBagVendorTrip(Player* bot)
+{
+    if (!bot || !SilvermoonIsOwn(bot) || !bot->IsAlive() || bot->IsInCombat() || bot->IsTaxiFlying())
+        return;
+    uint8 want = SilvermoonPolicyFor(bot->GetGUIDLow()).vendorSlots;
+    if (!want)
+        return;
+    uint32 freeSlots = 0;
+    for (uint8 slot = INVENTORY_SLOT_ITEM_START; slot < INVENTORY_SLOT_ITEM_END; ++slot)
+        if (!bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
+            ++freeSlots;
+    for (uint8 bag = INVENTORY_SLOT_BAG_START; bag < INVENTORY_SLOT_BAG_END; ++bag)
+        if (Bag* b = (Bag*)bot->GetItemByPos(INVENTORY_SLOT_BAG_0, bag))
+            if (b->GetProto() && b->GetProto()->Class == ITEM_CLASS_CONTAINER && b->GetProto()->SubClass == ITEM_SUBCLASS_CONTAINER)
+                freeSlots += b->GetFreeSlots();
+    if (freeSlots > want)
+        return;
+    static std::mutex tripLock;
+    static std::unordered_map<uint32, time_t> lastTrip;
+    {
+        std::lock_guard<std::mutex> guard(tripLock);
+        time_t& t = lastTrip[bot->GetGUIDLow()];
+        if (time(nullptr) - t < 10 * MINUTE)
+            return;                  // one trip, then give it time to sell before asking again
+        t = time(nullptr);
+    }
+    std::lock_guard<std::mutex> guard(orderLock);
+    if (goOrders.count(bot->GetGUIDLow()))
+        return;                      // already on a Go to trip
+    GoOrder& order = goOrders[bot->GetGUIDLow()];
+    order.flag = UNIT_NPC_FLAG_VENDOR;
+    order.what = "a vendor (bags nearly full)";
+    order.at = time(nullptr);
+    sLog.outBasic("Silvermoon: %s has %u bag slots free (policy: %u), going to a vendor", bot->GetName(), freeSlots, uint32(want));
+}
+
 void ai::SilvermoonRoguePoisons(Player* bot)
 {
     if (!bot || bot->getClass() != CLASS_ROGUE || bot->GetLevel() < 20 || !bot->IsAlive() || bot->IsInCombat() || bot->IsTaxiFlying())

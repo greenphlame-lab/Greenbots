@@ -46,6 +46,7 @@ namespace ai
         uint8 upgradePct = 0;        // 0 = the bot's defaults
         std::map<uint32, uint8> weapons;   // skill -> 1 train, 2 avoid
         uint8 bags = 0;              // bit 1: don't buy bags; bit 2: replace small bags with bigger ones
+        uint8 vendorSlots = 0;       // 1.8.3 (S): go to a vendor when this many bag slots or fewer are free (0 = off)
         bool askEquip = false;       // 1.6.21 (S): ask before equipping upgrades (1 hour, then it decides)
         // item rules (S): item id -> (action, always). action 1 sell, 2 auction, 3 destroy, 4 keep,
         // 5 bank (1.7.8);
@@ -60,7 +61,7 @@ namespace ai
         // target (finishers);
         // empty = the class's own rotation
         std::vector<std::pair<std::string, uint16>> rotation;
-        bool Any() const { return !rotation.empty() || askEquip || potionAt || disenchant || tradeGoods != 2 || !allowedZones.empty() || eatTo || drinkTo || travel || !blockedSpells.empty() || fleeMobs || fleeHealth || ahGold || upgradePct || !weapons.empty() || bags || !items.empty(); }
+        bool Any() const { return !rotation.empty() || askEquip || vendorSlots || potionAt || disenchant || tradeGoods != 2 || !allowedZones.empty() || eatTo || drinkTo || travel || !blockedSpells.empty() || fleeMobs || fleeHealth || ahGold || upgradePct || !weapons.empty() || bags || !items.empty(); }
     };
 
     // your own character playing on its own: Auto (self-bot) or an always-online alt with auto on

@@ -44,6 +44,8 @@ namespace ai
     // vendor in reach, and goes to a vendor selling them when out. Applying them is the stock "poisons"
     // step. Called often; throttled per character.
     void SilvermoonRoguePoisons(Player* bot);
+    // Policies "vendor when N bag slots free" (1.8.3, S): a vendor trip once the bags get that full
+    void SilvermoonBagVendorTrip(Player* bot);
 
     // "Go to" (S): send your character to the nearest friendly inn(keeper), flight master, auction
     // house, bank or vendor on its continent - ahead of everything else until it gets there.
