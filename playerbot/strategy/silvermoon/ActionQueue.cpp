@@ -112,7 +112,7 @@ namespace
             case AQ_QUEST:
             {
                 Quest const* q = sObjectMgr.GetQuestTemplate(s.a);
-                return std::string("Quest: ") + (q ? q->GetTitle() : "#" + std::to_string(s.a));
+                return std::string("Quest: ") + (q ? q->GetTitle() : "#" + std::to_string(s.a)) + (s.b ? " (whole chain)" : "");
             }
             case AQ_GRIND:
             {
@@ -269,6 +269,9 @@ bool ai::SilvermoonQueueCommand(Player* bot, std::string const& param, std::stri
             ss >> s.a;
             if (!sObjectMgr.GetQuestTemplate(s.a))
                 return false;
+            std::string chain;
+            ss >> chain;
+            s.b = chain == "chain" ? 1 : 0;    // 1.8.2 (S): carry on through the quest's whole chain
         }
         else if (kind == "grind")
         {
@@ -313,6 +316,16 @@ bool ai::SilvermoonQueueCommand(Player* bot, std::string const& param, std::stri
         ss >> n;
         if (!n || n > q.steps.size())
             return false;
+        // 1.8.2 (S: "when task is moved up mid travel, bot should reassess"): the running step leaving
+        // the top - a Go to step's trip is called off, so the new top step's goal is chosen at once
+        // (the Go to order otherwise comes first and the bot kept walking there)
+        if ((n == 1 || (verb == "up" && n == 2)) && q.steps[0].kind == AQ_GO && q.steps[0].issued)
+        {
+            std::string ignored;
+            SilvermoonGoCommand(bot, "stop", ignored);
+            q.steps[0].issued = false;
+            q.steps[0].started = 0;
+        }
         if (verb == "del")
         {
             reply = "Removed: " + Label(q.steps[n - 1]) + ".";
@@ -431,7 +444,33 @@ int ai::SilvermoonQueueStep(Player* bot, uint8_t& kind, uint32_t& id)
                 if (!quest)
                     end = "failed (no such quest)";
                 else if (bot->GetQuestRewardStatus(s.a))
+                {
                     end = "done";
+                    // whole chain (1.8.2, S: "complete entire quest chain"): on to the chain's next
+                    // quest, as the same step, until the chain ends or the next one can't be taken
+                    if (s.b)
+                    {
+                        uint32 next = quest->GetNextQuestInChain();
+                        if (!next && quest->GetNextQuestId() > 0)
+                            next = uint32(quest->GetNextQuestId());
+                        Quest const* nq = next ? sObjectMgr.GetQuestTemplate(next) : nullptr;
+                        if (nq && !bot->GetQuestRewardStatus(next))
+                        {
+                            QuestStatus ns = bot->GetQuestStatus(next);
+                            if (ns == QUEST_STATUS_INCOMPLETE || ns == QUEST_STATUS_COMPLETE || bot->CanTakeQuest(nq, false))
+                            {
+                                Note(bot, s, "done, on to the next quest in the chain");
+                                s.a = next;
+                                s.started = now;
+                                s.issued = false;
+                                changed = true;
+                                end = nullptr;
+                                continue;
+                            }
+                        }
+                        end = "done (end of the chain)";
+                    }
+                }
                 else if (st != QUEST_STATUS_INCOMPLETE && st != QUEST_STATUS_COMPLETE && !bot->CanTakeQuest(quest, false))
                     end = "failed (can't take it)";
                 break;

@@ -247,6 +247,12 @@ bool MovementAction::UseTaxi(PlayerbotAI* ai, uint32 entry, bool needNpc)
 
     TaxiPathEntry const* tEntry = sTaxiPathStore.LookupEntry(entry);
 
+    // Silvermoon 1.8.2 (S: Guile rode a flight as a ghost): never a flight while dead - a route planned
+    // alive can still hold a flight leg after dying; failing it here makes the bot re-plan, and dead
+    // bots never plan flights
+    if (!bot->IsAlive())
+        return false;
+
     if (!tEntry)
     {
 #ifdef MANGOSBOT_TWO
@@ -3885,7 +3891,8 @@ bool JumpAction::Execute(ai::Event &event)
 
                     float pointAngle = src.getAngleTo(jumpPoint);
                     sServerFacade.SetFacingTo(bot, pointAngle, true);
-                    bot->HandleEmoteCommand(EMOTE_ONESHOT_POINT);
+                    if (!ai->SilvermoonQuiet())
+                        bot->HandleEmoteCommand(EMOTE_ONESHOT_POINT);
                     SetDuration(sPlayerbotAIConfig.reactDelay);
                     return true;
                 }
@@ -3907,7 +3914,8 @@ bool JumpAction::Execute(ai::Event &event)
 
                     float pointAngle = src.getAngleTo(possibleLanding);
                     sServerFacade.SetFacingTo(bot, pointAngle, true);
-                    bot->HandleEmoteCommand(EMOTE_ONESHOT_POINT);
+                    if (!ai->SilvermoonQuiet())
+                        bot->HandleEmoteCommand(EMOTE_ONESHOT_POINT);
                     SetDuration(sPlayerbotAIConfig.reactDelay);
                     return true;
                 }
@@ -3970,7 +3978,8 @@ bool JumpAction::Execute(ai::Event &event)
                 WorldPosition botPos = WorldPosition(bot);
                 float pointAngle = botPos.getAngleTo(jumpLanding);
                 sServerFacade.SetFacingTo(bot, pointAngle, true);
-                bot->HandleEmoteCommand(EMOTE_ONESHOT_POINT);
+                if (!ai->SilvermoonQuiet())
+                    bot->HandleEmoteCommand(EMOTE_ONESHOT_POINT);
                 SetDuration(sPlayerbotAIConfig.reactDelay);
                 return true;
             }

@@ -767,6 +767,8 @@ bool ai::SilvermoonGoCommand(Player* bot, std::string const& param, std::string&
     if (!add)
         goQueue.erase(guid);        // a plain Go to replaces the whole plan
     reply = "Heading to " + order.what + ".";
+    // 1.8.2 diagnostic (S: "go to vendor" from the bags did nothing on Chino with the action queue on)
+    sLog.outBasic("Silvermoon: %s ordered Go to %s", bot->GetName(), order.what.c_str());
     return true;
 }
 
@@ -1303,7 +1305,7 @@ bool ai::SilvermoonGoGoal(Player* bot, SilvermoonScoredGoal& goal)
             float landingToDest = std::hypot(to->x - best->x, to->y - best->y);
             if (bestDist - (walkToFm + landingToDest) > 600.0f)
             {
-                if (walkToFm < 20.0f)
+                if (walkToFm < 20.0f && bot->IsAlive())   // 1.8.2: no flights while dead
                 {
                     std::vector<uint32> nodes = { from->ID, to->ID };
                     bot->GetMotionMaster()->Clear();

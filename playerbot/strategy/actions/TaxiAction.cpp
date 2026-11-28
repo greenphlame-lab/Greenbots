@@ -67,7 +67,7 @@ bool TaxiAction::Execute(Event& event)
         {
             uint32 path = nodes[selected - 1];
             TaxiPathEntry const* entry = sTaxiPathStore.LookupEntry(path);
-            if (!entry) return false;
+            if (!entry || !bot->IsAlive()) return false;     // Silvermoon 1.8.2: no flights while dead
 #ifdef MANGOSBOT_TWO                
             bot->OnTaxiFlightEject(true);
 #endif

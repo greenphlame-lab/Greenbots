@@ -276,6 +276,17 @@ PlayerbotAI::~PlayerbotAI()
         delete aiObjectContext;
 }
 
+namespace ai
+{
+    uint8 SilvermoonRestTarget(Player* bot, bool mana);
+    bool SilvermoonIsOwn(Player* bot);
+}
+
+bool PlayerbotAI::SilvermoonQuiet()
+{
+    return ai::SilvermoonIsOwn(bot);
+}
+
 void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
 {
     AiObjectContext* context = aiObjectContext;
@@ -290,6 +301,35 @@ void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
     {
         aiInternalUpdateDelay = 0;
         isWaiting = false;
+    }
+
+    // Silvermoon 1.8.2 (S: "eat until 80%" - the character ate well past full and sat on): food and
+    // drink run until the buff ends (the eat step also waits a flat 24 s), whatever the health. Your
+    // characters stand up once every buff they're sitting with has done its job: health at the
+    // Policies "eat until" (full if unset), mana at "drink until".
+    if (time(nullptr) >= silvermoonFullCheckAt)
+    {
+        silvermoonFullCheckAt = time(nullptr) + 1;
+        if (bot->IsAlive() && !bot->IsInCombat() && bot->getStandState() == UNIT_STAND_STATE_SIT && ai::SilvermoonIsOwn(bot))
+        {
+            bool eating = bot->HasAuraType(SPELL_AURA_MOD_REGEN);
+            bool drinking = bot->HasAuraType(SPELL_AURA_MOD_POWER_REGEN);
+            if (eating || drinking)
+            {
+                uint8 eatTo = ai::SilvermoonRestTarget(bot, false);
+                uint8 drinkTo = ai::SilvermoonRestTarget(bot, true);
+                bool fed = !eating || bot->GetHealthPercent() >= float(eatTo ? eatTo : 100);
+                bool watered = !drinking || !bot->HasMana() || bot->GetPowerPercent() >= float(drinkTo ? drinkTo : 100);
+                if (fed && watered)
+                {
+                    bot->RemoveSpellsCausingAura(SPELL_AURA_MOD_REGEN);
+                    bot->RemoveSpellsCausingAura(SPELL_AURA_MOD_POWER_REGEN);
+                    bot->SetStandState(UNIT_STAND_STATE_STAND);
+                    aiInternalUpdateDelay = 0;
+                    isWaiting = false;
+                }
+            }
+        }
     }
 
     // cancel logout in combat
@@ -1418,7 +1458,10 @@ void PlayerbotAI::UpdateAIInternal(uint32 elapsed, bool minimal)
             // bridge, a cliff. A bot with a floor right under it (searching down from just above its
             // feet) isn't under the world, it's under a roof
             float floorBelow = bot->GetMap()->GetHeight(bot->GetPositionX(), bot->GetPositionY(), z + 2.0f);
-            bool onFloor = floorBelow > INVALID_HEIGHT + 1.0f && z - floorBelow < 10.0f;
+            // 1.8.2: any surface under it counts, however far down - a bot falling off a cliff is in the air
+            // above real ground, and was put back on the cliff top over and over (Umuhm 22 times in 15
+            // minutes in Dun Morogh). Under the world there is nothing below to find.
+            bool onFloor = floorBelow > INVALID_HEIGHT + 1.0f;
             if (ground > INVALID_HEIGHT + 1.0f && z < ground - 20.0f && !onFloor)
             {
                 sLog.outBasic("Silvermoon: %s fell through the ground at %.0f %.0f (z %.0f, ground %.0f), put back on it",
@@ -2939,6 +2982,8 @@ bool PlayerbotAI::PlaySound(uint32 emote)
 
 bool PlayerbotAI::PlayEmote(uint32 emote)
 {
+    if (SilvermoonQuiet())
+        return false;            // 1.8.2 (S: "bot still occasionally emoting when on auto")
     WorldPacket data(SMSG_TEXT_EMOTE);
     data << (TextEmotes)emote;
     data << urand(0, EmoteAction::GetNumberOfEmoteVariants((TextEmotes)emote, bot->getRace(), bot->getGender()) - 1);
@@ -4180,7 +4225,8 @@ bool PlayerbotAI::TellPlayer(Player* player, std::string text, PlayerbotSecurity
         if (!sServerFacade.IsInFront(bot, player, sPlayerbotAIConfig.sightDistance, EMOTE_ANGLE_IN_FRONT))
             sServerFacade.SetFacingTo(bot, player);
 
-        bot->HandleEmoteCommand(EMOTE_ONESHOT_TALK);
+        if (!SilvermoonQuiet())
+            bot->HandleEmoteCommand(EMOTE_ONESHOT_TALK);
     }
 
     return true;

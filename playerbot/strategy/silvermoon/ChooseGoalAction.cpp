@@ -287,6 +287,14 @@ namespace
         }
         if (quest->GetRequiredClasses())
         {
+            // 1.8.2 (S: Nynitiz, a level 22 warrior, kept going back to Coldridge Valley): a class quest
+            // far below the bot (the level 1 trainer letters) isn't worth a trip
+            int32 ql = quest->GetQuestLevel() > 0 ? quest->GetQuestLevel() : int32(bot->GetLevel());
+            if (int32(bot->GetLevel()) - ql > 10)
+            {
+                tag = "class quest, far below me: ";
+                return 0.0f;
+            }
             tag = "class quest: ";
             return 2.0f;
         }
@@ -605,7 +613,19 @@ static SilvermoonScoredGoal ScoreWith(Player* bot, BotSnapshot const& snapshot, 
     uint32 colourQuest = 0;
     if (c.kind == GoalKind::QuestGiver)
         if (QuestRelationTravelDestination* q = dynamic_cast<QuestRelationTravelDestination*>(destination))
+        {
             colourQuest = q->GetQuestId();
+            // 1.8.2 (S: Nynitiz walked to Sten Stoutarm every 5 minutes for "Simple Memorandum", done long
+            // ago): the giver counts as "has a quest" when it has any quest for the bot (here a grey
+            // one it never takes), but the goal is scored for this quest - which must be takeable
+            Quest const* qt = sObjectMgr.GetQuestTemplate(colourQuest);
+            if (qt && (bot->GetQuestRewardStatus(colourQuest) || bot->GetQuestStatus(colourQuest) != QUEST_STATUS_NONE || !bot->CanTakeQuest(qt, false)))
+            {
+                goal.score.score = 0.0f;
+                goal.score.reason = "quest not takeable: " + goal.score.reason;
+                colourQuest = 0;
+            }
+        }
     if (c.kind == GoalKind::QuestObjective)
         if (QuestObjectiveTravelDestination* o = dynamic_cast<QuestObjectiveTravelDestination*>(destination))
             colourQuest = o->GetQuestId();
@@ -877,7 +897,13 @@ bool ChooseGoalAction::Execute(Event& event)
     if (SilvermoonGoIsYours(bot) || !SilvermoonResSickRestApplies(bot))
     {
         SilvermoonScoredGoal go;
-        if (SilvermoonGoGoal(bot, go) && go.destination && go.position)
+        bool hadOrder = SilvermoonGoIsYours(bot);
+        bool gotGo = SilvermoonGoGoal(bot, go);
+        // 1.8.2 diagnostic: your order there, but no trip came of it
+        if (hadOrder && (!gotGo || !go.destination || !go.position))
+            sLog.outBasic("Silvermoon: %s Go to order gave no trip (%s)", bot->GetName(),
+                !gotGo ? (SilvermoonGoIsYours(bot) ? "no spot found" : "order finished") : "no destination");
+        if (gotGo && go.destination && go.position)
         {
             travelTarget->SetStatus(TravelStatus::TRAVEL_STATUS_NONE);
             TravelTarget newTarget = TravelTarget(ai);
@@ -1287,8 +1313,9 @@ bool ChooseGoalAction::Execute(Event& event)
                 goals = fitting;
             else if (SilvermoonQueueOnly(bot))
             {
-                // queue only, and nothing found for the step yet: wait and look again
-                SET_AI_VALUE2(int, "manual int", "silvermoon goal retry at", int(time(nullptr) + 30));
+                // queue only, and nothing found for the step yet: wait and look again (10 s, 1.8.2: S saw
+                // the bot stand idle after reordering the queue)
+                SET_AI_VALUE2(int, "manual int", "silvermoon goal retry at", int(time(nullptr) + 10));
                 return false;
             }
         }

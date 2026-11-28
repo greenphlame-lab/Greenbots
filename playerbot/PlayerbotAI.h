@@ -643,6 +643,7 @@ public:
 
     //Checks if the bot is really a player. Players always have themselves as master.
     bool IsRealPlayer() { return bot->GetSession()->GetRemoteAddress() != "disconnected/bot"; }
+    bool SilvermoonQuiet();   // 1.8.2: your characters (Auto, auto alts) never emote on their own
     bool IsRealPlayer(Unit* unit) { return unit->IsPlayer() && ((Player*)unit)->GetSession()->GetRemoteAddress() != "disconnected/bot"; }
     bool IsSelfMaster() { return master ? (master == bot) : false; }
     //Bot has a master that is a player.
@@ -795,6 +796,7 @@ protected:
     std::deque<WorldPacket> deferredChat;
     // Silvermoon: falling through the world (see UpdateAIInternal)
     time_t silvermoonGroundCheckAt = 0;
+    time_t silvermoonFullCheckAt = 0;     // 1.8.2: stand up from food/drink at the Policies target
     float silvermoonLastZ = 0.0f;
     std::mutex deferredChatMutex;
     PacketHandlingHelper botOutgoingPacketHandlers;

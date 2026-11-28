@@ -122,7 +122,7 @@ bool MoveToTravelTargetAction::Execute(Event& event)
             SetDuration(randomDelay);
 
             // Occasionally face the member and perform an emote
-            if (urand(0, 3) == 0) { // 25% chance to emote
+            if (!ai->SilvermoonQuiet() && urand(0, 3) == 0) { // 25% chance to emote (1.8.2: not your characters)
                 bot->SetFacingToObject(member);
                 uint32 emoteChoice = urand(0, 2);
                 switch (emoteChoice) {

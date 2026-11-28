@@ -8,6 +8,7 @@
 #include <cstring>
 #include <set>
 #include <cstdlib>
+#include <memory>
 #include <mutex>
 #include <sstream>
 #include <unordered_map>
@@ -330,6 +331,17 @@ std::vector<SilvermoonRotDefault> ai::SilvermoonDefaultRotation(Player* bot)
 {
     std::vector<SilvermoonRotDefault> out;
     PlayerbotAI* ai = bot ? bot->GetPlayerbotAI() : nullptr;
+    // 1.8.2 (S: "default rotation still not show up on first login"): a character on Manual has no AI
+    // to read its class rotation from, so a throwaway one is built just to list it, never attached to
+    // the character (the same AI the self-bot switch builds for your character)
+    std::unique_ptr<PlayerbotAI> temp;
+    if (!ai && bot && bot->IsInWorld())
+    {
+        bool taxiCheater = bot->isTaxiCheater();
+        temp.reset(new PlayerbotAI(bot));
+        bot->SetTaxiCheater(taxiCheater);            // the constructor may switch it on: never for this
+        ai = temp.get();
+    }
     Engine* engine = ai ? ai->SilvermoonEngine(BotState::BOT_STATE_COMBAT) : nullptr;
     if (!engine)
         return out;

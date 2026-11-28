@@ -102,6 +102,8 @@ void EmoteActionBase::InitEmotes()
 
 bool EmoteActionBase::Emote(Unit* target, uint32 type, bool textEmote)
 {
+    if (ai->SilvermoonQuiet())
+        return false;            // 1.8.2 (S: "bot still occasionally emoting when on auto")
     if (target && !sServerFacade.IsInFront(bot, target, sPlayerbotAIConfig.sightDistance, M_PI_F))
         sServerFacade.SetFacingTo(bot, target);
 

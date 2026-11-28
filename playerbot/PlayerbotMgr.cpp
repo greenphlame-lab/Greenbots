@@ -301,8 +301,14 @@ void PlayerbotHolder::DisablePlayerBot(uint32 guid, bool logOutPlayer)
             bot->GetSession()->SetOffline(); //Prevent groupkick
         bot->GetPlayerbotAI()->TellPlayer(bot->GetPlayerbotAI()->GetMaster(), BOT_TEXT("goodbye"));
         bot->GetPlayerbotAI()->StopMoving();
-        MotionMaster& mm = *bot->GetMotionMaster();
-        mm.Clear();
+        // Silvermoon 1.8.2 (S: switching Auto to Manual cancelled the flight in progress): clearing the
+        // motion master drops the taxi path and leaves you standing in the air. On a flight the
+        // flight keeps going and lands you where it was headed.
+        if (!bot->IsTaxiFlying())
+        {
+            MotionMaster& mm = *bot->GetMotionMaster();
+            mm.Clear();
+        }
 
         if (!sPlayerbotAIConfig.bExplicitDbStoreSave)
         {
@@ -776,8 +782,11 @@ std::list<std::string> PlayerbotHolder::HandlePlayerbotCommand(const std::string
         {
             // re-choose now with the queue as it is
             if (TravelTarget* target = master->GetPlayerbotAI()->GetAiObjectContext()->GetValue<TravelTarget*>("travel target")->Get())
-                if (target->IsActive() && param.rfind("aq find", 0) != 0)
-                    target->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
+                if ((target->IsActive() || target->GetStatus() == TravelStatus::TRAVEL_STATUS_PREPARE) && param.rfind("aq find", 0) != 0)
+                    target->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);   // 1.8.2: a search still running was for the old step
+            // 1.8.2: and no "try again in 30 seconds" wait from before - the new order counts now
+            if (param.rfind("aq find", 0) != 0)
+                master->GetPlayerbotAI()->GetAiObjectContext()->GetValue<int>("manual int", "silvermoon goal retry at")->Set(0);
             master->GetPlayerbotAI()->TellPlayerNoFacing(master, reply);
         }
         return messages;

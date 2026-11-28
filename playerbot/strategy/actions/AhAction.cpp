@@ -90,7 +90,12 @@ bool AhAction::ExecuteCommand(Player* requester, std::string text, Unit* auction
             // Silvermoon 1.8: or 3 times the deposit in the purse (it comes back when the item sells) -
             // reserves left bots at 5-60 silver no "free" money, and nothing was posted
             if (deposit > freeMoney && bot->GetMoney() < deposit * 3)
+            {
+                // Silvermoon 1.8.2: your characters skip what they can't afford and try the rest
+                if (ai::SilvermoonIsOwn(bot))
+                    continue;
                 return false;
+            }
 
             const ItemPrototype* proto = item->GetProto();
 
@@ -112,7 +117,9 @@ bool AhAction::ExecuteCommand(Player* requester, std::string text, Unit* auction
                     postedItems++;
             }
 
-            if (!urand(0, 5 + (items.size()- postedItems)/10))
+            // Silvermoon 1.8.2 (S: "didn't capture every single item"): the stock random stop after each
+            // posting left most of the bags unposted; your characters post everything in one visit
+            if (!ai::SilvermoonIsOwn(bot) && !urand(0, 5 + (items.size()- postedItems)/10))
                 break;
         }
 

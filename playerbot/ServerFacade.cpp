@@ -88,7 +88,13 @@ bool ServerFacade::IsDistanceLessOrEqualThan(float dist1, float dist2)
 void ServerFacade::SetFacingTo(Unit* unit, float angle, bool force)
 {
     MotionMaster &mm = *unit->GetMotionMaster();
-    if (!force && !unit->IsStopped()) unit->SetFacingTo(angle);
+    // Silvermoon 1.8.2 (S: your character on Auto faced the wrong way in combat): a standing unit was
+    // only turned on the server and told to everyone else - your own game client never heard, so on
+    // your screen the character kept facing where it was. A character you are logged in on is turned
+    // the way movement reaches your client.
+    bool ownClient = unit->GetTypeId() == TYPEID_PLAYER && ((Player*)unit)->GetPlayerbotAI() &&
+        ((Player*)unit)->GetPlayerbotAI()->IsRealPlayer();
+    if ((!force && !unit->IsStopped()) || ownClient) unit->SetFacingTo(angle);
     else
     {
         unit->SetOrientation(angle);

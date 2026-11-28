@@ -209,6 +209,8 @@ bool RpgTaxiAction::Execute(Event& event)
     TaxiNodesEntry const* nodeTo = sTaxiNodesStore.LookupEntry(entry->to);
 
     Creature* flightMaster = bot->GetNPCIfCanInteractWith(guidP, UNIT_NPC_FLAG_FLIGHTMASTER);
+    if (!bot->IsAlive())
+        return false;                // Silvermoon 1.8.2: no flights while dead
     if (!flightMaster)
     {
         sLog.outError("Bot %s cannot talk to flightmaster (%zu location available)", bot->GetName(), nodes.size());
