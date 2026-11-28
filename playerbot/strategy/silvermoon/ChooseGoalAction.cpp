@@ -773,7 +773,10 @@ std::vector<SilvermoonScoredGoal> ai::SilvermoonScoreGoals(Player* bot, Playerbo
                 if (recent || gatherStops >= 12)
                     continue;
             }
-            else if (!destination || !seen.insert(destination).second || skip.count(destination))
+            // (1.8.7, S: Chino picked his queued Ironforge turn-in once, the trip fell through, and the turn-in
+            // went on the "given up, leave it out" list - so queue only then found nothing and waited. The
+            // queued quest's own goals are never left out.)
+            else if (!destination || !seen.insert(destination).second || (skip.count(destination) && !forQueue(destination)))
                 continue;
             // a gathering spot under a gather order only has to be possible (skill): "active" means a
             // node of that kind in sight whenever the bot stands inside the herb's area, so in the
