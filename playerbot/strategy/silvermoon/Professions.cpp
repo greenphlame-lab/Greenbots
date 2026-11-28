@@ -923,6 +923,139 @@ void ai::SilvermoonLevelPass(Player* bot)
     }
 }
 
+void ai::SilvermoonRoguePoisons(Player* bot)
+{
+    if (!bot || bot->getClass() != CLASS_ROGUE || bot->GetLevel() < 20 || !bot->IsAlive() || bot->IsInCombat() || bot->IsTaxiFlying())
+        return;
+    PlayerbotAI* ai = bot->GetPlayerbotAI();
+    if (!ai)
+        return;
+    {
+        static std::mutex lock;
+        static std::unordered_map<uint32, time_t> next;
+        std::lock_guard<std::mutex> guard(lock);
+        time_t& at = next[bot->GetGUIDLow()];
+        if (time(nullptr) < at)
+            return;
+        at = time(nullptr) + 60;
+    }
+    const uint32 SKILL_POISONS = 40;
+    if (!bot->HasSkill(SKILL_POISONS))
+    {
+        // the quest's reward: the trainer's teaching spell, as the quest giver casts it
+        bot->CastSpell(bot, 2995, TRIGGERED_OLD_TRIGGERED);
+        if (!bot->HasSkill(SKILL_POISONS))
+            bot->learnSpell(2842, false);
+        sLog.outBasic("Silvermoon: rogue %s (level %u) learned Poisons", bot->GetName(), bot->GetLevel());
+        if (SilvermoonIsOwn(bot))
+            SilvermoonAwayNote(bot, "Learned Poisons");
+        return;
+    }
+    // the poison to keep: the best known Instant Poison, else Deadly Poison
+    SpellEntry const* best = nullptr;
+    uint32 bestRank = 0;
+    for (auto const& sp : bot->GetSpellMap())
+    {
+        if (sp.second.state == PLAYERSPELL_REMOVED || sp.second.disabled)
+            continue;
+        SpellEntry const* e = sServerFacade.LookupSpellInfo(sp.first);
+        if (!e || e->Effect[0] != SPELL_EFFECT_CREATE_ITEM || SkillOfSpell(sp.first) != SKILL_POISONS || !e->SpellName[0])
+            continue;
+        std::string name = e->SpellName[0];
+        uint32 rank = name.rfind("Instant Poison", 0) == 0 ? 2000 : name.rfind("Deadly Poison", 0) == 0 ? 1000 : 0;
+        if (!rank)
+            continue;
+        rank += e->spellLevel;
+        if (rank > bestRank)
+        {
+            best = e;
+            bestRank = rank;
+        }
+    }
+    if (!best)
+        return;                      // no recipe yet: the trainer teaches them
+    uint32 itemId = best->EffectItemType[0];
+    uint32 have = bot->GetItemCount(itemId);
+    if (have >= 10)
+        return;
+    uint32 crafted = 0, wantItem = 0;
+    while (bot->GetItemCount(itemId) < 20 && crafted < 20)
+    {
+        // reagents: buy what's missing from a vendor in reach (a quarter of the money at most)
+        bool ready = true;
+        for (uint8 i = 0; i < MAX_SPELL_REAGENTS && ready; ++i)
+        {
+            if (best->Reagent[i] <= 0 || !best->ReagentCount[i])
+                continue;
+            uint32 reagent = uint32(best->Reagent[i]);
+            if (bot->GetItemCount(reagent) >= best->ReagentCount[i])
+                continue;
+            ItemPrototype const* rp = sObjectMgr.GetItemPrototype(reagent);
+            std::set<uint32> const& sellers = VendorsSelling(reagent);
+            Creature* seller = nullptr;
+            for (ObjectGuid const& g : ai->GetAiObjectContext()->GetValue<std::list<ObjectGuid>>("nearest npcs")->Get())
+                if (Creature* c = bot->GetMap()->GetCreature(g))
+                    if (sellers.count(c->GetEntry()) && !c->IsEnemy(bot) && bot->GetDistance(c) < 30.0f)
+                        seller = c;
+            uint32 buyCount = rp && rp->BuyCount ? rp->BuyCount : 1;
+            uint32 need = best->ReagentCount[i] - bot->GetItemCount(reagent);
+            uint32 lots = (need + buyCount - 1) / buyCount;
+            ItemPosCountVec dest;
+            if (!seller || !rp || rp->BuyPrice * lots * 4 > bot->GetMoney() ||
+                bot->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, reagent, lots * buyCount) != EQUIP_ERR_OK)
+            {
+                ready = false;
+                if (!sellers.empty() && !wantItem)
+                    wantItem = reagent;
+                break;
+            }
+            bot->ModifyMoney(-int32(rp->BuyPrice * lots));
+            bot->StoreNewItem(dest, reagent, true);
+        }
+        if (!ready)
+            break;
+        int32 made = best->CalculateSimpleValue(EFFECT_INDEX_0);
+        uint32 count = uint32(std::max(1, std::min(made, 20)));
+        ItemPosCountVec dest;
+        if (bot->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, itemId, count) != EQUIP_ERR_OK)
+            break;
+        for (uint8 i = 0; i < MAX_SPELL_REAGENTS; ++i)
+            if (best->Reagent[i] > 0 && best->ReagentCount[i])
+                bot->DestroyItemCount(uint32(best->Reagent[i]), best->ReagentCount[i], true);
+        bot->StoreNewItem(dest, itemId, true);
+        bot->UpdateCraftSkill(best->Id);
+        ++crafted;
+    }
+    if (crafted)
+    {
+        ItemPrototype const* ip = sObjectMgr.GetItemPrototype(itemId);
+        sLog.outBasic("Silvermoon: rogue %s made %u x %s", bot->GetName(), crafted, ip ? ip->Name1 : "poison");
+        return;
+    }
+    // none left and no reagents in reach: a trip to a vendor that sells them, at most once an hour
+    if (!have && wantItem && bot->GetMoney() > 2000)
+    {
+        static std::mutex tripLock;
+        static std::unordered_map<uint32, time_t> lastTrip;
+        {
+            std::lock_guard<std::mutex> guard(tripLock);
+            time_t& t = lastTrip[bot->GetGUIDLow()];
+            if (time(nullptr) - t < HOUR)
+                return;
+            t = time(nullptr);
+        }
+        ItemPrototype const* rp = sObjectMgr.GetItemPrototype(wantItem);
+        std::lock_guard<std::mutex> guard(orderLock);
+        if (goOrders.count(bot->GetGUIDLow()))
+            return;
+        GoOrder& order = goOrders[bot->GetGUIDLow()];
+        order.flag = UNIT_NPC_FLAG_VENDOR;
+        order.what = std::string("a vendor for ") + (rp ? rp->Name1 : "poison reagents");
+        order.entries = VendorsSelling(wantItem);
+        order.at = time(nullptr);
+    }
+}
+
 // Profession ranks (S, 1.6.22: "hit the threshold, and the #1 priority is to go train the next level,
 // as long as level and money permit"): every rank the profession trainers teach - the skill, the skill
 // and level it needs, its price, the spell the trainer casts and the one learned - and which trainers

@@ -38,6 +38,12 @@ namespace ai
     // sells is bought from a vendor standing nearby, or the character goes to the nearest vendor
     // that sells it. Command: ".bot prof level <skill>" / ".bot prof unlevel <skill>"
     void SilvermoonLevelPass(Player* bot);
+    // Rogue poisons (S, 1.8.1: "no logic for poisons"): every rogue of 20+ gets the Poisons skill (the
+    // reward of the level 20 rogue quest, Klaven's Tower / Hinott's Assistance - bots never finish those
+    // chains), keeps 10-20 of its best known Instant Poison (else Deadly) made from reagents bought at a
+    // vendor in reach, and goes to a vendor selling them when out. Applying them is the stock "poisons"
+    // step. Called often; throttled per character.
+    void SilvermoonRoguePoisons(Player* bot);
 
     // "Go to" (S): send your character to the nearest friendly inn(keeper), flight master, auction
     // house, bank or vendor on its continent - ahead of everything else until it gets there.

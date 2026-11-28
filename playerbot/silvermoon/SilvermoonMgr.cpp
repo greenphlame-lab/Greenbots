@@ -1863,6 +1863,7 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                             SilvermoonInnBind(me);
                             SilvermoonLevelPass(me);   // "Level it" orders (Professions window)
                             SilvermoonOwnIdleWatch(me);   // stood still with somewhere to go (1.7.2)
+                            SilvermoonRoguePoisons(me);   // 1.8.1: your rogues too
                             // a Gather order needs the gathering step (it finds and loots the nodes)
                             if ((SilvermoonGatherOrderFactor(me->GetGUIDLow(), 182) > 1.0f || SilvermoonGatherOrderFactor(me->GetGUIDLow(), 186) > 1.0f ||
                                  SilvermoonGatherOrderFactor(me->GetGUIDLow(), 356) > 1.0f) &&
@@ -3573,6 +3574,7 @@ void RandomPlayerbotMgr::SilvermoonFastProcessBot(Player* player, PlayerbotAI* a
     bool stuckDue = false, progressDue = false;
     // recovery (S, 1.6.20): cash-out and struggling flags, the safe way out (Recovery.cpp)
     SilvermoonRecoveryTick(player);
+    SilvermoonRoguePoisons(player);     // 1.8.1: rogues learn, make and carry poisons
     // gold watch: a bot whose money jumps by 5 gold or more within one 10-second check is logged
     // with what it is doing (5 Horde casters gained 50-96 gold in one hour on 2026-11-22 and the
     // cause could not be traced afterwards)
