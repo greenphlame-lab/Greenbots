@@ -316,7 +316,7 @@ bool AddGatheringLootAction::AddLoot(Player* requester, ObjectGuid guid)
     // 1.8.4 (S: "copper on Chino's minimap but when on another task no attention paid to it - when nodes
     // show, go grab them no matter where you're headed"): your characters pick any herb or ore node their
     // skill can gather within minimap tracking range (about 90 yards), whatever the current task
-    if (loot.skillId && (loot.skillId == SKILL_MINING || loot.skillId == SKILL_HERBALISM) && ai::SilvermoonIsOwn(bot))
+    if (loot.skillId && (loot.skillId == SKILL_MINING || loot.skillId == SKILL_HERBALISM))   // all bots (S: "not just my char")
         gatheringDistanceToUse = std::max(gatheringDistanceToUse, 90.0f);
 
     if (sServerFacade.IsDistanceGreaterThan(sServerFacade.GetDistance2d(requester, wo), gatheringDistanceToUse))
