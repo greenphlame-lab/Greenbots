@@ -737,13 +737,26 @@ std::vector<SilvermoonScoredGoal> ai::SilvermoonScoreGoals(Player* bot, Playerbo
             recentSpots.push_back(v.first);
     }
     uint32 gatherStops = 0;
+    // 1.8.4 (S: Chino on Auto, "Road to Salvation" queued, did nothing - its turn-in is in Ironforge, a
+    // zone his Policies leave out, and far enough to fall past the 40 nearest candidates): the queued
+    // quest's own giver, objectives and turn-in pass the zone list and the cap - you asked for them
+    uint32 queueQuest = SilvermoonQueueFetchQuest(bot);
+    auto forQueue = [&](TravelDestination* d) -> bool
+    {
+        if (!queueQuest || !d)
+            return false;
+        QuestTravelDestination* qd = dynamic_cast<QuestTravelDestination*>(d);
+        return qd && qd->GetQuestId() == queueQuest;
+    };
     // partitions are ordered by distance, so this walks nearest first
     for (auto& [partition, points] : list)
     {
         for (auto& [destination, position, distance] : points)
         {
-            if (goals.size() >= MAX_CANDIDATES && !gatherOrder)
+            if (goals.size() >= MAX_CANDIDATES && !gatherOrder && !queueQuest)
                 break;
+            if (goals.size() >= MAX_CANDIDATES && queueQuest && !gatherOrder && !forQueue(destination))
+                continue;
             if (goals.size() >= MAX_CANDIDATES && (!destination ||
                 (destination->GetPurpose() != TravelDestinationPurpose::GatherHerbalism && destination->GetPurpose() != TravelDestinationPurpose::GatherMining &&
                  destination->GetPurpose() != TravelDestinationPurpose::GatherFishing)))
@@ -776,7 +789,7 @@ std::vector<SilvermoonScoredGoal> ai::SilvermoonScoreGoals(Player* bot, Playerbo
             if (position && position->getMapId() != bot->GetMapId())
                 continue;
             // policies (S): zones ticked off in the Policies window are never goals
-            if (position && policyZones)
+            if (position && policyZones && !forQueue(destination))
             {
                 uint32 zoneId = 0, areaId = 0;
                 sTerrainMgr.GetZoneAndAreaId(zoneId, areaId, position->getMapId(), position->getX(), position->getY(), position->getZ());
