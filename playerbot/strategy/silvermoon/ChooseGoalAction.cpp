@@ -786,8 +786,8 @@ std::vector<SilvermoonScoredGoal> ai::SilvermoonScoreGoals(Player* bot, Playerbo
             // another map (continent): only relocation crosses an ocean - a quest objective on the other
             // continent scored like a local one and the bot wandered, killing grey mobs (Guile, in
             // Tirisfal, "doing" Kron's Amulet in Durotar)
-            if (position && position->getMapId() != bot->GetMapId())
-                continue;
+            if (position && position->getMapId() != bot->GetMapId() && !forQueue(destination))
+                continue;                // (1.8.6: the queued quest may cross the sea - the route takes the boat)
             // policies (S): zones ticked off in the Policies window are never goals
             if (position && policyZones && !forQueue(destination))
             {

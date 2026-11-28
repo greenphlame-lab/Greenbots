@@ -44,8 +44,10 @@ std::vector<SilvermoonGoalFetch> ai::SilvermoonBuildGoalFetches(PlayerbotAI* ai,
                     flag |= (uint32)(1 << (objective + 1));
             }
         }
+        // 1.8.6 (S: "a distant trip ... will work under the action queue?"): the queued quest's turn-in and
+        // objectives are looked for across the whole continent (a level 3 otherwise searched 1,700 yards)
         if (flag)
-            fetches.push_back({ flag, { (int32)questId }, 1000.0f + (level * level) * 75.0f });
+            fetches.push_back({ flag, { (int32)questId }, questId == SilvermoonQueueFetchQuest(bot) ? 10000.0f : 1000.0f + (level * level) * 75.0f });
     }
 
     // action queue (S, 1.8): the top step's quest giver and grind spots from much further out, and
