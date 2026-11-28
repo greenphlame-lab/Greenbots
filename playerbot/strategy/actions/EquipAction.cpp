@@ -342,7 +342,11 @@ bool EquipUpgradesAction::Execute(Event& event)
     // Silvermoon: your own character on Auto (self-bot) does equip upgrades (S, 2026-11-24). It no
     // longer takes the weapons off first, though: with everything else "keep" that left Guile unarmed
     // after a vendor visit (and said "my bags are full" when the backpack was full)
-    bool selfBot = ai->IsRealPlayer();
+    // Silvermoon 1.8.3 (S: Chino took off his Anvilmar Knife and stayed unarmed): the check took the
+    // weapons off first and put the best back on - but with "Ask before equipping upgrades" the knife
+    // itself then waited an hour for your answer. Your characters (Auto, always online) keep what they
+    // wear and only swap when something better is allowed on, like your character on Auto always did.
+    bool selfBot = ai->IsRealPlayer() || SilvermoonIsOwn(bot);
     if (!sPlayerbotAIConfig.autoEquipUpgradeLoot && !sRandomPlayerbotMgr.IsRandomBot(bot))
         return false;
 
