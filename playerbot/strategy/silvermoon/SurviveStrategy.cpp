@@ -133,6 +133,9 @@ bool PolicyRotationAction::Pick(std::string& name, Unit*& target)
             continue;
         if ((cond & 32) && !enemy->IsNonMeleeSpellCasted(false))
             continue;
+        // target is humanoid (1.8.1, S: Pick Pocket "just if humanoid")
+        if ((cond & 128) && enemy->GetCreatureType() != CREATURE_TYPE_HUMANOID)
+            continue;
         // combo points (1.8.1, S: rogue finishers "if x combo points"): N * 256 = at least N
         if (uint32 cp = (cond >> 8) & 7)
             if (bot->GetComboPoints() < cp)

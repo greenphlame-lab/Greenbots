@@ -347,7 +347,7 @@ std::vector<SilvermoonRotDefault> ai::SilvermoonDefaultRotation(Player* bot)
         if (Lower(name).rfind("zz", 0) == 0)
             continue;
         std::string t = Lower(trigger), a = Lower(action);
-        uint8 cond = 16;                 // the class's own rule
+        uint16 cond = 16;                 // the class's own rule
         if (t == "default")
             cond = 0;
         else if (t.find("target") != std::string::npos && (t.find("low health") != std::string::npos || t.find("critical health") != std::string::npos))
@@ -361,6 +361,19 @@ std::vector<SilvermoonRotDefault> ai::SilvermoonDefaultRotation(Player* bot)
             cond = 1;
         else if (t.find("interrupt") != std::string::npos || t.find("casting") != std::string::npos)
             cond = 32;
+        // finishers (1.8.1): the class's combo-point rule as "at least N combo points" (5 unless the
+        // rule names a number)
+        if (t.find("combo") != std::string::npos)
+        {
+            uint32 n = 5;
+            for (char ch : t)
+                if (ch >= '1' && ch <= '5')
+                    n = uint32(ch - '0');
+            cond = uint16(n * 256);
+        }
+        // Pick Pocket (1.8.1, S): "just if humanoid", not the class's "behind target"
+        if (a == "pick pocket")
+            cond = 128;
         SilvermoonRotDefault& e = best[Lower(name)];
         if (e.name.empty() || relevance > e.relevance)
         {
