@@ -692,9 +692,16 @@ bool RefreshTravelTargetAction::isUseful()
     return true;
 }
 
+namespace ai { bool SilvermoonIsOwn(Player* bot); }
+
 bool ResetTargetAction::Execute(Event& event)
 {
     TravelTarget* oldTarget = AI_VALUE(TravelTarget*, "travel target");
+    // 1.8.7 diagnostic (S: Chino stood still on a queued turn-in): your characters' trip resets are logged
+    // with the trip's real state
+    if (SilvermoonIsOwn(bot))
+        sLog.outBasic("Silvermoon: %s reset its trip (status %u, forced %d, %s)", bot->GetName(), uint32(oldTarget->GetStatus()),
+            oldTarget->IsForced() ? 1 : 0, oldTarget->GetDestination() ? oldTarget->GetDestination()->GetTitle().c_str() : "no destination");
 
     context->ClearValues("no active travel destinations");
 

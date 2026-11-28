@@ -940,7 +940,9 @@ void TravelTarget::SetStatus(TravelStatus status) {
     // Silvermoon 1.7.5 diagnostic (S: Go trips to far trainers re-planned every 2-3 seconds): a
     // forced trip to a far temporary spot that is cut off gets a backtrace in the log, at most one
     // every 20 seconds server-wide (resolve the +offsets with gdb "info symbol" on mangosd)
-    if ((status == TravelStatus::TRAVEL_STATUS_EXPIRED || status == TravelStatus::TRAVEL_STATUS_COOLDOWN || status == TravelStatus::TRAVEL_STATUS_NONE) &&
+    // (1.8.7: NONE left out - a brand-new travel target sets it from uninitialised fields, which logged
+    // false "trip cut" lines with garbage distances)
+    if ((status == TravelStatus::TRAVEL_STATUS_EXPIRED || status == TravelStatus::TRAVEL_STATUS_COOLDOWN) &&
         (m_status == TravelStatus::TRAVEL_STATUS_READY || m_status == TravelStatus::TRAVEL_STATUS_TRAVEL) && bot && tDestination && wPosition &&
         ((forced && dynamic_cast<TemporaryTravelDestination*>(tDestination) && wPosition->distance(WorldPosition(bot)) > 500.0f) ||
          // 1.8.5: any trip of your characters cut with 100+ yards to go (S: Chino stood still on a queued turn-in)

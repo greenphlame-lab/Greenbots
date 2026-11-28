@@ -1,5 +1,6 @@
 #pragma once
 #include "playerbot/strategy/triggers/GenericTriggers.h"
+#include "playerbot/TravelMgr.h"
 
 namespace ai
 {
@@ -102,6 +103,9 @@ namespace ai
             {
                 if (!AI_VALUE(bool, "has attackers") && !AI_VALUE(bool, "has enemy player targets"))
                 {
+                    // 1.8.7: on a trip, stealth comes off so it travels at full speed
+                    if (AI_VALUE(TravelTarget*, "travel target")->GetStatus() == TravelStatus::TRAVEL_STATUS_TRAVEL)
+                        return true;
                     if (AI_VALUE2(bool, "moving", "self target"))
                     {
                         if (ai->GetMaster())
@@ -139,6 +143,13 @@ namespace ai
             {
                 return false;
             }
+
+            // Silvermoon 1.8.7 (S: Chino on a queued turn-in "stands still and stealths and unstealths over and
+            // over"): on a trip, a mob near the road made it stealth (stopping it), then moving made it
+            // unstealth, then the mob made it stealth again - it never got anywhere. No stealthing while a
+            // trip is under way; it stealths at the destination as usual.
+            if (!bot->InBattleGround() && AI_VALUE(TravelTarget*, "travel target")->GetStatus() == TravelStatus::TRAVEL_STATUS_TRAVEL)
+                return false;
 
             Unit* target = ai->GetUnit(AI_VALUE(ObjectGuid, "enemy player target"));
             if (!target)

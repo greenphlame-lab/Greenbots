@@ -1655,7 +1655,7 @@ static void SilvermoonOwnIdleWatch(Player* me)
         if (wait && still >= 2 * MINUTE && now - lastNote[guid] >= MINUTE)
         {
             lastNote[guid] = now;
-            sLog.outBasic("Silvermoon: %s still for %u s with somewhere to go, waiting (%s)", me->GetName(), uint32(still), wait);
+            sLog.outBasic("Silvermoon: %s still for %u s with somewhere to go, waiting (%s); trip status %u, retry in %d s, purpose %s, last action %s", me->GetName(), uint32(still), wait, target ? uint32(target->GetStatus()) : 99u, ai->GetAiObjectContext()->GetValue<int>("manual int", "silvermoon goal retry at")->Get() - int(time(nullptr)), ai->GetAiObjectContext()->GetValue<std::string>("manual string", "future travel purpose")->Get().c_str(), ai->GetLastAction(BotState::BOT_STATE_NON_COMBAT).substr(0, 600).c_str());
         }
         return;
     }
