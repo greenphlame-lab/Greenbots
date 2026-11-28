@@ -1881,6 +1881,11 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                         // lifesaver was ever logged for her): the survive step (flee rules, lifesavers, potion,
                         // rotation, walking past mobs) wasn't on her combat strategies - it's added when the AI
                         // is built, before the server knows it's your character on Auto. Checked every 30 s.
+                        // 1.8.4 (S: nodes on the minimap ignored on other tasks): your characters with Mining or
+                        // Herbalism always have the gathering step (it picks nodes in tracking range, see AddLootAction)
+                        if (me->GetPlayerbotAI() && (me->HasSkill(SKILL_MINING) || me->HasSkill(SKILL_HERBALISM)) &&
+                            !me->GetPlayerbotAI()->HasStrategy("gather", BotState::BOT_STATE_NON_COMBAT))
+                            me->GetPlayerbotAI()->ChangeStrategy("+gather,+loot", BotState::BOT_STATE_NON_COMBAT);
                         // 1.8.4 (S: Chino kept killing mobs he couldn't loot): no helping with other players' tagged
                         // mobs - no loot and no XP for them
                         if (me->GetPlayerbotAI() && me->GetPlayerbotAI()->HasStrategy("attack tagged", BotState::BOT_STATE_NON_COMBAT))

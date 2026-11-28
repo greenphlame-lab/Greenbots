@@ -16,7 +16,7 @@
 using namespace ai;
 using namespace MaNGOS;
 
-namespace ai { float SilvermoonGatherOrderFactor(uint32 guid, uint32 skill); }
+namespace ai { float SilvermoonGatherOrderFactor(uint32 guid, uint32 skill); bool SilvermoonIsOwn(Player* bot); }
 
 using namespace ai;
 
@@ -313,6 +313,11 @@ bool AddGatheringLootAction::AddLoot(Player* requester, ObjectGuid guid)
     // that skill while it walks from spawn spot to spawn spot
     if (loot.skillId && SilvermoonGatherOrderFactor(bot->GetGUIDLow(), loot.skillId) > 1.0f)
         gatheringDistanceToUse = std::max(gatheringDistanceToUse, 60.0f);
+    // 1.8.4 (S: "copper on Chino's minimap but when on another task no attention paid to it - when nodes
+    // show, go grab them no matter where you're headed"): your characters pick any herb or ore node their
+    // skill can gather within minimap tracking range (about 90 yards), whatever the current task
+    if (loot.skillId && (loot.skillId == SKILL_MINING || loot.skillId == SKILL_HERBALISM) && ai::SilvermoonIsOwn(bot))
+        gatheringDistanceToUse = std::max(gatheringDistanceToUse, 90.0f);
 
     if (sServerFacade.IsDistanceGreaterThan(sServerFacade.GetDistance2d(requester, wo), gatheringDistanceToUse))
     {
