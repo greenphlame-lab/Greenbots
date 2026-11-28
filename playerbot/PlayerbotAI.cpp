@@ -9313,5 +9313,5 @@ bool PlayerbotAI::SilvermoonSyncQuests() const
 // work)
 bool PlayerbotAI::SilvermoonMuted() const
 {
-    return IsRealPlayerConst() || (sPlayerbotAIConfig.IsFreeAltBot(bot->GetGUIDLow()) && SilvermoonAutoOn(bot->GetGUIDLow()));
+    return IsRealPlayerConst() || (sPlayerbotAIConfig.IsFreeAltBot(bot->GetGUIDLow()) && SilvermoonAltAuto(bot->GetGUIDLow()));
 }

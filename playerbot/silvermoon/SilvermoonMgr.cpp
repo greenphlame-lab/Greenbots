@@ -1839,7 +1839,14 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                     it = lastSeen.erase(it);                             // you left that character
                 else
                     ++it;
-            for (uint32 g : SilvermoonAutoGuids())
+            // 1.8.3 (S: Guile showed "gone offline" though set to always online): always-online characters
+            // were only logged in at startup; now, like Auto ones, whenever nobody is playing them
+            std::vector<uint32> wanted = SilvermoonAutoGuids();
+            for (auto const& alt : sPlayerbotAIConfig.freeAltBots)
+                if (sRandomPlayerbotMgr.GetValue(alt.second, "always") == uint32(BotAlwaysOnline::ACTIVE) &&
+                    std::find(wanted.begin(), wanted.end(), alt.second) == wanted.end())
+                    wanted.push_back(alt.second);
+            for (uint32 g : wanted)
             {
                 if (realNow.count(g))
                     continue;
@@ -1852,7 +1859,7 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                 if (!sPlayerbotAIConfig.IsFreeAltBot(g))
                     sPlayerbotAIConfig.freeAltBots.push_back(std::make_pair(account, g));
                 sRandomPlayerbotMgr.AddPlayerBot(g, account);
-                sLog.outBasic("Silvermoon: character %u is on Auto and nobody is playing it, logging it in as a bot", g);
+                sLog.outBasic("Silvermoon: character %u is on Auto or always online and nobody is playing it, logging it in as a bot", g);
             }
             // the in-game panel: every logged-in player gets its own character's state
             for (auto& i : sRandomPlayerbotMgr.GetPlayers())
@@ -1938,12 +1945,12 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                 SilvermoonGhostRescue(p);
                 if (p->GetMap() && p->GetMap()->IsContinent())
                     SilvermoonRelocateTick(p, p->GetPlayerbotAI());   // trip arrival for alts (Guile)
-                if (SilvermoonAutoOn(alt.second) && !p->GetGroup() &&
+                if (SilvermoonAltAuto(alt.second) && !p->GetGroup() &&
                     !p->GetPlayerbotAI()->HasStrategy("rpg vendor", BotState::BOT_STATE_NON_COMBAT))
                     p->GetPlayerbotAI()->ChangeStrategy("+rpg vendor", BotState::BOT_STATE_NON_COMBAT);   // AH posting (see above)
-                if (SilvermoonAutoOn(alt.second) && !p->GetPlayerbotAI()->HasStrategy("silvermoon survive", BotState::BOT_STATE_COMBAT))
+                if (SilvermoonAltAuto(alt.second) && !p->GetPlayerbotAI()->HasStrategy("silvermoon survive", BotState::BOT_STATE_COMBAT))
                     p->GetPlayerbotAI()->ChangeStrategy("+silvermoon survive", BotState::BOT_STATE_COMBAT);   // flee rules etc. (1.8.1, above)
-                if (SilvermoonAutoOn(alt.second) && p->IsAlive() && !p->IsInCombat() && p->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_RESTING) &&
+                if (SilvermoonAltAuto(alt.second) && p->IsAlive() && !p->IsInCombat() && p->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_RESTING) &&
                     !GetEventValue(alt.second, "silvermoon_alt_shop"))
                 {
                     SetEventValue(alt.second, "silvermoon_alt_shop", 1, 10 * MINUTE);
@@ -1971,7 +1978,7 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
             for (auto const& alt : sPlayerbotAIConfig.freeAltBots)
             {
                 Player* p = sObjectMgr.GetPlayer(ObjectGuid(HIGHGUID_PLAYER, alt.second));
-                if (!p || !p->IsInWorld() || !p->GetPlayerbotAI() || SilvermoonAutoOn(alt.second))
+                if (!p || !p->IsInWorld() || !p->GetPlayerbotAI() || SilvermoonAltAuto(alt.second))
                     continue;
                 // not while you are playing it yourself (S: Mommy, logged in on Auto, lost the brain
                 // every 30 s here - its alt switch was off - and went back to stock questing,
@@ -1995,7 +2002,7 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
             for (auto const& alt : sPlayerbotAIConfig.freeAltBots)
             {
                 Player* p = sObjectMgr.GetPlayer(ObjectGuid(HIGHGUID_PLAYER, alt.second));
-                if (!p || !p->IsInWorld() || p->GetGroup() || p->InBattleGround() || !p->GetPlayerbotAI() || !SilvermoonAutoOn(alt.second))
+                if (!p || !p->IsInWorld() || p->GetGroup() || p->InBattleGround() || !p->GetPlayerbotAI() || !SilvermoonAltAuto(alt.second))
                     continue;
                 PlayerbotAI* pai = p->GetPlayerbotAI();
                 if (!pai->HasStrategy("travel", BotState::BOT_STATE_NON_COMBAT))

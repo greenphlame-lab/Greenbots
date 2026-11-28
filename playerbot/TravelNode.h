@@ -480,6 +480,8 @@ bool SilvermoonBuyBag(Player* bot);
 // Silvermoon auto mode (layer 1): which of S's own always-online characters play on the brain.
 // Rows in characters.silvermoon_auto; re-read every 30 s; "auto on/off" whispers write them.
 bool SilvermoonAutoOn(uint32 guid);
+// 1.8.3 (S: "play as if on auto"): Auto on, or an always-online character of yours nobody is playing
+bool SilvermoonAltAuto(uint32 guid);
 std::vector<uint32> SilvermoonAutoGuids();      // every character with auto on
 void SilvermoonSetAuto(uint32 guid, bool on);   // memory + database
 void SilvermoonLoadAuto();                      // world thread, every 30 s

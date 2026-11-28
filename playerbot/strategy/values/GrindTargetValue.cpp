@@ -235,7 +235,7 @@ Unit* GrindTargetValue::FindTargetForGrinding(int assistCount)
         // mobs 3 or more levels above it and elites it cannot handle alone.
         // (also your own characters playing on the brain: Auto, and always-online alts with auto on)
         if (((sRandomPlayerbotMgr.IsRandomBot(bot) && !ai->HasRealPlayerMaster()) || ai->IsRealPlayer() ||
-             (sPlayerbotAIConfig.IsFreeAltBot(bot) && SilvermoonAutoOn(bot->GetGUIDLow()))) &&
+             (sPlayerbotAIConfig.IsFreeAltBot(bot) && SilvermoonAltAuto(bot->GetGUIDLow()))) &&
             (!bot->GetGroup() || bot->GetGroup()->GetMembersCount() < 2) &&
             !bot->InBattleGround() && unit->GetTypeId() == TYPEID_UNIT)
         {

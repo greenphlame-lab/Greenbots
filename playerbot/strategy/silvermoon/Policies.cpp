@@ -162,7 +162,7 @@ bool ai::SilvermoonIsOwn(Player* bot)
     PlayerbotAI* ai = bot ? bot->GetPlayerbotAI() : nullptr;
     if (!ai)
         return false;
-    return ai->IsRealPlayer() || (sPlayerbotAIConfig.IsFreeAltBot(bot->GetGUIDLow()) && SilvermoonAutoOn(bot->GetGUIDLow()));
+    return ai->IsRealPlayer() || (sPlayerbotAIConfig.IsFreeAltBot(bot->GetGUIDLow()) && SilvermoonAltAuto(bot->GetGUIDLow()));
 }
 
 SilvermoonPolicy ai::SilvermoonPolicyFor(uint32 guid)

@@ -410,7 +410,7 @@ bool ChooseRpgTargetAction::Execute(Event& event)
     // Silvermoon (S): your own characters (Auto, and alts with auto on) don't role-play at all - the
     // only NPC they stop at is the one their goal is about (vendor, trainer, quest giver...); full
     // bots keep the role-play layer
-    bool ownGoalOnly = ai->IsRealPlayer() || (sPlayerbotAIConfig.IsFreeAltBot(bot) && SilvermoonAutoOn(bot->GetGUIDLow()));
+    bool ownGoalOnly = ai->IsRealPlayer() || (sPlayerbotAIConfig.IsFreeAltBot(bot) && SilvermoonAltAuto(bot->GetGUIDLow()));
     int32 goalEntry = 0;
     if (ownGoalOnly)
         if (TravelTarget* goal = AI_VALUE(TravelTarget*, "travel target"))

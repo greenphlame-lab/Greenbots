@@ -6,6 +6,7 @@
 #include <set>
 #include <cmath>
 #include "playerbot/PlayerbotAIConfig.h"
+#include "playerbot/RandomPlayerbotMgr.h"
 #include <algorithm>
 #include "playerbot/TravelMgr.h"
 
@@ -328,6 +329,13 @@ bool SilvermoonAutoOn(uint32 guid)
     std::lock_guard<std::mutex> guard(silvermoonAutoLock);
     auto it = silvermoonAuto.find(guid);
     return it != silvermoonAuto.end() && it->second;
+}
+
+bool SilvermoonAltAuto(uint32 guid)
+{
+    if (SilvermoonAutoOn(guid))
+        return true;
+    return sPlayerbotAIConfig.IsFreeAltBot(guid) && sRandomPlayerbotMgr.GetValue(guid, "always") == uint32(BotAlwaysOnline::ACTIVE);
 }
 
 std::vector<uint32> SilvermoonAutoGuids()

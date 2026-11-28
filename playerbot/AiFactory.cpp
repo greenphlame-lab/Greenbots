@@ -1000,7 +1000,7 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
                 // Brill at level 9 for hours): an ungrouped always-online alt gets it too.
                 if (sPlayerbotAIConfig.silvermoonBrain &&
                     (!facade->HasRealPlayerMaster() || (facade->IsRealPlayer() && !player->GetGroup()) ||
-                     (sPlayerbotAIConfig.IsFreeAltBot(player) && !player->GetGroup() && SilvermoonAutoOn(player->GetGUIDLow()))) &&
+                     (sPlayerbotAIConfig.IsFreeAltBot(player) && !player->GetGroup() && SilvermoonAltAuto(player->GetGUIDLow()))) &&
                     !sRandomPlayerbotMgr.SilvermoonDungeonOf(player->GetGUIDLow()))
                     nonCombatEngine->addStrategy("silvermoon brain");
                 // 1.7.2: your own characters keep up the buffs their rotation list marks "not active"
