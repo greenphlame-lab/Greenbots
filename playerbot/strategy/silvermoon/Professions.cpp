@@ -819,9 +819,15 @@ void ai::SilvermoonLevelPass(Player* bot)
     std::vector<uint32> spells = context->GetValue<std::vector<uint32>>("craft spells")->Get();
     uint32 crafted = 0;
     uint32 wantItem = 0;          // a vendor material it still needs
+    // 1.8.1 (S: "level First Aid" made a few bandages and the character ran off with materials left):
+    // a pass keeps going round its recipes while something still gets made - up to 60 crafts -
+    // instead of stopping after 5
+    for (uint32 round = 0; round < 60; ++round)
+    {
+    uint32 craftedBefore = crafted;
     for (uint32 spellId : spells)
     {
-        if (crafted >= 5)
+        if (crafted >= 60)
             break;
         uint32 skill = SkillOfSpell(spellId);
         if (!skill || !skills.count(skill) || !ShouldCraftSpellValue::SpellGivesSkillUp(spellId, bot))
@@ -900,6 +906,9 @@ void ai::SilvermoonLevelPass(Player* bot)
         ++crafted;
         if (ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId))
             sLog.outBasic("Silvermoon: %s crafted %s to level a profession", bot->GetName(), proto->Name1);
+    }
+    if (crafted == craftedBefore || crafted >= 60)
+        break;                       // nothing more it can make right now
     }
     // nothing to craft right now and a vendor material is missing: go to a vendor that sells it
     if (!crafted && wantItem && !goingSomewhere)
