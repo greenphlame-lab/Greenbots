@@ -977,7 +977,9 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
         if (!player->GetGroup() || facade->IsGroupLeader())
         {
             // let 25% of random not grouped (or group leader) bots help other players
-            if (!urand(0, 3))
+            // (Silvermoon 1.8.4: not your characters - S: Chino killed mobs another player had tagged and
+            // could never loot them, and a tagged mob gives no XP either)
+            if (!urand(0, 3) && !facade->IsRealPlayer() && !sPlayerbotAIConfig.IsFreeAltBot(player))
             {
                 nonCombatEngine->addStrategy("attack tagged");
             }

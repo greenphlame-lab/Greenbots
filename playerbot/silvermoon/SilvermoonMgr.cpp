@@ -429,9 +429,7 @@ static float SilvermoonWeaponDps(ItemPrototype const* proto)
 // goes to the bags and is sold on the next vendor visit. Runs before Dual Wield.
 static void SilvermoonWeaponUpgrade(Player* bot)
 {
-    // "Ask before equipping upgrades" (S, 1.6.21): no buying and wearing new weapons unasked
-    if (SilvermoonIsOwn(bot) && SilvermoonPolicyFor(bot->GetGUIDLow()).askEquip)
-        return;
+    // (1.8.4: vendor weapons are white and bind to nobody, so "Ask before equipping" no longer stops this - S)
     uint8 cls = bot->getClass();
     if (cls != CLASS_ROGUE && cls != CLASS_WARRIOR && cls != CLASS_HUNTER && cls != CLASS_PALADIN && cls != CLASS_SHAMAN)
         return;
@@ -968,9 +966,7 @@ static void SilvermoonDropStaleQuests(Player* bot)
 
 static void SilvermoonDualWield(Player* bot)
 {
-    // "Ask before equipping upgrades" (S, 1.6.21): no buying and wearing new weapons unasked
-    if (SilvermoonIsOwn(bot) && SilvermoonPolicyFor(bot->GetGUIDLow()).askEquip)
-        return;
+    // (1.8.4: vendor weapons are white and bind to nobody, so "Ask before equipping" no longer stops this - S)
     uint8 cls = bot->getClass();
     uint32 level = bot->GetLevel();
     uint32 fee = cls == CLASS_ROGUE ? 300 : 2200;
@@ -1885,6 +1881,10 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                         // lifesaver was ever logged for her): the survive step (flee rules, lifesavers, potion,
                         // rotation, walking past mobs) wasn't on her combat strategies - it's added when the AI
                         // is built, before the server knows it's your character on Auto. Checked every 30 s.
+                        // 1.8.4 (S: Chino kept killing mobs he couldn't loot): no helping with other players' tagged
+                        // mobs - no loot and no XP for them
+                        if (me->GetPlayerbotAI() && me->GetPlayerbotAI()->HasStrategy("attack tagged", BotState::BOT_STATE_NON_COMBAT))
+                            me->GetPlayerbotAI()->ChangeStrategy("-attack tagged", BotState::BOT_STATE_NON_COMBAT);
                         if (me->GetPlayerbotAI() && !me->GetPlayerbotAI()->HasStrategy("silvermoon survive", BotState::BOT_STATE_COMBAT))
                         {
                             me->GetPlayerbotAI()->ChangeStrategy("+silvermoon survive", BotState::BOT_STATE_COMBAT);
@@ -1948,6 +1948,8 @@ void RandomPlayerbotMgr::SilvermoonUpdate(uint32 elapsed)
                 if (SilvermoonAltAuto(alt.second) && !p->GetGroup() &&
                     !p->GetPlayerbotAI()->HasStrategy("rpg vendor", BotState::BOT_STATE_NON_COMBAT))
                     p->GetPlayerbotAI()->ChangeStrategy("+rpg vendor", BotState::BOT_STATE_NON_COMBAT);   // AH posting (see above)
+                if (p->GetPlayerbotAI()->HasStrategy("attack tagged", BotState::BOT_STATE_NON_COMBAT))
+                    p->GetPlayerbotAI()->ChangeStrategy("-attack tagged", BotState::BOT_STATE_NON_COMBAT);   // 1.8.4: nothing to loot or learn from
                 if (SilvermoonAltAuto(alt.second) && !p->GetPlayerbotAI()->HasStrategy("silvermoon survive", BotState::BOT_STATE_COMBAT))
                     p->GetPlayerbotAI()->ChangeStrategy("+silvermoon survive", BotState::BOT_STATE_COMBAT);   // flee rules etc. (1.8.1, above)
                 if (SilvermoonAltAuto(alt.second) && p->IsAlive() && !p->IsInCombat() && p->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_RESTING) &&
@@ -3662,6 +3664,16 @@ void RandomPlayerbotMgr::SilvermoonFastProcessBot(Player* player, PlayerbotAI* a
     SilvermoonRecoveryTick(player);
     SilvermoonRoguePoisons(player);     // 1.8.1: rogues learn, make and carry poisons
     SilvermoonBagVendorTrip(player);    // 1.8.3: your always-online alts' "vendor when N slots free"
+    // crafting in the field (1.8.4, S: "give me something measurable" - craft skills barely moved: Alchemy
+    // averaged 4 across 245 bots, 17 crafts by 12 bots in 3 hours): the craft pass only ran while resting
+    // in a town, and random bots rarely rest there. Now also every 20 minutes anywhere, out of combat,
+    // with what's in the bags (no buying)
+    if (IsRandomBot(player) && ai && player->IsAlive() && !player->IsInCombat() && !player->IsTaxiFlying() && !player->IsBeingTeleported() &&
+        !player->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_RESTING) && !GetEventValue(bot, "silvermoon_dungeon") && !GetEventValue(bot, "silvermoon_fieldcraft"))
+    {
+        SetEventValue(bot, "silvermoon_fieldcraft", 1, 20 * MINUTE);
+        SilvermoonCraftPass(player, false);
+    }
     // duels (1.8.3, S: "bots dueling endlessly ... shouldn't go on forever"): a bots-only duel that's run 3
     // minutes ends with no winner (two healers, or two bots that can't hurt each other). Duels with a real
     // player are left alone.

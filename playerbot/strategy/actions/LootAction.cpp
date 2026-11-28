@@ -81,6 +81,28 @@ bool OpenLootAction::DoLoot(LootObject& lootObject)
         bot->GetSession()->HandleLootOpcode(packet);
         SetDuration(sPlayerbotAIConfig.lootDelay);
 
+        // Silvermoon 1.8.4 (S: Chino on Auto left his own solo kills unlooted; the server logged "have no
+        // right to loot"): with you logged in, the loot window opens on your game client too, and it can
+        // close it again before the bot's own pick-up step runs a moment later. So your character takes
+        // the coins and items right here, while the loot is open.
+        if (ai->IsRealPlayer() && bot->GetLootGuid() == lootObject.guid)
+        {
+            if (Loot* loot = sLootMgr.GetLoot(bot))
+            {
+                WorldPacket money(CMSG_LOOT_MONEY, 0);
+                bot->GetSession()->HandleLootMoneyOpcode(money);
+                for (uint8 slot = 0; slot < 16; ++slot)
+                {
+                    LootItem* item = loot->GetLootItemInSlot(slot);
+                    if (!item || item->isBlocked || item->GetSlotTypeForSharedLoot(bot, loot) == MAX_LOOT_SLOT_TYPE)
+                        continue;
+                    WorldPacket take(CMSG_AUTOSTORE_LOOT_ITEM, 1);
+                    take << slot;
+                    bot->GetSession()->HandleAutostoreLootItemOpcode(take);
+                }
+            }
+        }
+
         if (bot->isRealPlayer())
         {
             WorldPacket data(SMSG_EMOTE, 4 + 8);

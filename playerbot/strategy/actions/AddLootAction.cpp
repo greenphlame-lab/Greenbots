@@ -344,7 +344,12 @@ bool AddGatheringLootAction::AddLoot(Player* requester, ObjectGuid guid)
     }
     else
     {
-        if (strongHostiles.size() > 1)
+        // Silvermoon 1.8.4 (S: Chino ran right past a Copper Vein on his Mining route): on a gather order or
+        // catch-up session, two same-level troggs near a vein were enough to skip it, and in Dun Morogh
+        // nearly every vein has some. There, only three or more mobs not well below the bot block a node;
+        // the bot fights what comes
+        size_t blockAt = (loot.skillId && SilvermoonGatherOrderFactor(bot->GetGUIDLow(), loot.skillId) > 1.0f) ? 3 : 2;
+        if (strongHostiles.size() >= blockAt)
         {
             std::ostringstream out;
             out << strongHostiles.front()->GetName() << " is blocking " << wo->GetName() << ", need to kill it or I will not gather";

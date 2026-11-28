@@ -807,6 +807,12 @@ bool ai::SilvermoonEquipAllowed(Player* bot, Item* item)
 {
     if (!bot || !item || !SilvermoonIsOwn(bot) || !SilvermoonPolicyFor(bot->GetGUIDLow()).askEquip)
         return true;
+    // 1.8.4 (S: "only for things that would become bound"): greys, whites, bags and anything already
+    // soulbound go on without asking; the question is for green-or-better items that bind when worn
+    ItemPrototype const* ap = item->GetProto();
+    if (!ap || ap->Class == ITEM_CLASS_CONTAINER || ap->Quality <= ITEM_QUALITY_NORMAL ||
+        ap->Bonding != BIND_WHEN_EQUIPPED || item->IsSoulBound())
+        return true;
     uint32 itemGuid = item->GetGUIDLow();
     time_t now = time(nullptr);
     std::string note;

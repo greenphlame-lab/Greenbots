@@ -125,6 +125,16 @@ bool RecheckGoalAction::isUseful()
             target->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
         return false;
     }
+    // a gather route stop (1.8.4, S: Chino stood 2 minutes at Kharanos on "gather route 1/95"): spawn
+    // spots sit on rocks and slopes the travel code never counts as reached, so the forced stop waited
+    // out its 5 minutes. Within 20 yards (flat distance) the stop is done and the next one is chosen.
+    if (AI_VALUE2(int, "manual int", "silvermoon goal kind") == int(GoalKind::Gather) + 1)
+    {
+        TravelTarget* target = AI_VALUE(TravelTarget*, "travel target");
+        if (target && target->IsActive() && target->GetPosition() && dynamic_cast<TemporaryTravelDestination*>(target->GetDestination()) &&
+            target->GetPosition()->getMapId() == bot->GetMapId() && target->GetPosition()->sqDistance2d(WorldPosition(bot)) < 400.0f)
+            target->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
+    }
     // a Go to trip is there within 15 yards (the Go to step's own rule) - the trip ends so the Go to
     // step does its arrival work (train, repair, buy, the next queued stop). The travel code only
     // counts 5 yards as there, and a trainer behind a counter is never that close: the forced trip
