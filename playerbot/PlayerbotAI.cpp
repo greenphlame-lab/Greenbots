@@ -1413,7 +1413,13 @@ void PlayerbotAI::UpdateAIInternal(uint32 elapsed, bool minimal)
         if (falling && !bot->IsInWater())
         {
             float ground = bot->GetMap()->GetHeight(bot->GetPositionX(), bot->GetPositionY(), z + 600.0f);
-            if (ground > INVALID_HEIGHT + 1.0f && z < ground - 20.0f)
+            // 1.8.1 (S: bots walking down the Thunder Bluff flight tower stairs were put back on top and
+            // fell): "the ground" seen from 600 yards up is the highest surface - the tower top, a
+            // bridge, a cliff. A bot with a floor right under it (searching down from just above its
+            // feet) isn't under the world, it's under a roof
+            float floorBelow = bot->GetMap()->GetHeight(bot->GetPositionX(), bot->GetPositionY(), z + 2.0f);
+            bool onFloor = floorBelow > INVALID_HEIGHT + 1.0f && z - floorBelow < 10.0f;
+            if (ground > INVALID_HEIGHT + 1.0f && z < ground - 20.0f && !onFloor)
             {
                 sLog.outBasic("Silvermoon: %s fell through the ground at %.0f %.0f (z %.0f, ground %.0f), put back on it",
                     bot->GetName(), bot->GetPositionX(), bot->GetPositionY(), z, ground);
