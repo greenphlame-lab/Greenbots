@@ -173,6 +173,11 @@ SilvermoonPolicy ai::SilvermoonPolicyFor(uint32 guid)
 
 bool ai::SilvermoonZoneBlocked(uint32 guid, uint32 zoneId)
 {
+    // 1.8.4 (S: "Ironforge or Stormwind not being ticked shouldn't prevent venturing there - they're cities,
+    // not zones"): the capitals are always allowed
+    static const std::set<uint32> capitals = { 1519, 1537, 1657, 1637, 1638, 1497 };
+    if (capitals.count(zoneId))
+        return false;
     std::lock_guard<std::mutex> guard(policyLock);
     std::set<uint32> const& allowed = Get(guid).allowedZones;
     return !allowed.empty() && !allowed.count(zoneId);
