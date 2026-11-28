@@ -11,6 +11,7 @@
 #include <cstdlib>
 #include <ctime>
 #include <mutex>
+#include <set>
 #include <sstream>
 #include <unordered_map>
 #include <vector>
@@ -135,6 +136,40 @@ namespace
         return "?";
     }
 
+    // quests given on a continent (creature or object quest givers spawned there), and creatures
+    // spawned there - cached per map (1.8.1: the queue lists start from these)
+    std::set<uint32> const& QuestsOnMap(uint32 map)
+    {
+        static std::mutex lock;
+        static std::unordered_map<uint32, std::set<uint32>> cache;
+        std::lock_guard<std::mutex> guard(lock);
+        auto it = cache.find(map);
+        if (it != cache.end())
+            return it->second;
+        std::set<uint32>& out = cache[map];
+        if (auto r = WorldDatabase.PQuery("SELECT DISTINCT qr.quest FROM creature_questrelation qr JOIN creature c ON c.id = qr.id WHERE c.map = %u "
+            "UNION SELECT DISTINCT gr.quest FROM gameobject_questrelation gr JOIN gameobject g ON g.id = gr.id WHERE g.map = %u", map, map))
+        {
+            do { out.insert(r->Fetch()[0].GetUInt32()); } while (r->NextRow());
+        }
+        return out;
+    }
+    std::vector<uint32> const& MobsOnMap(uint32 map)
+    {
+        static std::mutex lock;
+        static std::unordered_map<uint32, std::vector<uint32>> cache;
+        std::lock_guard<std::mutex> guard(lock);
+        auto it = cache.find(map);
+        if (it != cache.end())
+            return it->second;
+        std::vector<uint32>& out = cache[map];
+        if (auto r = WorldDatabase.PQuery("SELECT DISTINCT c.id FROM creature c JOIN creature_template t ON t.entry = c.id WHERE c.map = %u AND t.NpcFlags = 0", map))
+        {
+            do { out.push_back(r->Fetch()[0].GetUInt32()); } while (r->NextRow());
+        }
+        return out;
+    }
+
     void Note(Player* bot, AqStep const& s, char const* how)
     {
         std::string text = std::string("AqQueue: ") + Label(s) + " - " + how;
@@ -159,22 +194,21 @@ bool ai::SilvermoonQueueCommand(Player* bot, std::string const& param, std::stri
         while (!text.empty() && text[0] == ' ')
             text.erase(0, 1);
         text = Lower(text);
-        if (text.size() < 2)
-        {
-            reply = "Type at least 2 letters to search.";
-            return true;
-        }
+        // no text (1.8.1, S): the full list for this continent, best fits first; text narrows it
         int32 level = int32(bot->GetLevel());
         std::vector<std::pair<int32, std::string>> found;       // (distance from my level, "id|label")
         if (what == "quest")
         {
+            std::set<uint32> const& here = QuestsOnMap(bot->GetMapId());
             for (auto const& [id, qp] : sObjectMgr.GetQuestTemplates())
             {
                 Quest const* q = qp.get();
-                if (!q || Lower(q->GetTitle()).find(text) == std::string::npos)
+                if (!q || (!text.empty() && Lower(q->GetTitle()).find(text) == std::string::npos))
                     continue;
                 bool inLog = bot->GetQuestStatus(id) == QUEST_STATUS_INCOMPLETE || bot->GetQuestStatus(id) == QUEST_STATUS_COMPLETE;
-                if (!inLog && (bot->GetQuestRewardStatus(id) || !bot->CanTakeQuest(q, false)))
+                if (!inLog && (bot->GetQuestRewardStatus(id) || !bot->CanTakeQuest(q, false) || !here.count(id)))
+                    continue;           // takeable, and given on this continent (or already in the log)
+                if (!inLog && q->GetQuestLevel() > 0 && (int32(q->GetQuestLevel()) > level + 4 || int32(q->GetQuestLevel()) < level - 10))
                     continue;
                 int32 ql = q->GetQuestLevel() > 0 ? int32(q->GetQuestLevel()) : level;
                 found.push_back({ std::abs(ql - level) - (inLog ? 100 : 0),
@@ -184,10 +218,10 @@ bool ai::SilvermoonQueueCommand(Player* bot, std::string const& param, std::stri
         else if (what == "mob")
         {
             std::unordered_map<std::string, bool> seen;
-            for (uint32 id = 1; id < sCreatureStorage.GetMaxEntry(); ++id)
+            for (uint32 id : MobsOnMap(bot->GetMapId()))
             {
                 CreatureInfo const* ci = sCreatureStorage.LookupEntry<CreatureInfo>(id);
-                if (!ci || !ci->Name || ci->NpcFlags || Lower(ci->Name).find(text) == std::string::npos)
+                if (!ci || !ci->Name || ci->NpcFlags || (!text.empty() && Lower(ci->Name).find(text) == std::string::npos))
                     continue;
                 if (int32(ci->MaxLevel) < level - 10 || int32(ci->MinLevel) > level + 4)
                     continue;
@@ -205,7 +239,7 @@ bool ai::SilvermoonQueueCommand(Player* bot, std::string const& param, std::stri
         // short lines: "SMAQF\t<kind>;R;..." starts the results, "SMAQF\t<kind>;+;..." adds to them
         std::string msg = "SMAQF\t" + what + ";R;";
         bool first = true;
-        for (size_t i = 0; i < found.size() && i < 15; ++i)
+        for (size_t i = 0; i < found.size() && i < 60; ++i)
         {
             std::string part = found[i].second.substr(0, 70);
             if (!first && msg.size() + part.size() > 200)
@@ -218,7 +252,7 @@ bool ai::SilvermoonQueueCommand(Player* bot, std::string const& param, std::stri
             first = false;
         }
         messages.push_back(msg);
-        reply = found.empty() ? "Nothing found for \"" + text + "\"." : std::to_string(std::min<size_t>(found.size(), 15)) + " found.";
+        reply = found.empty() ? "Nothing found." : std::to_string(std::min<size_t>(found.size(), 60)) + " found.";
         return true;
     }
 
