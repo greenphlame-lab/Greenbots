@@ -1337,10 +1337,15 @@ bool ai::SilvermoonGoGoal(Player* bot, SilvermoonScoredGoal& goal)
     // Go to > Vendor (1.7.8, S: items set to "sell always" weren't sold on a Go to vendor trip): the
     // vendor visit sells everything marked for the vendor, item rules included - the stock sell step
     // only runs when the bags are getting full
-    if (firstArrival && (order.flag & (UNIT_NPC_FLAG_VENDOR | UNIT_NPC_FLAG_REPAIR)) && bot->GetPlayerbotAI())
+    if (firstArrival && (order.flag & (UNIT_NPC_FLAG_VENDOR | UNIT_NPC_FLAG_REPAIR | UNIT_NPC_FLAG_AUCTIONEER)) && bot->GetPlayerbotAI())
     {
         PlayerbotAI* bai = bot->GetPlayerbotAI();
-        bai->DoSpecificAction("sell", Event("silvermoon go", "legacy all"), true);
+        // Go to > Auction house (1.8.1, S: Guile got there but listed nothing): post everything marked for
+        // the AH (your "AH" rules included); the vendor trip sells as before
+        if (order.flag & UNIT_NPC_FLAG_AUCTIONEER)
+            bai->DoSpecificAction("ah", Event("silvermoon go", "vendor"), true);
+        else
+            bai->DoSpecificAction("sell", Event("silvermoon go", "legacy all"), true);
         // up to 15 yards counts as there, but selling needs the vendor in reach: the vendor becomes the
         // rpg target, so the character walks up and its vendor visit sells the rest
         for (ObjectGuid const& g : bai->GetAiObjectContext()->GetValue<std::list<ObjectGuid>>("nearest npcs")->Get())

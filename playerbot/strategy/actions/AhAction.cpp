@@ -2,6 +2,7 @@
 #include "playerbot/playerbot.h"
 #include "playerbot/RandomPlayerbotMgr.h"
 #include "AhAction.h"
+#include "playerbot/strategy/silvermoon/Policies.h"
 #include "playerbot/strategy/values/ItemCountValue.h"
 #include "playerbot/RandomItemMgr.h"
 #include "playerbot/strategy/values/BudgetValues.h"
@@ -75,7 +76,10 @@ bool AhAction::ExecuteCommand(Player* requester, std::string text, Unit* auction
             bool isMoreProfitableToSellToAHThanToVendor = ItemUsageValue::IsMoreProfitableToSellToAHThanToVendor(item->GetProto(), bot);
             pmo.reset();
 
-            if (!isMoreProfitableToSellToAHThanToVendor)
+            // Silvermoon 1.8.1 (S: Guile's "AH" rule items weren't listed): your "AH" rule posts the item
+            // even when the vendor would pay as much
+            if (!isMoreProfitableToSellToAHThanToVendor &&
+                !(ai::SilvermoonIsOwn(bot) && ai::SilvermoonItemRule(bot->GetGUIDLow(), item->GetProto()->ItemId) == 2))
                 continue;
 
             uint32 deposit = AuctionHouseMgr::GetAuctionDeposit(auctionHouseEntry, time * MINUTE, item);
