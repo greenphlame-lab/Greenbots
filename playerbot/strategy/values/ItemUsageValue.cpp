@@ -548,7 +548,7 @@ ItemUsage ItemUsageValue::CalculateStock()
             return ItemUsage::ITEM_USAGE_KEEP;
     }
 
-    // Silvermoon (S): throwing weapons - one on the paper doll is plenty. Never bought as ammo; a
+    // Silvermoon (S): throwing weapons - see below (1.8.1: one stack worn, one spare). A
     // copy in the bags is equipped only when the ranged slot is empty, otherwise it's sold.
     if (proto->Class == ITEM_CLASS_WEAPON && proto->SubClass == ITEM_SUBCLASS_WEAPON_THROWN &&
         (bot->getClass() == CLASS_ROGUE || bot->getClass() == CLASS_WARRIOR))
@@ -556,8 +556,20 @@ ItemUsage ItemUsageValue::CalculateStock()
         Item* ranged = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_RANGED);
         if (!ranged && bot->CanUseItem(proto) == EQUIP_ERR_OK)
             return ItemUsage::ITEM_USAGE_EQUIP;
-        if (ranged && ranged->GetEntry() == proto->ItemId && !ai->HasItemInInventory(proto->ItemId))
-            return ItemUsage::ITEM_USAGE_KEEP;   // the one on the paper doll
+        // 1.8.1 (S: Guile still bought several stacks of throwing axes): in 1.12 thrown weapons come
+        // in stacks of up to 200 and get used up, so the rule is one stack on the paper doll plus at
+        // most one spare stack in the bags. A vendor's stack is bought only when the worn one is
+        // below 50 and there's no spare; the old rule called a vendor's stack "keep" whenever the
+        // bags held none, so it bought one, sold it as a spare, and bought again
+        if (ranged && ranged->GetEntry() == proto->ItemId)
+        {
+            uint32 worn = ranged->GetCount();
+            uint32 total = bot->GetItemCount(proto->ItemId);
+            uint32 spare = total > worn ? total - worn : 0;
+            if (!spare)
+                return worn < 50 ? ItemUsage::ITEM_USAGE_AMMO : ItemUsage::ITEM_USAGE_NONE;
+            return spare <= std::max<uint32>(proto->GetMaxStackSize(), 1u) ? ItemUsage::ITEM_USAGE_KEEP : ItemUsage::ITEM_USAGE_VENDOR;
+        }
         return ItemUsage::ITEM_USAGE_VENDOR;
     }
 
