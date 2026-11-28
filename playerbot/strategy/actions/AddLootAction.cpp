@@ -1,6 +1,7 @@
 
 #include "playerbot/playerbot.h"
 #include "AddLootAction.h"
+#include <algorithm>
 
 #include "playerbot/LootObjectStack.h"
 #include "playerbot/PlayerbotAIConfig.h"
@@ -93,6 +94,15 @@ bool AddAllLootAction::Execute(Event& event)
         std::list<ObjectGuid> gos = context->GetValue<std::list<ObjectGuid>>("nearest game objects no los")->Get();
         for (std::list<ObjectGuid>::iterator i = gos.begin(); i != gos.end(); i++)
             added |= AddLoot(requester, *i);
+        // 1.8.6 (S: Mommy had Silverleaf on her minimap and didn't go for it): the scan above stops at 60
+        // yards, the minimap tracks further - herbalists and miners also look 100 yards out
+        if (bot->HasSkill(SKILL_MINING) || bot->HasSkill(SKILL_HERBALISM))
+        {
+            std::list<ObjectGuid> nodes = context->GetValue<std::list<ObjectGuid>>("nearest gather nodes")->Get();
+            for (ObjectGuid const& g : nodes)
+                if (std::find(gos.begin(), gos.end(), g) == gos.end())
+                    added |= AddLoot(requester, g);
+        }
 
         std::list<ObjectGuid> corpses = context->GetValue<std::list<ObjectGuid>>("nearest corpses")->Get();
         for (std::list<ObjectGuid>::iterator i = corpses.begin(); i != corpses.end(); i++)
@@ -317,7 +327,7 @@ bool AddGatheringLootAction::AddLoot(Player* requester, ObjectGuid guid)
     // show, go grab them no matter where you're headed"): your characters pick any herb or ore node their
     // skill can gather within minimap tracking range (about 90 yards), whatever the current task
     if (loot.skillId && (loot.skillId == SKILL_MINING || loot.skillId == SKILL_HERBALISM))   // all bots (S: "not just my char")
-        gatheringDistanceToUse = std::max(gatheringDistanceToUse, 90.0f);
+        gatheringDistanceToUse = std::max(gatheringDistanceToUse, 100.0f);
 
     if (sServerFacade.IsDistanceGreaterThan(sServerFacade.GetDistance2d(requester, wo), gatheringDistanceToUse))
     {

@@ -3679,6 +3679,34 @@ void RandomPlayerbotMgr::SilvermoonFastProcessBot(Player* player, PlayerbotAI* a
         SetEventValue(bot, "silvermoon_fieldcraft", 1, 20 * MINUTE);
         SilvermoonCraftPass(player, false);
     }
+    // repair where it sells (1.8.6, S: "sell their loot first then repair"): 317 bots wore 1,770 broken
+    // green+ items; repairs only ran while resting in a town, so a broke bot that sold its loot at a
+    // vendor walked off unrepaired. Any bot with broken gear and some money next to a repairer now
+    // repairs (partly when it can't pay for all: weapon first), checked at most once a minute
+    static std::mutex fieldRepairLock;
+    static std::unordered_map<uint32, time_t> fieldRepairAt;     // in memory: no database write each minute
+    bool repairDue = false;
+    {
+        std::lock_guard<std::mutex> guard(fieldRepairLock);
+        time_t& at = fieldRepairAt[bot];
+        if (time(nullptr) >= at)
+        {
+            at = time(nullptr) + MINUTE;
+            repairDue = true;
+        }
+    }
+    if (repairDue && player->IsAlive() && !player->IsInCombat() && player->GetMoney() && !player->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_RESTING))
+    {
+        bool broken = false;
+        for (uint8 slot = EQUIPMENT_SLOT_START; slot < EQUIPMENT_SLOT_END && !broken; ++slot)
+            if (Item* item = player->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
+                if (item->GetUInt32Value(ITEM_FIELD_MAXDURABILITY) && !item->GetUInt32Value(ITEM_FIELD_DURABILITY))
+                    broken = true;
+        if (broken)
+        {
+            SilvermoonRepairNearby(player);
+        }
+    }
     // duels (1.8.3, S: "bots dueling endlessly ... shouldn't go on forever"): a bots-only duel that's run 3
     // minutes ends with no winner (two healers, or two bots that can't hurt each other). Duels with a real
     // player are left alone.

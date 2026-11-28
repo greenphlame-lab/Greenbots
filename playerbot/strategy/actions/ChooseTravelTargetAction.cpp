@@ -721,6 +721,16 @@ bool ResetTargetAction::isUseful()
     if (AI_VALUE(TravelTarget*, "travel target")->GetStatus() == TravelStatus::TRAVEL_STATUS_PREPARE)
         return false;
 
+    // Silvermoon 1.8.6 (S: Chino stood still on his queued Ironforge turn-in, "your fix still not working";
+    // the log: trip cut TRAVEL -> NONE by this reset, 5346 yards left): "a quest taker nearby" reset
+    // his trip every time he passed Steelgrill's Depot, and he chose it again. A forced trip that's
+    // under way - a queued step, a Go to, a relocation, a profession trip - is not reset for that
+    {
+        TravelTarget* t = AI_VALUE(TravelTarget*, "travel target");
+        if (t->IsActive() && t->IsForced())
+            return false;
+    }
+
     return true;
 }
 

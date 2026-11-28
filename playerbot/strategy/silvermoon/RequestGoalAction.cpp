@@ -75,6 +75,10 @@ std::vector<SilvermoonGoalFetch> ai::SilvermoonBuildGoalFetches(PlayerbotAI* ai,
     // ...or cashing out (S, 1.6.20): broken gear and no money for a full repair, whatever the bag fill
     if ((context->GetValue<bool>("should sell")->Get() || SilvermoonCashOut(bot)) && context->GetValue<bool>("can sell")->Get())
         fetches.push_back({ (uint32)TravelDestinationPurpose::Vendor, {}, 10000.0f });
+    // 1.8.6 (S: "they should sell their loot first then repair"): cashing out, the trip goes to a
+    // repairer - they buy loot too - so the money from selling is spent on repairs at the same stop
+    if (SilvermoonCashOut(bot) && context->GetValue<bool>("can sell")->Get())
+        fetches.push_back({ (uint32)TravelDestinationPurpose::Repair, {}, 10000.0f });
     // only when it can pay: Taxes (level 28, 43 copper) walked between Razor Hill's repairers for an
     // hour ("can repair" checks the cheapest repair against the money it may spend on repairs)
     if (context->GetValue<bool>("should repair")->Get() && context->GetValue<bool>("can repair")->Get())

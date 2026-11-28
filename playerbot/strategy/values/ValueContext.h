@@ -123,6 +123,8 @@ namespace ai
             creators["avoid creature list"] = [](PlayerbotAI* ai) { return new AvoidCreatureListValue(ai); };
             creators["nearest game objects"] = [](PlayerbotAI* ai) { return new NearestGameObjects(ai); };
             creators["nearest game objects no los"] = [](PlayerbotAI* ai) { return new NearestGameObjects(ai, sPlayerbotAIConfig.sightDistance, LOS_IGNORE); };
+            // Silvermoon 1.8.6: herb and ore nodes as far as the minimap tracks them (the scan above stops at 60 yards)
+            creators["nearest gather nodes"] = [](PlayerbotAI* ai) { return new NearestGameObjects(ai, 100.0f, LOS_IGNORE, "nearest gather nodes"); };
             creators["nearest dynamic objects"] = [](PlayerbotAI* ai) { return new NearestDynamicObjects(ai); };
             creators["nearest dynamic objects no los"] = [](PlayerbotAI* ai) { return new NearestDynamicObjects(ai, sPlayerbotAIConfig.sightDistance, LOS_IGNORE); };
             creators["closest game objects static los"] = [](PlayerbotAI* ai) { return new NearestGameObjects(ai, INTERACTION_DISTANCE, LOS_STATIC); };
