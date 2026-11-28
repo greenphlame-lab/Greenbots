@@ -90,7 +90,7 @@ namespace
                     if (c != std::string::npos && c > 0)
                     {
                         int v = atoi(entry.substr(c + 1).c_str());
-                        uint8 cond = key == "ro" ? legacy[std::min(5, std::max(0, v))] : uint8(std::min(127, std::max(0, v)));
+                        uint16 cond = key == "ro" ? legacy[std::min(5, std::max(0, v))] : uint16(std::min(1535, std::max(0, v)));
                         p.rotation.push_back(std::make_pair(entry.substr(0, c), cond));
                     }
                 }
@@ -448,7 +448,7 @@ bool ai::SilvermoonRotationBlocks(Player* bot, uint32 spellId)
     {
         if (std::find(group.begin(), group.end(), name) == group.end())
             continue;
-        std::vector<std::pair<std::string, uint8>> list = SilvermoonRotationFor(bot->GetGUIDLow());
+        std::vector<std::pair<std::string, uint16>> list = SilvermoonRotationFor(bot->GetGUIDLow());
         bool listed = false, other = false;
         for (auto const& e : list)
         {
@@ -463,7 +463,7 @@ bool ai::SilvermoonRotationBlocks(Player* bot, uint32 spellId)
     return false;
 }
 
-std::vector<std::pair<std::string, uint8>> ai::SilvermoonRotationFor(uint32 guid)
+std::vector<std::pair<std::string, uint16>> ai::SilvermoonRotationFor(uint32 guid)
 {
     std::lock_guard<std::mutex> guard(policyLock);
     return Get(guid).rotation;
@@ -478,7 +478,7 @@ bool ai::SilvermoonPolicyCommand(Player* bot, std::string const& param, std::str
     {
         bool append = param[3] == '+';
         std::string rest = param.substr(append ? 5 : 4);
-        std::vector<std::pair<std::string, uint8>> list;
+        std::vector<std::pair<std::string, uint16>> list;
         if (rest != "clear")
         {
             std::stringstream vs(rest);
@@ -487,7 +487,7 @@ bool ai::SilvermoonPolicyCommand(Player* bot, std::string const& param, std::str
             {
                 size_t c = entry.rfind(':');
                 std::string name = c == std::string::npos ? entry : entry.substr(0, c);
-                uint8 cond = c == std::string::npos ? 0 : uint8(std::min(127, std::max(0, atoi(entry.substr(c + 1).c_str()))));
+                uint16 cond = c == std::string::npos ? 0 : uint16(std::min(1535, std::max(0, atoi(entry.substr(c + 1).c_str()))));
                 while (!name.empty() && name[0] == ' ') name.erase(0, 1);
                 while (!name.empty() && name.back() == ' ') name.pop_back();
                 if (name.empty() || name.find_first_of(";=") != std::string::npos)

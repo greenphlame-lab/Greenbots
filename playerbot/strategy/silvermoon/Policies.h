@@ -56,8 +56,9 @@ namespace ai
         // 1 not active (its debuff on the target / buff on me isn't there), 2 target below 20%,
         // 4 me below 50% health, 8 opener (target above 90%), 16 the class's own rule for it (the
         // trigger its default rotation uses), 32 target is casting, 64 two or more enemies on me;
+        // and N * 256 (N = 1..5, 1.8.1): at least N combo points on the target (finishers);
         // empty = the class's own rotation
-        std::vector<std::pair<std::string, uint8>> rotation;
+        std::vector<std::pair<std::string, uint16>> rotation;
         bool Any() const { return !rotation.empty() || askEquip || potionAt || disenchant || tradeGoods != 2 || !allowedZones.empty() || eatTo || drinkTo || travel || !blockedSpells.empty() || fleeMobs || fleeHealth || ahGold || upgradePct || !weapons.empty() || bags || !items.empty(); }
     };
 
@@ -86,7 +87,7 @@ namespace ai
     // itself and leaves a notification in the away log). Your characters only; others always true.
     bool SilvermoonEquipAllowed(Player* bot, Item* item);
     // rotation (S, 1.7): your priority list, empty when you haven't set one
-    std::vector<std::pair<std::string, uint8>> SilvermoonRotationFor(uint32 guid);
+    std::vector<std::pair<std::string, uint16>> SilvermoonRotationFor(uint32 guid);
     // the class's own combat rotation as the bot runs it now (1.7.1, the Rotation window's starting
     // point): spells it casts, best first, each with a condition (as above) and the trigger behind it
     struct SilvermoonRotDefault { std::string name; uint8 cond = 0; std::string trigger; float relevance = 0.0f; };

@@ -133,6 +133,10 @@ bool PolicyRotationAction::Pick(std::string& name, Unit*& target)
             continue;
         if ((cond & 32) && !enemy->IsNonMeleeSpellCasted(false))
             continue;
+        // combo points (1.8.1, S: rogue finishers "if x combo points"): N * 256 = at least N
+        if (uint32 cp = (cond >> 8) & 7)
+            if (bot->GetComboPoints() < cp)
+                continue;
         if (cond & 64)
         {
             uint32 n = 0;
